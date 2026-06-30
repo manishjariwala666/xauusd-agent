@@ -1,164 +1,51 @@
-import streamlit as st
-import pandas as pd
-import time
-from supabase import create_client, Client
-
-# --- SETTINGS & CONFIG ---
-st.set_page_config(page_title="XAUUSD VIP Hub", page_icon="💰", layout="wide")
-
-# Custom CSS for Premium Chat Interface
-st.markdown("""
-<style>
-    .reportview-container { background: #0e1117; }
-    .chat-message-admin {
-        background-color: #1f2937;
-        padding: 15px;
-        border-radius: 10px;
-        margin-bottom: 10px;
-        border-left: 5px solid #f59e0b;
-        color: #f3f4f6;
-    }
-    .chat-time { font-size: 0.8rem; color: #9ca3af; margin-top: 5px; }
-    .status-card {
-        background-color: #111827;
-        padding: 15px;
-        border-radius: 8px;
-        border: 1px solid #374151;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# --- DATABASE CONNECTION ---
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# --- SESSION STATE INITIALIZATION ---
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "role" not in st.session_state:
-    st.session_state.role = None
-if "username" not in st.session_state:
-    st.session_state.username = None
-
 # --- LOGIN SCREEN ---
 if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center;'>🔒 VIP AI Terminal</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray;'>Algorithmic Signal Network</p>", unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["🔑 Sign In", "📝 Register"])
+    # 3 Columns banayein aur center wali col2 ko use karein width control karne ke liye
+    col1, col2, col3 = st.columns([1, 1.5, 1])
     
-    with tab1:
-        user_input = st.text_input("Email or Username")
-        pass_input = st.text_input("Password", type="password")
-        if st.button("Log In", use_container_width=True):
-            if user_input == "manishadmin" and pass_input == "goldmaster77":
-                st.session_state.logged_in = True
-                st.session_state.role = "ADMIN"
-                st.session_state.username = "Manissh (Admin)"
-                st.rerun()
-            else:
-                try:
-                    res = supabase.table("users").select("*").eq("username", user_input).eq("password", pass_input).execute()
-                    if len(res.data) > 0:
-                        st.session_state.logged_in = True
-                        st.session_state.role = "USER"
-                        st.session_state.username = res.data[0]["username"]
-                        st.rerun()
-                    else:
-                        st.error("Invalid Credentials")
-                except Exception as e:
-                    st.error("Database Connection Error")
-                    
-    with tab2:
-        reg_user = st.text_input("Create Username")
-        reg_pass = st.text_input("Create Password", type="password")
-        reg_phone = st.text_input("WhatsApp / Telegram Number (with Country Code)")
-        if st.button("Register & Activate Alerts", use_container_width=True):
-            if reg_user and reg_pass and reg_phone:
-                try:
-                    supabase.table("users").insert({
-                        "username": reg_user, 
-                        "password": reg_pass, 
-                        "phone": reg_phone,
-                        "role": "USER"
-                    }).execute()
-                    st.success("Registration Successful! Please Sign In.")
-                except Exception as e:
-                    st.error("Username already exists or database error.")
-            else:
-                st.warning("Please fill all details.")
-
-# --- APP HUB (LOGGED IN) ---
-else:
-    st.sidebar.markdown(f"### 👤 Welcome, {st.session_state.username}")
-    st.sidebar.markdown(f"**Role:** {st.session_state.role}")
-    if st.sidebar.button("Logout 🚪"):
-        st.session_state.logged_in = False
-        st.session_state.role = None
-        st.session_state.username = None
-        st.rerun()
-
-    st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD VIP Signal Hub</h2>", unsafe_allow_html=True)
-    st.markdown("---")
-
-    if st.session_state.role == "ADMIN":
-        col1, col2 = st.columns([1, 2])
+    with col2:
+        tab1, tab2 = st.tabs(["🔑 Sign In", "📝 Register"])
         
-        with col1:
-            st.markdown("### 🛠️ Admin Control Panel")
-            st.markdown("<div class='status-card'><span style='color:#10b981;'>●</span> Core Orchestrator Live</div>", unsafe_allow_html=True)
-            st.write("")
-            
-            st.markdown("#### 📣 Broadcast New Signal / Message")
-            signal_msg = st.text_area("Type your XAUUSD Signal here...", height=150, placeholder="Example:\n🚀 XAUUSD BUY NOW\nEntry: 2320 - 2322\nTP: 2335 | SL: 2310")
-            
-            if st.button("🚀 Broadcast to Users", use_container_width=True):
-                if signal_msg:
+        with tab1:
+            user_input = st.text_input("Email or Username")
+            pass_input = st.text_input("Password", type="password")
+            if st.button("Log In", use_container_width=True):
+                if user_input == "manishadmin" and pass_input == "goldmaster77":
+                    st.session_state.logged_in = True
+                    st.session_state.role = "ADMIN"
+                    st.session_state.username = "Manissh (Admin)"
+                    st.rerun()
+                else:
                     try:
-                        supabase.table("signals").insert({"message": signal_msg, "sender": st.session_state.username}).execute()
-                        st.success("Signal broadcasted successfully!")
-                        time.sleep(1)
-                        st.rerun()
+                        res = supabase.table("users").select("*").eq("username", user_input).eq("password", pass_input).execute()
+                        if len(res.data) > 0:
+                            st.session_state.logged_in = True
+                            st.session_state.role = "USER"
+                            st.session_state.username = res.data[0]["username"]
+                            st.rerun()
+                        else:
+                            st.error("Invalid Credentials")
                     except Exception as e:
-                        st.error("Failed to send message to database.")
+                        st.error("Database Connection Error")
+                        
+        with tab2:
+            reg_user = st.text_input("Create Username")
+            reg_pass = st.text_input("Create Password", type="password")
+            reg_phone = st.text_input("WhatsApp / Telegram Number")
+            if st.button("Register & Activate Alerts", use_container_width=True):
+                if reg_user and reg_pass and reg_phone:
+                    try:
+                        supabase.table("users").insert({
+                            "username": reg_user, 
+                            "password": reg_pass, 
+                            "phone": reg_phone,
+                            "role": "USER"
+                        }).execute()
+                        st.success("Registration Successful! Please Sign In.")
+                    except Exception as e:
+                        st.error("Username already exists.")
                 else:
-                    st.warning("Please enter a message first.")
-        
-        with col2:
-            st.markdown("### 📱 Live Broadcast Feed (What Users See)")
-            try:
-                signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
-                if len(signals.data) == 0:
-                    st.info("No signals broadcasted yet.")
-                else:
-                    for sig in signals.data:
-                        st.markdown(f"""
-                        <div class="chat-message-admin">
-                            <strong>📢 {sig['sender']}</strong><br>
-                            <p style="white-space: pre-wrap; margin-top: 5px;">{sig['message']}</p>
-                            <div class="chat-time">🕒 {sig['created_at'][:16].replace('T', ' ')}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-            except Exception as e:
-                st.info("Tip: Create a 'signals' table in your Supabase database.")
-
-    elif st.session_state.role == "USER":
-        st.markdown("### 📢 Live VIP Signal Stream")
-        st.caption("Real-time algorithmic trading updates from Admin.")
-        
-        try:
-            signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
-            if len(signals.data) == 0:
-                st.info("Waiting for the next premium XAUUSD signal... Keep this screen open. 🔍")
-            else:
-                for sig in signals.data:
-                    st.markdown(f"""
-                    <div class="chat-message-admin">
-                        <strong>📢 {sig['sender']}</strong><br>
-                        <p style="white-space: pre-wrap; margin-top: 5px;">{sig['message']}</p>
-                        <div class="chat-time">🕒 {sig['created_at'][:16].replace('T', ' ')}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-        except Exception as e:
-            st.error("Unable to load signals. Technical team is working on it.")
+                    st.warning("Please fill all details.")
