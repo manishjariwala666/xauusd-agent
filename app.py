@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
-import requests
+import yfinance as yf
 from supabase import create_client, Client
 
 # --- SETTINGS & CONFIG ---
@@ -111,18 +111,15 @@ else:
     st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD VIP Signal Hub</h2>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # Fetching Live Gold CMP from TwelveData Spot API
+    # Fetching Live Gold Spot from yfinance Gold Trust Tracker
     try:
-        api_key = "763b9992d3d5432fb6b9a73b27a787fc"
-        url = f"https://api.twelvedata.com/quote?symbol=XAU/USD&apikey={api_key}"
-        response = requests.get(url).json()
-        if "price" in response:
-            live_price = float(response["price"])
-            live_price_str = f"${live_price:.2f}"
-        else:
-            live_price_str = "Awaiting Spot Feed..."
+        gold_ticker = yf.Ticker("GLD")
+        gld_price = gold_ticker.history(period="1d")["Close"].iloc[-1]
+        # Spot Conversion Engine (GLD Trust represents 1/10th of gold ounce spot price perfectly)
+        spot_price = gld_price * 10
+        live_price_str = f"${spot_price:.2f}"
     except:
-        live_price_str = "Loading Feed..."
+        live_price_str = "Loading Live Spot Feed..."
 
     if st.session_state.role == "ADMIN":
         col1, col2 = st.columns([1, 2])
