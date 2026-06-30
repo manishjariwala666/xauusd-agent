@@ -2,3 +2,5 @@ streamlit
 requests
 google-genai
 python-dotenv
+supabase
+pandas
