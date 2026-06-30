@@ -26,7 +26,7 @@ st.markdown("""
         border: 1px solid #374151;
     }
 </style>
-""", unsafe_style_allowed=True)
+""", unsafe_allow_html=True)
 
 # --- DATABASE CONNECTION ---
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -43,8 +43,8 @@ if "username" not in st.session_state:
 
 # --- LOGIN SCREEN ---
 if not st.session_state.logged_in:
-    st.markdown("<h2 style='text-align: center;'>🔒 VIP AI Terminal</h2>", unsafe_style_allowed=True)
-    st.markdown("<p style='text-align: center; color: gray;'>Algorithmic Signal Network</p>", unsafe_style_allowed=True)
+    st.markdown("<h2 style='text-align: center;'>🔒 VIP AI Terminal</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray;'>Algorithmic Signal Network</p>", unsafe_allow_html=True)
     
     tab1, tab2 = st.tabs(["🔑 Sign In", "📝 Register"])
     
@@ -58,7 +58,6 @@ if not st.session_state.logged_in:
                 st.session_state.username = "Manissh (Admin)"
                 st.rerun()
             else:
-                # Basic User Check
                 try:
                     res = supabase.table("users").select("*").eq("username", user_input).eq("password", pass_input).execute()
                     if len(res.data) > 0:
@@ -92,7 +91,6 @@ if not st.session_state.logged_in:
 
 # --- APP HUB (LOGGED IN) ---
 else:
-    # Sidebar
     st.sidebar.markdown(f"### 👤 Welcome, {st.session_state.username}")
     st.sidebar.markdown(f"**Role:** {st.session_state.role}")
     if st.sidebar.button("Logout 🚪"):
@@ -101,20 +99,17 @@ else:
         st.session_state.username = None
         st.rerun()
 
-    # Main Interface
-    st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD VIP Signal Hub</h2>", unsafe_style_allowed=True)
+    st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD VIP Signal Hub</h2>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # ADMIN PANEL VIEW
     if st.session_state.role == "ADMIN":
         col1, col2 = st.columns([1, 2])
         
         with col1:
             st.markdown("### 🛠️ Admin Control Panel")
-            st.markdown("<div class='status-card'><span style='color:#10b981;'>●</span> Core Orchestrator Live</div>", unsafe_style_allowed=True)
+            st.markdown("<div class='status-card'><span style='color:#10b981;'>●</span> Core Orchestrator Live</div>", unsafe_allow_html=True)
             st.write("")
             
-            # Broadcast Input Box
             st.markdown("#### 📣 Broadcast New Signal / Message")
             signal_msg = st.text_area("Type your XAUUSD Signal here...", height=150, placeholder="Example:\n🚀 XAUUSD BUY NOW\nEntry: 2320 - 2322\nTP: 2335 | SL: 2310")
             
@@ -133,7 +128,6 @@ else:
         with col2:
             st.markdown("### 📱 Live Broadcast Feed (What Users See)")
             try:
-                # Fetch recent signals from Supabase
                 signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
                 if len(signals.data) == 0:
                     st.info("No signals broadcasted yet.")
@@ -145,16 +139,14 @@ else:
                             <p style="white-space: pre-wrap; margin-top: 5px;">{sig['message']}</p>
                             <div class="chat-time">🕒 {sig['created_at'][:16].replace('T', ' ')}</div>
                         </div>
-                        """, unsafe_style_allowed=True)
+                        """, unsafe_allow_html=True)
             except Exception as e:
-                st.info("Tip: Create a 'signals' table in your Supabase database with columns: id, message, sender, created_at.")
+                st.info("Tip: Create a 'signals' table in your Supabase database.")
 
-    # USER PANEL VIEW
     elif st.session_state.role == "USER":
         st.markdown("### 📢 Live VIP Signal Stream")
         st.caption("Real-time algorithmic trading updates from Admin.")
         
-        # Display Only Broadcast Messages
         try:
             signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
             if len(signals.data) == 0:
@@ -167,6 +159,6 @@ else:
                         <p style="white-space: pre-wrap; margin-top: 5px;">{sig['message']}</p>
                         <div class="chat-time">🕒 {sig['created_at'][:16].replace('T', ' ')}</div>
                     </div>
-                    """, unsafe_style_allowed=True)
+                    """, unsafe_allow_html=True)
         except Exception as e:
             st.error("Unable to load signals. Technical team is working on it.")
