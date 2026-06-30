@@ -7,17 +7,18 @@ from supabase import create_client, Client
 # --- SETTINGS & CONFIG ---
 st.set_page_config(page_title="XAUUSD VIP Hub", page_icon="💰", layout="wide")
 
-# Custom CSS for Premium Chat Interface
+# Custom CSS for Premium Interface
 st.markdown("""
 <style>
     .reportview-container { background: #0e1117; }
     .chat-message-admin {
         background-color: #1f2937;
-        padding: 15px;
-        border-radius: 10px;
-        margin-bottom: 10px;
-        border-left: 5px solid #f59e0b;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 15px;
+        border-left: 6px solid #f59e0b;
         color: #f3f4f6;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .status-card {
         background-color: #111827;
@@ -26,11 +27,11 @@ st.markdown("""
         border: 1px solid #374151;
         margin-bottom: 15px;
     }
-    th { background-color: #1f2937 !important; color: #f59e0b !important; }
+    th { background-color: #1f2937 !important; color: #f59e0b !important; font-weight: bold !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- DATABASE CONNECTION (FOR ADMIN/USER LOGIN ONLY) ---
+# --- DATABASE CONNECTION ---
 SUPABASE_URL = "https://tdgyhqlxoyfkkrhzljwo.supabase.co"
 SUPABASE_KEY = "sb_secret_R4xiW5szyOxyrFPRRotsyw_RTiYFWWf"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -58,7 +59,7 @@ if not st.session_state.logged_in:
         
         with tab1:
             email_input = st.text_input("Registered Email ID")
-            whatsapp_input = st.text_input("WhatsApp Number", type="password", help="Enter your registered whatsapp number as password")
+            whatsapp_input = st.text_input("WhatsApp Number", type="password")
             if st.button("Log In", use_container_width=True):
                 if email_input == "manishadmin" and whatsapp_input == "goldmaster77":
                     st.session_state.logged_in = True
@@ -83,7 +84,7 @@ if not st.session_state.logged_in:
                         
         with tab2:
             reg_email = st.text_input("Enter Email ID")
-            reg_whatsapp = st.text_input("WhatsApp Number (with country code)")
+            reg_whatsapp = st.text_input("WhatsApp Number")
             reg_txid = st.text_input("Transaction ID (TXID)")
             if st.button("Register & Activate Alerts", use_container_width=True):
                 if reg_email and reg_whatsapp and reg_txid:
@@ -94,11 +95,9 @@ if not st.session_state.logged_in:
                             "txid": reg_txid,
                             "status": "Pending"
                         }).execute()
-                        st.success("Registration Successful! Status: Pending Approval.")
+                        st.success("Registration Successful!")
                     except Exception as e:
-                        st.error("Email already registered or database structure mismatch.")
-                else:
-                    st.warning("Please fill all details.")
+                        st.error("Error during registration.")
 
 # --- APP HUB (LOGGED IN) ---
 else:
@@ -114,7 +113,7 @@ else:
     st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD VIP Signal Hub</h2>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # Fetching Live Gold CMP from yfinance and applying terminal offset calibration
+    # Fetch Live CMP
     try:
         gold_ticker = yf.Ticker("GC=F")
         raw_price = gold_ticker.history(period="1d")["Close"].iloc[-1]
@@ -123,39 +122,53 @@ else:
     except:
         live_price_str = "Syncing Live Spot Feed..."
 
-    # Live Data Fetch Engine from Google Sheet
-    try:
-        df = pd.read_csv(SHEET_TSV_URL, sep="\t")
-        sheet_fetch_success = True
-    except Exception as e:
-        sheet_fetch_success = False
-
     st.markdown(f"<div class='status-card'><span style='color:#10b981;'>●</span> XAUUSD Live Spot CMP: <b>{live_price_str}</b></div>", unsafe_allow_html=True)
 
+    # Fetch Google Sheet Data & Clean Empty Columns
+    try:
+        df = pd.read_csv(SHEET_TSV_URL, sep="\t")
+        # Drop columns that are completely empty or have "Unnamed" and all NaNs
+        df = df.dropna(how='all', axis=1)
+        # Fill remaining individual NaNs with empty string for clean display
+        df = df.fillna("")
+        sheet_fetch_success = True
+    except:
+        sheet_fetch_success = False
+
     if sheet_fetch_success and not df.empty:
-        # Get the absolute latest signal row (last row of the sheet)
+        # Get the absolute latest row
         latest_row = df.iloc[-1]
         
         st.markdown("### 🚨 Latest Premium Signal (Live from Google Sheet)")
-        # Display latest row as a highlighted card block dynamically
-        items = [f"<b>{col}:</b> {val}" for col, val in latest_row.items() if pd.notna(val)]
-        signal_html = " | &nbsp;&nbsp;&nbsp;&nbsp; ".join(items)
+        
+        # Format the display nicely without printing empty values
+        items = []
+        for col, val in latest_row.items():
+            val_str = str(val).strip()
+            if val_str and "Unnamed" not in str(col) and val_str.lower() != "none":
+                items.append(f"<b>{col}:</b> {val_str}")
+            elif "Unnamed" in str(col) and val_str and val_str.lower() != "none":
+                items.append(f"{val_str}")
+                
+        signal_html = " | &nbsp;&nbsp;&nbsp;&nbsp; ".join(items) if items else "New update logged in sheet."
         
         st.markdown(f"""
         <div class="chat-message-admin">
             <strong>📢 Manissh S Jariwala (Admin Broadcast)</strong><br>
-            <p style="font-size: 1.15rem; margin-top: 8px; color: #f3f4f6;">{signal_html}</p>
+            <p style="font-size: 1.2rem; margin-top: 8px; color: #f3f4f6; line-height: 1.6;">{signal_html}</p>
         </div>
         """, unsafe_allow_html=True)
         
         # Display full log history table below
         st.write("")
         st.markdown("### 📊 Historical Signal Logs")
-        st.dataframe(df.iloc[::-1], use_container_width=True) # Reverse to show newest on top
+        
+        # Filter out completely unnamed or empty columns from dataframe display
+        clean_df = df.loc[:, ~df.columns.str.contains('^Unnamed')] if any(df.columns.str.contains('^Unnamed')) else df
+        st.dataframe(clean_df.iloc[::-1], use_container_width=True)
         
     else:
-        st.info("Waiting for the next premium XAUUSD signal from Google Sheet... Keep this screen open. 🔍")
+        st.info("Waiting for data stream from Google Sheet... Keep this screen open. 🔍")
 
-    # Manual Refresh Button
     if st.button("🔄 Sync & Refresh Sheet Data", use_container_width=True):
         st.rerun()
