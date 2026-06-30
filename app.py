@@ -30,9 +30,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- DATABASE CONNECTION ---
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+# --- DATABASE CONNECTION (HARDCODED CONNECTION LOCK) ---
+SUPABASE_URL = "https://tdgyhqlxoyfkkrhzljwo.supabase.co"
+SUPABASE_KEY = "sb_secret_R4xiW5szyOxyrFPRRotsyw_RTiYFWWf"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- SESSION STATE INITIALIZATION ---
@@ -57,6 +57,7 @@ if not st.session_state.logged_in:
             email_input = st.text_input("Registered Email ID")
             whatsapp_input = st.text_input("WhatsApp Number", type="password", help="Enter your registered whatsapp number as password")
             if st.button("Log In", use_container_width=True):
+                # Admin Bypass
                 if email_input == "manishadmin" and whatsapp_input == "goldmaster77":
                     st.session_state.logged_in = True
                     st.session_state.role = "ADMIN"
@@ -111,7 +112,7 @@ else:
     st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD VIP Signal Hub</h2>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # Fetching Live Gold CMP from yfinance (Option 1: Single Resource)
+    # Fetching Live Gold CMP from yfinance
     try:
         gold_ticker = yf.Ticker("GC=F")
         live_price = gold_ticker.history(period="1d")["Close"].iloc[-1]
@@ -138,7 +139,7 @@ else:
                         time.sleep(0.5)
                         st.rerun()
                     except Exception as e:
-                        st.error("Failed to send message to database.")
+                        st.error(f"Database Error: {e}")
                 else:
                     st.warning("Please enter a message first.")
         
