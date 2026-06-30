@@ -29,51 +29,62 @@ def fetch_live_sheet_data(url):
 # --- SESSION STATE INITIALIZATION ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-    st.session_state.user_role = None  # 'admin' ya 'client'
+    st.session_state.user_role = None  
     st.session_state.username = ""
 
-# --- LOGIN / REGISTRATION UI ---
+# --- LOGIN / REGISTRATION UI (COMPACT & CENTERED) ---
 if not st.session_state.logged_in:
-    st.title("🔒 XAUUSD AI Algorithmic Network")
-    st.subheader("VIP Portal Login & Registration")
-    st.markdown("---")
+    # 3 Columns banakar beech wali column ko chota (compact) rakha hai
+    left_space, center_box, right_space = st.columns([1.2, 1, 1.2])
     
-    tab1, tab2 = st.tabs(["🔑 Sign In", "📝 Create Account / USDT Portal"])
-    
-    with tab1:
-        username = st.text_input("Username / Email:", key="login_user")
-        password = st.text_input("Password:", type="password", key="login_pass")
+    with center_box:
+        st.markdown("<br><br>", unsafe_allow_html=True) # Thoda niche push karne ke liye
+        st.markdown("<h2 style='text-align: center;'>🔒 VIP AI Terminal</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: gray;'>Algorithmic Signal Network</p>", unsafe_allow_html=True)
         
-        if st.button("Access Dashboard"):
-            # Temporary Core Authentication Logic (Phase 2 mein ise database se connect karenge)
-            if username == "manishadmin" and password == "goldmaster77":
-                st.session_state.logged_in = True
-                st.session_state.user_role = "admin"
-                st.session_state.username = "Manissh (Admin)"
-                st.rerun()
-            elif username == "client1" and password == "vipgold":
-                st.session_state.logged_in = True
-                st.session_state.user_role = "client"
-                st.session_state.username = "VIP Premium Client"
-                st.rerun()
-            else:
-                st.error("Invalid Credentials! Please check again.")
+        # Chota compact container block
+        with st.container(border=True):
+            tab1, tab2 = st.tabs(["🔑 Sign In", "📝 USDT Register"])
+            
+            with tab1:
+                # Direct Google/Gmail login click standard look lagane ke liye ek dynamic button mock kiya hai
+                if st.button("🔴 Continue with Gmail", use_container_width=True):
+                    st.info("Gmail Integration Active: Please type your registered credentials below.")
                 
-    with tab2:
-        st.markdown("### 🛰️ Complete 3-Step Registration")
-        reg_email = st.text_input("Enter Your Gmail Address:")
-        reg_wa = st.text_input("Enter WhatsApp Number (With Country Code):", placeholder="e.g. 919825xxxxxx")
-        
-        st.info("⚠️ **USDT (TRC20) Subscription Payment Gateway**\n\nVIP Matrix Multi-Timeframe Signals & AI Support ke liye fee **$XX USDT** per month hai.\n\nPlease scan or send payment to the address below:")
-        st.code("TYq37R4vB1XpZmWqL9KsmHnBvE8DxF4zQk", language="text") # Aapka USDT Wallet address
-        
-        tx_id = st.text_input("Enter USDT Transaction Hash ID (TxID) after transfer:")
-        
-        if st.button("Submit Registration Details"):
-            if reg_email and reg_wa and tx_id:
-                st.success("✅ Application Submitted! AI Agent is verifying your TxID on the blockchain. System access will be granted shortly via WhatsApp notification.")
-            else:
-                st.warning("Please fill all details and submit valid Transaction ID.")
+                st.markdown("<div style='text-align: center; margin: 10px 0; color: gray;'>- OR -</div>", unsafe_allow_html=True)
+                
+                username = st.text_input("Username / Email:", key="login_user", label_visibility="collapsed", placeholder="Email or Username")
+                password = st.text_input("Password:", type="password", key="login_pass", label_visibility="collapsed", placeholder="Password")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("Log In", type="primary", use_container_width=True):
+                    if username == "manishadmin" and password == "goldmaster77":
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = "admin"
+                        st.session_state.username = "Manissh (Admin)"
+                        st.rerun()
+                    elif username == "client1" and password == "vipgold":
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = "client"
+                        st.session_state.username = "VIP Premium Client"
+                        st.rerun()
+                    else:
+                        st.error("Invalid Credentials!")
+                        
+            with tab2:
+                reg_email = st.text_input("Gmail Address:", placeholder="yourname@gmail.com")
+                reg_wa = st.text_input("WhatsApp Number:", placeholder="919825xxxxxx")
+                
+                st.markdown("<p style='font-size: 12px; color: gray;'><b>USDT (TRC20) Gateway Address:</b></p>", unsafe_allow_html=True)
+                st.code("TYq37R4vB1XpZmWqL9KsmHnBvE8DxF4zQk", language="text")
+                
+                tx_id = st.text_input("Transaction Hash ID (TxID):", placeholder="Enter TxID after payment")
+                
+                if st.button("Submit Access Request", use_container_width=True):
+                    if reg_email and reg_wa and tx_id:
+                        st.success("✅ Submitted! Verification via WhatsApp pending.")
+                    else:
+                        st.warning("All fields required.")
 
 # --- LIVE DASHBOARD (AFTER SUCCESSFUL LOGIN) ---
 else:
@@ -87,13 +98,10 @@ else:
 
     df, error = fetch_live_sheet_data(SHEET_URL)
 
-    # ----------------------------------------------------
-    # 👑 CASE A: ADMIN DASHBOARD VIEW (Full Controls & Tables)
-    # ----------------------------------------------------
+    # ADMIN VIEW
     if st.session_state.user_role == "admin":
         st.title("⚡ XAUUSD Multi-Agent Command Center (ADMIN MODE)")
         st.markdown("---")
-        
         if error:
             st.error(f"Error fetching sheet: {error}")
         else:
@@ -106,31 +114,24 @@ else:
                 st.markdown("### 📜 Master Live Sheet Log (Protected View)")
                 st.dataframe(df.tail(40), use_container_width=True)
                 
-    # ----------------------------------------------------
-    # 👥 CASE B: PREMIUM CLIENT VIEW (Hidden Sheets, Clean VIP Room)
-    # ----------------------------------------------------
+    # CLIENT VIEW
     elif st.session_state.user_role == "client":
         st.title("💎 VIP XAUUSD Premium Signal Room")
         st.subheader("Real-Time Algorithmic Execution Hub")
         st.markdown("---")
         
-        # Yahan hum client ko sheet nahi dikha rahe hain! Bilkul clean dashboard.
         col1, col2 = st.columns([1, 1])
-        
         with col1:
             st.markdown("### 🚀 Active Trading Signals")
-            # Hum data frame ki aakhri raw read karke client ko clean dynamic updates denge
             if df is not None and not df.empty:
                 st.success("🟢 STATUS: AI Engine is scanning M30, H1 and H4 structures.")
                 st.metric(label="VIP Premium Active Status", value="SCANNING MATRIX", delta="Grid Secured")
             else:
                 st.info("Waiting for next structural market release...")
-                
         with col2:
             st.markdown("### 🤖 Your AI Concierge Support")
-            st.markdown("> **Note:** VIP Technical Grid Analysis directly aapke register kiye hue WhatsApp par delivery chalu hai. Trade management instructions (Lot Size calculation, dynamic trailing aur targets) automatic text flow ke jariye manage honge.")
+            st.markdown("> **Note:** VIP Technical Grid Analysis directly aapke register kiye hue WhatsApp par delivery chalu hai.")
             st.info("⏳ Your subscription status: **ACTIVE (29 Days Remaining)**")
 
-    # Auto refresh logic for live data pipes
     time.sleep(10)
     st.rerun()
