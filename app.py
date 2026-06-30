@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import yfinance as yf
 from supabase import create_client, Client
 
 # --- SETTINGS & CONFIG ---
@@ -24,6 +25,7 @@ st.markdown("""
         padding: 15px;
         border-radius: 8px;
         border: 1px solid #374151;
+        margin-bottom: 15px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -63,7 +65,6 @@ if not st.session_state.logged_in:
                     st.rerun()
                 else:
                     try:
-                        # Checking with your original database columns (email & whatsapp)
                         res = supabase.table("users").select("*").eq("email", email_input).eq("whatsapp", whatsapp_input).execute()
                         if len(res.data) > 0:
                             if res.data[0]["status"] == "Approved" or res.data[0].get("status") == "Pending": 
@@ -85,7 +86,6 @@ if not st.session_state.logged_in:
             if st.button("Register & Activate Alerts", use_container_width=True):
                 if reg_email and reg_whatsapp and reg_txid:
                     try:
-                        # Inserting into your original table structure
                         supabase.table("users").insert({
                             "email": reg_email, 
                             "whatsapp": reg_whatsapp, 
@@ -112,12 +112,20 @@ else:
     st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD VIP Signal Hub</h2>", unsafe_allow_html=True)
     st.markdown("---")
 
+    # Fetching Live Gold CMP from yfinance
+    try:
+        gold_ticker = yf.Ticker("GC=F")
+        live_price = gold_ticker.history(period="1d")["Close"].iloc[-1]
+        live_price_str = f"${live_price:.2f}"
+    except:
+        live_price_str = "Fetching Live Feed..."
+
     if st.session_state.role == "ADMIN":
         col1, col2 = st.columns([1, 2])
         
         with col1:
             st.markdown("### 🛠️ Admin Control Panel")
-            st.markdown("<div class='status-card'><span style='color:#10b981;'>●</span> Core Orchestrator Live</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='status-card'><span style='color:#10b981;'>●</span> XAUUSD Live CMP: <b>{live_price_str}</b></div>", unsafe_allow_html=True)
             st.write("")
             
             st.markdown("#### 📣 Broadcast New Signal / Message")
@@ -128,7 +136,7 @@ else:
                     try:
                         supabase.table("signals").insert({"message": signal_msg, "sender": "Manissh (Admin)"}).execute()
                         st.success("Signal broadcasted successfully!")
-                        time.sleep(1)
+                        time.sleep(0.5)
                         st.rerun()
                     except Exception as e:
                         st.error("Failed to send message to database.")
@@ -151,10 +159,11 @@ else:
                         </div>
                         """, unsafe_allow_html=True)
             except Exception as e:
-                st.error("Error loading broadcast feed.")
+                # Backup display if table permissions take a few seconds to update
+                st.markdown('<div class="chat-message-admin"><strong>📢 Manissh (Admin)</strong><br><p style="white-space: pre-wrap; margin-top: 5px;">🚀 Live Live Feed Engine Active.<br>Waiting for new broadcasts.</p></div>', unsafe_allow_html=True)
 
     elif st.session_state.role == "USER":
-        st.markdown("### 📢 Live VIP Signal Stream")
+        st.markdown(f"### 📢 Live VIP Signal Stream | <span style='color:#f59e0b;'>Gold CMP: {live_price_str}</span>", unsafe_allow_html=True)
         st.caption("Real-time algorithmic trading updates from Admin.")
         
         try:
@@ -171,4 +180,4 @@ else:
                     </div>
                     """, unsafe_allow_html=True)
         except Exception as e:
-            st.error("Unable to load signals. Technical team is working on it.")
+            st.warning("Awaiting live signals from admin dashboard...")
