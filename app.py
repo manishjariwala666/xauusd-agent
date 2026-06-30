@@ -19,7 +19,6 @@ st.markdown("""
         border-left: 5px solid #f59e0b;
         color: #f3f4f6;
     }
-    .chat-time { font-size: 0.8rem; color: #9ca3af; margin-top: 5px; }
     .status-card {
         background-color: #111827;
         padding: 15px;
@@ -27,13 +26,17 @@ st.markdown("""
         border: 1px solid #374151;
         margin-bottom: 15px;
     }
+    th { background-color: #1f2937 !important; color: #f59e0b !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- DATABASE CONNECTION ---
+# --- DATABASE CONNECTION (FOR ADMIN/USER LOGIN ONLY) ---
 SUPABASE_URL = "https://tdgyhqlxoyfkkrhzljwo.supabase.co"
 SUPABASE_KEY = "sb_secret_R4xiW5szyOxyrFPRRotsyw_RTiYFWWf"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# --- GOOGLE SHEET TSV LINK ---
+SHEET_TSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRc2bZvbbN8-_7HXt-Cu0_UPmUpLEcpOcGQimQj8j1Q39i4Hr4E8tjhMCX5krQSAsX4kXwYpzwn5BjC/pub?output=tsv"
 
 # --- SESSION STATE INITIALIZATION ---
 if "logged_in" not in st.session_state:
@@ -111,73 +114,48 @@ else:
     st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD VIP Signal Hub</h2>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # Fetching Live Gold CMP from yfinance and applying terminal sync math
+    # Fetching Live Gold CMP from yfinance and applying terminal offset calibration
     try:
         gold_ticker = yf.Ticker("GC=F")
         raw_price = gold_ticker.history(period="1d")["Close"].iloc[-1]
-        # Mathematical Terminal Offset Calibration (-$19.20 point synchronization)
         calibrated_spot = raw_price - 19.20
         live_price_str = f"${calibrated_spot:.2f}"
     except:
         live_price_str = "Syncing Live Spot Feed..."
 
-    if st.session_state.role == "ADMIN":
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            st.markdown("### 🛠️ Admin Control Panel")
-            st.markdown(f"<div class='status-card'><span style='color:#10b981;'>●</span> XAUUSD Live Spot CMP: <b>{live_price_str}</b></div>", unsafe_allow_html=True)
-            st.write("")
-            
-            st.markdown("#### 📣 Broadcast New Signal / Message")
-            signal_msg = st.text_area("Type your XAUUSD Signal here...", height=150, placeholder="Example:\n🚀 XAUUSD BUY NOW\nEntry: 2320 - 2322\nTP: 2335 | SL: 2310")
-            
-            if st.button("🚀 Broadcast to Users", use_container_width=True):
-                if signal_msg:
-                    try:
-                        supabase.table("signals").insert({"message": signal_msg, "sender": "Manissh (Admin)"}).execute()
-                        st.success("Signal broadcasted successfully!")
-                        time.sleep(0.5)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Database Error: {e}")
-                else:
-                    st.warning("Please enter a message first.")
-        
-        with col2:
-            st.markdown("### 📱 Live Broadcast Feed (What Users See)")
-            try:
-                signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
-                if len(signals.data) == 0:
-                    st.info("No signals broadcasted yet.")
-                else:
-                    for sig in signals.data:
-                        st.markdown(f"""
-                        <div class="chat-message-admin">
-                            <strong>📢 {sig['sender']}</strong><br>
-                            <p style="white-space: pre-wrap; margin-top: 5px;">{sig['message']}</p>
-                            <div class="chat-time">🕒 {sig['created_at'][:16].replace('T', ' ')}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-            except Exception as e:
-                st.markdown('<div class="chat-message-admin"><strong>📢 Manissh (Admin)</strong><br><p style="white-space: pre-wrap; margin-top: 5px;">🚀 Live Feed Engine Active.<br>Waiting for data flow.</p></div>', unsafe_allow_html=True)
+    # Live Data Fetch Engine from Google Sheet
+    try:
+        df = pd.read_csv(SHEET_TSV_URL, sep="\t")
+        sheet_fetch_success = True
+    except Exception as e:
+        sheet_fetch_success = False
 
-    elif st.session_state.role == "USER":
-        st.markdown(f"### 📢 Live VIP Signal Stream | <span style='color:#f59e0b;'>Gold Spot CMP: {live_price_str}</span>", unsafe_allow_html=True)
-        st.caption("Real-time algorithmic trading updates from Admin.")
+    st.markdown(f"<div class='status-card'><span style='color:#10b981;'>●</span> XAUUSD Live Spot CMP: <b>{live_price_str}</b></div>", unsafe_allow_html=True)
+
+    if sheet_fetch_success and not df.empty:
+        # Get the absolute latest signal row (last row of the sheet)
+        latest_row = df.iloc[-1]
         
-        try:
-            signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
-            if len(signals.data) == 0:
-                st.info("Waiting for the next premium XAUUSD signal... Keep this screen open. 🔍")
-            else:
-                for sig in signals.data:
-                    st.markdown(f"""
-                    <div class="chat-message-admin">
-                        <strong>📢 {sig['sender']}</strong><br>
-                        <p style="white-space: pre-wrap; margin-top: 5px;">{sig['message']}</p>
-                        <div class="chat-time">🕒 {sig['created_at'][:16].replace('T', ' ')}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-        except Exception as e:
-            st.warning("Awaiting live signals from admin dashboard...")
+        st.markdown("### 🚨 Latest Premium Signal (Live from Google Sheet)")
+        # Display latest row as a highlighted card block dynamically
+        items = [f"<b>{col}:</b> {val}" for col, val in latest_row.items() if pd.notna(val)]
+        signal_html = " | &nbsp;&nbsp;&nbsp;&nbsp; ".join(items)
+        
+        st.markdown(f"""
+        <div class="chat-message-admin">
+            <strong>📢 Manissh S Jariwala (Admin Broadcast)</strong><br>
+            <p style="font-size: 1.15rem; margin-top: 8px; color: #f3f4f6;">{signal_html}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Display full log history table below
+        st.write("")
+        st.markdown("### 📊 Historical Signal Logs")
+        st.dataframe(df.iloc[::-1], use_container_width=True) # Reverse to show newest on top
+        
+    else:
+        st.info("Waiting for the next premium XAUUSD signal from Google Sheet... Keep this screen open. 🔍")
+
+    # Manual Refresh Button
+    if st.button("🔄 Sync & Refresh Sheet Data", use_container_width=True):
+        st.rerun()
