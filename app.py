@@ -21,12 +21,11 @@ except:
 def fetch_live_sheet_data(url):
     try:
         clear_url = f"{url}&cache_bypass={int(time.time())}"
-        # Header automatically clean handles mixed rows
+        # Mixed blocks ko handle karne ke liye simple text dataframe read
         df = pd.read_csv(clear_url, header=None)
         
-        # Latest data niche add hota hai, isliye hum bottom rows ko priority de rahe hain
-        # Taaki bina date sorting formula crash hue direct real-time data dikhe
-        df_display = df.tail(40) # Last 40 rows hamesha samne rahengi
+        # Latest data bottom blocks mein hota hai, isliye last 40 rows pull kar rahe hain
+        df_display = df.tail(40) 
         return df_display, None
     except Exception as e:
         return None, str(e)
@@ -84,9 +83,9 @@ else:
 
     with col2:
         st.markdown("### 📜 Live Sheet View (Bottom Blocks)")
-        # Direct clean block rendering bina strict table assumptions ke
-        st.dataframe(df, use_container_width=True, heading_rows=None)
+        # Clean standard display bina kisi non-supported parameters ke
+        st.dataframe(df, use_container_width=True)
 
-# Dynamic loop refresh
+# Dynamic loop auto-refresh
 time.sleep(10)
 st.rerun()
