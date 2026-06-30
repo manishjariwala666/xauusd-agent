@@ -38,69 +38,75 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "role" not in st.session_state:
     st.session_state.role = None
-if "username" not in st.session_state:
-    st.session_state.username = None
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
 
 # --- LOGIN SCREEN ---
 if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center; margin-top: 50px;'>🔒 VIP AI Terminal</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray;'>Algorithmic Signal Network</p>", unsafe_allow_html=True)
     
-    # Grid configuration to keep boxes small and centered
     col1, col2, col3 = st.columns([1, 1.2, 1])
     
     with col2:
-        tab1, tab2 = st.tabs(["🔑 Sign In", "📝 Register"])
+        tab1, tab2 = st.tabs(["🔑 Sign In", "📝 Register VIP"])
         
         with tab1:
-            user_input = st.text_input("Email or Username")
-            pass_input = st.text_input("Password", type="password")
+            email_input = st.text_input("Registered Email ID")
+            whatsapp_input = st.text_input("WhatsApp Number", type="password", help="Enter your registered whatsapp number as password")
             if st.button("Log In", use_container_width=True):
-                if user_input == "manishadmin" and pass_input == "goldmaster77":
+                # Admin Bypass
+                if email_input == "manishadmin" and whatsapp_input == "goldmaster77":
                     st.session_state.logged_in = True
                     st.session_state.role = "ADMIN"
-                    st.session_state.username = "Manissh (Admin)"
+                    st.session_state.user_email = "Manissh (Admin)"
                     st.rerun()
                 else:
                     try:
-                        res = supabase.table("users").select("*").eq("username", user_input).eq("password", pass_input).execute()
+                        # Checking with your original database columns (email & whatsapp)
+                        res = supabase.table("users").select("*").eq("email", email_input).eq("whatsapp", whatsapp_input).execute()
                         if len(res.data) > 0:
-                            st.session_state.logged_in = True
-                            st.session_state.role = "USER"
-                            st.session_state.username = res.data[0]["username"]
-                            st.rerun()
+                            if res.data[0]["status"] == "Approved" or res.data[0].get("status") == "Pending": 
+                                st.session_state.logged_in = True
+                                st.session_state.role = "USER"
+                                st.session_state.user_email = res.data[0]["email"]
+                                st.rerun()
+                            else:
+                                st.error("Your account status is blocked or inactive.")
                         else:
-                            st.error("Invalid Credentials")
+                            st.error("Invalid Email or WhatsApp number.")
                     except Exception as e:
                         st.error("Database Connection Error")
                         
         with tab2:
-            reg_user = st.text_input("Create Username")
-            reg_pass = st.text_input("Create Password", type="password")
-            reg_phone = st.text_input("WhatsApp / Telegram Number")
+            reg_email = st.text_input("Enter Email ID")
+            reg_whatsapp = st.text_input("WhatsApp Number (with country code)")
+            reg_txid = st.text_input("Transaction ID (TXID)")
             if st.button("Register & Activate Alerts", use_container_width=True):
-                if reg_user and reg_pass and reg_phone:
+                if reg_email and reg_whatsapp and reg_txid:
                     try:
+                        # Inserting into your original table structure
                         supabase.table("users").insert({
-                            "username": reg_user, 
-                            "password": reg_pass, 
-                            "phone": reg_phone,
-                            "role": "USER"
+                            "email": reg_email, 
+                            "whatsapp": reg_whatsapp, 
+                            "txid": reg_txid,
+                            "status": "Pending"
                         }).execute()
-                        st.success("Registration Successful! Please Sign In.")
+                        st.success("Registration Successful! Status: Pending Approval. You can try logging in.")
                     except Exception as e:
-                        st.error("Username already exists.")
+                        st.error("Email already registered or database structure mismatch.")
                 else:
                     st.warning("Please fill all details.")
 
 # --- APP HUB (LOGGED IN) ---
 else:
-    st.sidebar.markdown(f"### 👤 Welcome, {st.session_state.username}")
+    st.sidebar.markdown(f"### 👤 Welcome")
+    st.sidebar.markdown(f"**Account:** {st.session_state.user_email}")
     st.sidebar.markdown(f"**Role:** {st.session_state.role}")
     if st.sidebar.button("Logout 🚪"):
         st.session_state.logged_in = False
         st.session_state.role = None
-        st.session_state.username = None
+        st.session_state.user_email = None
         st.rerun()
 
     st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD VIP Signal Hub</h2>", unsafe_allow_html=True)
@@ -120,7 +126,7 @@ else:
             if st.button("🚀 Broadcast to Users", use_container_width=True):
                 if signal_msg:
                     try:
-                        supabase.table("signals").insert({"message": signal_msg, "sender": st.session_state.username}).execute()
+                        supabase.table("signals").insert({"message": signal_msg, "sender": "Manissh (Admin)"}).execute()
                         st.success("Signal broadcasted successfully!")
                         time.sleep(1)
                         st.rerun()
@@ -145,7 +151,7 @@ else:
                         </div>
                         """, unsafe_allow_html=True)
             except Exception as e:
-                st.info("Tip: Create a 'signals' table in your Supabase database.")
+                st.error("Error loading broadcast feed.")
 
     elif st.session_state.role == "USER":
         st.markdown("### 📢 Live VIP Signal Stream")
