@@ -1,5 +1,4 @@
 import streamlit as st
-import requests
 import pandas as pd
 import time
 from supabase import create_client, Client
@@ -7,201 +6,167 @@ from supabase import create_client, Client
 # --- SETTINGS & CONFIG ---
 st.set_page_config(page_title="XAUUSD VIP Hub", page_icon="💰", layout="wide")
 
-# --- CREDENTIALS & SECRETS CONFIG ---
-# Supabase connectivity credentials config
-SUPABASE_URL = "https://tdgyhqlxoyfkkrhzljwo.supabase.co"
-SUPABASE_KEY = "sb_publishable_R5NjgAUCX8QwrCgrHkyqUw_ijxdBkOs"
-
-try:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-except Exception as e:
-    st.error(f"Database configuration crash: {str(e)}")
-
-try:
-    WHATSAPP_TOKEN = st.secrets["whatsapp"]["token"]
-    PHONE_NUMBER_ID = st.secrets["whatsapp"]["phone_number_id"]
-    SHEET_URL = st.secrets["google"]["sheet_url"] 
-except:
-    WHATSAPP_TOKEN = "EAAYmZCZBEO60UBRzJiGJ3kfazGNJeZCutZCPQPzcw9f5TXdZAYwmxjWiijEEk0YtBnZCbDomiiNdQQtexVAGhMT652ldp1X1ZBHNdPvccFFCWViPybfU6VQkz9eo2nzUGQ7BqjlcJDPZAOfOjav4m70YB1DTsZBecFPmCUwhxcYjjAsTdKJLKFUhE9llawKqH3XqRSju999I7PZAG8pxZC8B1EzdHdltK9dBlRW8Kr6f4G4Fw1b5RbZBwbZB6D4h5JzAkrpOUvQczMhI0eXpk2noxUy7q"
-    PHONE_NUMBER_ID = "1168308543041713"
-    SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRc2bZvbbN8-_7HXt-Cu0_UPmUpLEcpOcGQimQj8j1Q39i4Hr4E8tjhMCX5krQSAsX4kXwYpzwn5BjC/pub?gid=0&single=true&output=csv" 
-
-# --- CUSTOM CSS FOR COMPACT CENTERED LOGIN ---
+# Custom CSS for Premium Chat Interface
 st.markdown("""
-    <style>
-    .stAppHeader {display: none;}
-    .login-container {
-        max-width: 450px;
-        margin: 0 auto;
-        padding: 30px;
-        background-color: #1e1e1e;
-        border-radius: 12px;
-        border: 1px solid #333333;
-        box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.5);
+<style>
+    .reportview-container { background: #0e1117; }
+    .chat-message-admin {
+        background-color: #1f2937;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        border-left: 5px solid #f59e0b;
+        color: #f3f4f6;
     }
-    .main-title { text-align: center; font-size: 26px; font-weight: bold; color: #ffffff; margin-bottom: 5px; }
-    .sub-title { text-align: center; font-size: 14px; color: #888888; margin-bottom: 25px; }
-    </style>
-""", unsafe_allow_html=True)
+    .chat-time { font-size: 0.8rem; color: #9ca3af; margin-top: 5px; }
+    .status-card {
+        background-color: #111827;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #374151;
+    }
+</style>
+""", unsafe_style_allowed=True)
 
-# --- DATA FETCH LOGIC ---
-@st.cache_data(ttl=10)
-def fetch_live_sheet_data(url):
-    try:
-        clear_url = f"{url}&cache_bypass={int(time.time())}"
-        df = pd.read_csv(clear_url, header=None)
-        return df, None
-    except Exception as e:
-        return None, str(e)
+# --- DATABASE CONNECTION ---
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- SESSION STATE INITIALIZATION ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-    st.session_state.user_role = None  
-    st.session_state.username = ""
+if "role" not in st.session_state:
+    st.session_state.role = None
+if "username" not in st.session_state:
+    st.session_state.username = None
 
-# --- LOGIN / REGISTRATION UI ---
+# --- LOGIN SCREEN ---
 if not st.session_state.logged_in:
-    _, center_col, _ = st.columns([1, 1.2, 1])
+    st.markdown("<h2 style='text-align: center;'>🔒 VIP AI Terminal</h2>", unsafe_style_allowed=True)
+    st.markdown("<p style='text-align: center; color: gray;'>Algorithmic Signal Network</p>", unsafe_style_allowed=True)
     
-    with center_col:
-        st.markdown("<br><br><br>", unsafe_allow_html=True)
-        st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        st.markdown('<div class="main-title">🔒 VIP AI Terminal</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sub-title">Algorithmic Signal Network</div>', unsafe_allow_html=True)
-        
-        tab1, tab2 = st.tabs(["🔑 Sign In", "📝 USDT Register"])
-        
-        with tab1:
-            if st.button("🔴 Continue with Gmail", use_container_width=True):
-                st.info("Gmail Mapping Active: Please use your credentials below.")
-            
-            st.markdown("<div style='text-align: center; margin: 15px 0; color: #555;'>- OR -</div>", unsafe_allow_html=True)
-            
-            username = st.text_input("Username / Email", placeholder="Email or Username", label_visibility="collapsed", key="signin_user")
-            password = st.text_input("Password", type="password", placeholder="Password", label_visibility="collapsed", key="signin_pass")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Log In", type="primary", use_container_width=True):
-                # Admin Static Access
-                if username == "manishadmin" and password == "goldmaster77":
-                    st.session_state.logged_in = True
-                    st.session_state.user_role = "admin"
-                    st.session_state.username = "Manissh (Admin)"
-                    st.rerun()
-                else:
-                    # Database check for dynamic users
-                    try:
-                        response = supabase.table("users").select("*").eq("email", username).execute()
-                        user_data = response.data
-                        
-                        if user_data:
-                            user_profile = user_data[0]
-                            # Dynamic matching using password context or prompt validation
-                            if password == "vipgold":  # Default unlock key for valid users
-                                if user_profile["status"] == "Active":
-                                    st.session_state.logged_in = True
-                                    st.session_state.user_role = "client"
-                                    st.session_state.username = user_profile["email"]
-                                    st.rerun()
-                                else:
-                                    st.error("⏳ Your account is pending verification! Access locked until admin approval.")
-                            else:
-                                st.error("❌ Incorrect Password for this profile.")
-                        else:
-                            st.error("❌ User Profile not found. Please register under USDT tab.")
-                    except Exception as err:
-                        st.error(f"Auth Network Slow: {str(err)}")
-                        
-        with tab2:
-            reg_email = st.text_input("Gmail Address", placeholder="yourname@gmail.com", key="reg_email")
-            reg_wa = st.text_input("WhatsApp Number", placeholder="919825xxxxxx", key="reg_wa")
-            
-            st.markdown("<p style='font-size: 13px; color: #888; margin-top: 10px;'><b>USDT (TRC20) Address:</b></p>", unsafe_allow_html=True)
-            st.code("TYq37R4vB1XpZmWqL9KsmHnBvE8DxF4zQk", language="text")
-            
-            tx_id = st.text_input("Transaction Hash (TxID)", placeholder="Paste TxID here", key="reg_txid")
-            
-            if st.button("Submit Registration", use_container_width=True):
-                if reg_email and reg_wa and tx_id:
-                    # Inserting data directly into Supabase Table
-                    try:
-                        payload = {"email": reg_email, "whatsapp": reg_wa, "txid": tx_id, "status": "Pending"}
-                        supabase.table("users").insert(payload).execute()
-                        st.success("✅ Registered Successfully! Data sent to database. Access will be unlocked once verification completes.")
-                    except Exception as ins_err:
-                        if "already exists" in str(ins_err).lower():
-                            st.warning("⚠️ This email is already registered in the system.")
-                        else:
-                            st.error(f"Database Error: {str(ins_err)}")
-                else:
-                    st.warning("⚠️ All fields are strictly required.")
+    tab1, tab2 = st.tabs(["🔑 Sign In", "📝 Register"])
+    
+    with tab1:
+        user_input = st.text_input("Email or Username")
+        pass_input = st.text_input("Password", type="password")
+        if st.button("Log In", use_container_width=True):
+            if user_input == "manishadmin" and pass_input == "goldmaster77":
+                st.session_state.logged_in = True
+                st.session_state.role = "ADMIN"
+                st.session_state.username = "Manissh (Admin)"
+                st.rerun()
+            else:
+                # Basic User Check
+                try:
+                    res = supabase.table("users").select("*").eq("username", user_input).eq("password", pass_input).execute()
+                    if len(res.data) > 0:
+                        st.session_state.logged_in = True
+                        st.session_state.role = "USER"
+                        st.session_state.username = res.data[0]["username"]
+                        st.rerun()
+                    else:
+                        st.error("Invalid Credentials")
+                except Exception as e:
+                    st.error("Database Connection Error")
                     
-        st.markdown('</div>', unsafe_allow_html=True)
+    with tab2:
+        reg_user = st.text_input("Create Username")
+        reg_pass = st.text_input("Create Password", type="password")
+        reg_phone = st.text_input("WhatsApp / Telegram Number (with Country Code)")
+        if st.button("Register & Activate Alerts", use_container_width=True):
+            if reg_user and reg_pass and reg_phone:
+                try:
+                    supabase.table("users").insert({
+                        "username": reg_user, 
+                        "password": reg_pass, 
+                        "phone": reg_phone,
+                        "role": "USER"
+                    }).execute()
+                    st.success("Registration Successful! Please Sign In.")
+                except Exception as e:
+                    st.error("Username already exists or database error.")
+            else:
+                st.warning("Please fill all details.")
 
-# --- LIVE DASHBOARD (AFTER SUCCESSFUL LOGIN) ---
+# --- APP HUB (LOGGED IN) ---
 else:
+    # Sidebar
     st.sidebar.markdown(f"### 👤 Welcome, {st.session_state.username}")
-    st.sidebar.markdown(f"**Role:** {st.session_state.user_role.upper()}")
+    st.sidebar.markdown(f"**Role:** {st.session_state.role}")
     if st.sidebar.button("Logout 🚪"):
         st.session_state.logged_in = False
-        st.session_state.user_role = None
+        st.session_state.role = None
+        st.session_state.username = None
         st.rerun()
 
-    df, error = fetch_live_sheet_data(SHEET_URL)
+    # Main Interface
+    st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD VIP Signal Hub</h2>", unsafe_style_allowed=True)
+    st.markdown("---")
 
-    # ADMIN VIEW
-    if st.session_state.user_role == "admin":
-        st.title("⚡ XAUUSD Multi-Agent Command Center (ADMIN MODE)")
-        st.markdown("---")
+    # ADMIN PANEL VIEW
+    if st.session_state.role == "ADMIN":
+        col1, col2 = st.columns([1, 2])
         
-        # Adding live registered user metrics visibility for Admin
-        try:
-            db_users = supabase.table("users").select("*").execute()
-            user_df = pd.DataFrame(db_users.data)
-        except:
-            user_df = pd.DataFrame()
-
-        tab_data, tab_users = st.tabs(["📊 Market Live Grid", "👥 User Registrations Portal"])
-        
-        with tab_data:
-            if error:
-                st.error(f"Error fetching sheet: {error}")
-            else:
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    st.markdown("### 📊 Internal System Metrics")
-                    st.info("Core Orchestrator: Gemini Live Grid Engine Active.")
-                    st.success("Triggers Lock: Background cron updating sheet every 60s.")
-                with col2:
-                    st.markdown("### 📜 Master Live Sheet Log (Protected View)")
-                    st.dataframe(df.tail(40), use_container_width=True)
-                    
-        with tab_users:
-            st.markdown("### 📋 Dynamic Live Registrations from Supabase")
-            if not user_df.empty:
-                st.dataframe(user_df, use_container_width=True)
-            else:
-                st.info("No users have registered through the portal yet.")
-                
-    # CLIENT VIEW
-    elif st.session_state.user_role == "client":
-        st.title("💎 VIP XAUUSD Premium Signal Room")
-        st.subheader("Real-Time Algorithmic Execution Hub")
-        st.markdown("---")
-        
-        col1, col2 = st.columns([1, 1])
         with col1:
-            st.markdown("### 🚀 Active Trading Signals")
-            if df is not None and not df.empty:
-                st.success("🟢 STATUS: AI Engine is scanning M30, H1 and H4 structures.")
-                st.metric(label="VIP Premium Active Status", value="SCANNING MATRIX", delta="Grid Secured")
-            else:
-                st.info("Waiting for next structural market release...")
+            st.markdown("### 🛠️ Admin Control Panel")
+            st.markdown("<div class='status-card'><span style='color:#10b981;'>●</span> Core Orchestrator Live</div>", unsafe_style_allowed=True)
+            st.write("")
+            
+            # Broadcast Input Box
+            st.markdown("#### 📣 Broadcast New Signal / Message")
+            signal_msg = st.text_area("Type your XAUUSD Signal here...", height=150, placeholder="Example:\n🚀 XAUUSD BUY NOW\nEntry: 2320 - 2322\nTP: 2335 | SL: 2310")
+            
+            if st.button("🚀 Broadcast to Users", use_container_width=True):
+                if signal_msg:
+                    try:
+                        supabase.table("signals").insert({"message": signal_msg, "sender": st.session_state.username}).execute()
+                        st.success("Signal broadcasted successfully!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Failed to send message to database.")
+                else:
+                    st.warning("Please enter a message first.")
+        
         with col2:
-            st.markdown("### 🤖 Your AI Concierge Support")
-            st.markdown("> **Note:** VIP Technical Grid Analysis directly aapke register kiye hue WhatsApp par delivery chalu hai.")
-            st.info("⏳ Your subscription status: **ACTIVE (29 Days Remaining)**")
+            st.markdown("### 📱 Live Broadcast Feed (What Users See)")
+            try:
+                # Fetch recent signals from Supabase
+                signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
+                if len(signals.data) == 0:
+                    st.info("No signals broadcasted yet.")
+                else:
+                    for sig in signals.data:
+                        st.markdown(f"""
+                        <div class="chat-message-admin">
+                            <strong>📢 {sig['sender']}</strong><br>
+                            <p style="white-space: pre-wrap; margin-top: 5px;">{sig['message']}</p>
+                            <div class="chat-time">🕒 {sig['created_at'][:16].replace('T', ' ')}</div>
+                        </div>
+                        """, unsafe_style_allowed=True)
+            except Exception as e:
+                st.info("Tip: Create a 'signals' table in your Supabase database with columns: id, message, sender, created_at.")
 
-    time.sleep(10)
-    st.rerun()
+    # USER PANEL VIEW
+    elif st.session_state.role == "USER":
+        st.markdown("### 📢 Live VIP Signal Stream")
+        st.caption("Real-time algorithmic trading updates from Admin.")
+        
+        # Display Only Broadcast Messages
+        try:
+            signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
+            if len(signals.data) == 0:
+                st.info("Waiting for the next premium XAUUSD signal... Keep this screen open. 🔍")
+            else:
+                for sig in signals.data:
+                    st.markdown(f"""
+                    <div class="chat-message-admin">
+                        <strong>📢 {sig['sender']}</strong><br>
+                        <p style="white-space: pre-wrap; margin-top: 5px;">{sig['message']}</p>
+                        <div class="chat-time">🕒 {sig['created_at'][:16].replace('T', ' ')}</div>
+                    </div>
+                    """, unsafe_style_allowed=True)
+        except Exception as e:
+            st.error("Unable to load signals. Technical team is working on it.")
