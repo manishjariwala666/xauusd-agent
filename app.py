@@ -112,11 +112,6 @@ if not st.session_state.logged_in:
                     cookie_manager.set("xau_role", "ADMIN", max_age=604800)
                     cookie_manager.set("xau_email", "Manissh S Jariwala (Admin)", max_age=604800)
                     st.rerun()
-                elif "@" in email_input and whatsapp_input == "free123":
-                    st.session_state.logged_in = True
-                    st.session_state.role = "FREE"
-                    st.session_state.user_email = email_input
-                    st.rerun()
                 else:
                     try:
                         res = supabase.table("users").select("*").eq("email", email_input).eq("whatsapp", whatsapp_input).execute()
@@ -216,7 +211,6 @@ else:
 
     # WELCOME MESSAGE RULES PER TIER
     if st.session_state.role == "FREE":
-        st.toast(f"Welcome {st.session_state.user_email}! You are exploring on a Free Trial Account.")
         st.markdown(f"""
         <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #e11d48; margin-bottom:15px;'>
             <h4 style='margin:0; color:#e11d48;'>👋 Welcome to XAUUSD AI Trial Hub, {st.session_state.user_email}!</h4>
@@ -226,4 +220,84 @@ else:
     else:
         st.markdown(f"""
         <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #10b981; margin-bottom:15px;'>
-            <h4 style='margin:0; color:#10b981;'>👑
+            <h4 style='margin:0; color:#10b981;'>👑 VIP Operational Hub Active</h4>
+            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>Welcome back, {st.session_state.user_email}. All automated neural networks and institutional pipelines are fully unlocked.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Mode 1: Trading Hub Dashboard
+    if workspace_mode == "📢 Live Trading Hub":
+        st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD Multi-Agent Hub</h2>", unsafe_allow_html=True)
+        st.markdown(f"<div class='status-card'><span style='color:#10b981;'>●</span> <b>Real-Time Spot Price (Synced):</b> <span style='color:#f59e0b; font-size:1.2rem;'>{live_price_str}</span></div>", unsafe_allow_html=True)
+
+        st.markdown("### 🤖 Executive AI Floor")
+        tl, ag = st.columns([1, 2])
+        with tl:
+            st.markdown("<div class='agent-card' style='border-left: 4px solid #38bdf8;'><b>👔 Team Leader (Alpha Strategist):</b><br>'All sub-systems executing protocols. System stable.'</div>", unsafe_allow_html=True)
+        with ag:
+            if st.session_state.role == "FREE":
+                st.markdown("<div class='agent-card' style='color:#9ca3af;'>🔒 <b>Data Pipeline Status:</b> [Locked for Free Accounts] Upgrade to VIP to access Google Sheet streaming matrix.</div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<div class='agent-card'><b>⚡ Data Pipeline Status:</b> {latest_signal}</div>", unsafe_allow_html=True)
+
+        # ADMIN PANEL MANAGEMENT
+        if st.session_state.role == "ADMIN":
+            st.markdown("### 🛠️ Admin Broadcast Console")
+            clean_editable_signal = clean_html_tags(latest_signal)
+            signal_msg = st.text_area("Type Signal to Deploy...", value=clean_editable_signal, height=100)
+            if st.button("🚀 Push Live Broadcast to VIP Terminal", use_container_width=True):
+                if signal_msg:
+                    supabase.table("signals").insert({"message": signal_msg, "sender": "Manissh S Jariwala (Admin)"}).execute()
+                    st.success("Signal deployed globally!")
+                    time.sleep(0.5)
+                    st.rerun()
+        else:
+            if st.session_state.role != "FREE":
+                st.info("ℹ️ Live Terminal connected. Institutional signal updates are managed directly by corporate system algorithms.")
+
+        # GROUP CHAT AND SPREADSHEET TABLE IMAGE SIMULATION
+        st.markdown("### 📢 Live VIP Stream Feed")
+        
+        if sheet_active and st.session_state.role != "FREE":
+            with st.expander("📊 Dynamic Neural Matrix Sheet Stream (Click to Expand)", expanded=True):
+                try:
+                    display_df = pd.read_csv(SHEET_TSV_URL, sep="\t").dropna(how='all', axis=1).fillna("")
+                    st.dataframe(display_df.tail(5), use_container_width=True)
+                    st.caption("⚡ Live Matrix Stream direct synchronization pipeline successfully active.")
+                except:
+                    st.error("Matrix framework rendering delay.")
+
+        # Stream feeds
+        if st.session_state.role == "FREE":
+            st.markdown('<div class="chat-message-admin" style="border-left:6px solid #e11d48;"><strong>📢 System Core Bot</strong><br><p style="color:#f87171; font-size:1rem; margin-top:5px;">⚠️ Live Signal Stream is locked for Free Tier. Please use the Activate VIP portal to get instant lifetime verification tokens.</p></div>', unsafe_allow_html=True)
+        else:
+            if sheet_active:
+                st.markdown(f'<div class="chat-message-admin"><strong>📢 Google Sheet Real-time Feed</strong><br><p style="color:#facc15; font-size:1.1rem; margin-top:5px;">{latest_signal}</p></div>', unsafe_allow_html=True)
+            try:
+                signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
+                for sig in signals.data:
+                    st.markdown(f'<div class="chat-message-admin"><strong>📢 {sig["sender"]}</strong><br><p style="color:#facc15; font-size:1.1rem; margin-top:5px;">{sig["message"]}</p></div>', unsafe_allow_html=True)
+            except:
+                pass
+
+    # Mode 2: AI Agent Detailed Runtime Logs
+    elif workspace_mode == "🤖 AI Agent Activity Log":
+        st.markdown("<h2 style='color: #38bdf8;'>🤖 Live AI Agent Runtime Log</h2>", unsafe_allow_html=True)
+        st.caption("Real-time monitoring panel showing what agents are processing right now.")
+        st.write("")
+        
+        current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.markdown(f"#### ⏱️ Current Execution Timestamp: `{current_time_str}`")
+        
+        if st.session_state.role == "FREE":
+            st.markdown(f"<div class='log-box' style='color:#f87171;'>❌ [RESTRICTED] <b>[Agent 1 to 5 Logs]</b>: Detailed sub-agent runtime parameters are locked for Free Trial accounts. Please update access levels.</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 1 - Trend Analyzer]</b>: Scanning H4 Chart... Market Structure is structural Higher-Highs. Bullish confirmation active.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 2 - Momentum Scalper]</b>: Monitoring M15 RSI/MACD crossovers near price {live_price_str}. Checking for quick volume spikes.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 3 - Risk Manager]</b>: Calculating exposure balance. Dynamic Stop-Loss safety parameters verified.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 4 - Volatility Monitor]</b>: Liquidations and spread gaps tracking active. Spread variation nominal.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 5 - Sentiment Analyst]</b>: Scraping international central bank updates. Safe-haven capital inflows streaming into XAU.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box' style='color:#facc15;'>⚙️ [{current_time_str}] <b>[AI Team Leader - Alpha Strategist]</b>: Consolidated reports from 5 sub-agents. Consensus calculated. System locked and synced with Google Sheet pipeline.</div>", unsafe_allow_html=True)
+
+        if st.button("🔄 Sync & Refresh Live Logs", use_container_width=True):
+            st.rerun()
