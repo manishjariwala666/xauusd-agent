@@ -10,25 +10,61 @@ import extra_streamlit_components as stx
 # --- SETTINGS & CONFIG ---
 st.set_page_config(page_title="XAUUSD VIP AI Terminal", page_icon="💰", layout="wide")
 
-# --- INDIGO-PURPLE HIGH PERFORMANCE TRADING RADIAN DESIGN ENGINE ---
+# --- MODERN BROKER LANDING INTERFACE THEME ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
     
     * { font-family: 'Plus Jakarta Sans', sans-serif; }
     
-    /* Dhan/Sahi Premium Matte-Dark Layout Theme */
     .stApp {
         background: radial-gradient(circle at 50% 10%, #0d0f14 0%, #07080a 100%) !important;
     }
     
-    /* Clean Sidebar Separation Matrix */
     section[data-testid="stSidebar"] {
         background-color: #040507 !important;
         border-right: 1px solid rgba(129, 140, 248, 0.08) !important;
     }
     
-    /* Premium Sharp Card Modules with Subtle Neon Ambient Accent */
+    /* Dynamic Ultra-Premium Corporate Header Hero Banner Template */
+    .hero-banner-container {
+        background: linear-gradient(135deg, #4f46e5 0%, #1e1b4b 50%, #090a0f 100%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        padding: 40px;
+        margin-bottom: 30px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+    .hero-banner-container::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, rgba(0,0,0,0) 70%);
+        border-radius: 50%;
+    }
+    .hero-title {
+        color: #ffffff;
+        font-size: 2.6rem;
+        font-weight: 800;
+        letter-spacing: -1px;
+        margin: 0;
+        text-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    .hero-subtitle {
+        color: #a5b4fc;
+        font-size: 1.1rem;
+        font-weight: 500;
+        margin-top: 8px;
+        margin-bottom: 0;
+        opacity: 0.9;
+    }
+    
+    /* Sharp Cards Layout */
     .premium-card {
         background: linear-gradient(180deg, rgba(17, 20, 28, 0.7) 0%, rgba(10, 12, 18, 0.9) 100%);
         border: 1px solid rgba(129, 140, 248, 0.07);
@@ -38,7 +74,6 @@ st.markdown("""
         box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
     }
     
-    /* Modern Broker Typographic Titles */
     .glow-header {
         font-weight: 800;
         font-size: 2.3rem;
@@ -48,14 +83,12 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
     }
     
-    /* High Performance Metric Elements */
     .metric-display {
         background: rgba(255, 255, 255, 0.01);
         border: 1px solid rgba(129, 140, 248, 0.05);
         border-radius: 14px;
         padding: 18px;
         text-align: center;
-        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.02);
     }
     .metric-val {
         font-size: 2.3rem;
@@ -64,30 +97,26 @@ st.markdown("""
         letter-spacing: -1px;
     }
     
-    /* Micro Glowing Status Framework Indicators */
     .glow-badge-green {
-        background: rgba(16, 185, 129, 0.04);
-        border: 1px solid rgba(16, 185, 129, 0.3);
+        background: rgba(16, 185, 129, 0.05);
+        border: 1px solid #10b981;
         color: #34d399;
-        padding: 5px 14px;
+        padding: 6px 16px;
         border-radius: 8px;
         font-weight: 600;
-        font-size: 0.78rem;
-        letter-spacing: 0.3px;
+        font-size: 0.8rem;
     }
     
     .glow-badge-rose {
-        background: rgba(225, 29, 72, 0.04);
-        border: 1px solid rgba(225, 29, 72, 0.3);
+        background: rgba(225, 29, 72, 0.05);
+        border: 1px solid #e11d48;
         color: #fb7185;
-        padding: 5px 14px;
+        padding: 6px 16px;
         border-radius: 8px;
         font-weight: 600;
-        font-size: 0.78rem;
-        letter-spacing: 0.3px;
+        font-size: 0.8rem;
     }
     
-    /* Clean Premium Institutional Layout Chats */
     .chat-message-premium {
         background: rgba(255, 255, 255, 0.01);
         border: 1px solid rgba(255, 255, 255, 0.03);
@@ -98,27 +127,15 @@ st.markdown("""
         color: #cbd5e1;
     }
     
-    /* Indigo Neon Action Button Architectures */
     div.stButton > button {
         background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
         color: #ffffff !important;
         font-weight: 600 !important;
-        letter-spacing: 0.3px !important;
         border-radius: 10px !important;
         border: 1px solid rgba(255, 255, 255, 0.05) !important;
         padding: 10px 22px !important;
         transition: all 0.2s ease !important;
         box-shadow: 0 8px 20px rgba(99, 102, 241, 0.2) !important;
-    }
-    div.stButton > button:hover {
-        transform: translateY(-1px) !important;
-        box-shadow: 0 12px 25px rgba(99, 102, 241, 0.35) !important;
-        background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%) !important;
-    }
-    
-    .stDataFrame {
-        border: 1px solid rgba(129, 140, 248, 0.06) !important;
-        border-radius: 10px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -128,7 +145,6 @@ SUPABASE_URL = "https://tdgyhqlxoyfkkrhzljwo.supabase.co"
 SUPABASE_KEY = "sb_secret_R4xiW5szyOxyrFPRRotsyw_RTiYFWWf"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- GOOGLE SHEET TSV LINK ---
 SHEET_TSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRc2bZvbbN8-_7HXt-Cu0_UPmUpLEcpOcGQimQj8j1Q39i4Hr4E8tjhMCX5krQSAsX4kXwYpzwn5BjC/pub?output=tsv"
 VIP_TELEGRAM_LINK = "https://t.me/+YourSecretChannelInviteLinkHere"
 
@@ -263,34 +279,54 @@ else:
         except:
             pass
 
-    # High Performance Core Top Banner Dashboard Sync
-    st.markdown("<div class='premium-card' style='padding: 22px; margin-top: 15px; display: flex; align-items: center; justify-content: space-between;'>", unsafe_allow_html=True)
-    c_left, c_right = st.columns([2.5, 1])
-    with c_left:
-        if st.session_state.role == "FREE":
-            st.markdown(f"<h3 style='margin:0; font-weight:700; color:#fff;'>👋 Welcome to Trading Floor, <span style='color:#818cf8;'>{st.session_state.user_email}</span></h3>", unsafe_allow_html=True)
-            st.markdown("<p style='color: #4b5563; margin:4px 0 0 0; font-size:0.92rem; font-weight:500;'>Isolated evaluation tier. Activate full framework pipeline modules in sidebar views.</p>", unsafe_allow_html=True)
-        elif st.session_state.role == "PENDING_VIP":
-            st.markdown(f"<h3 style='margin:0; font-weight:700; color:#fff;'>⏳ Telemetry Settlement Verification Active</h3>", unsafe_allow_html=True)
-            st.markdown("<p style='color: #4b5563; margin:4px 0 0 0; font-size:0.92rem; font-weight:500;'>Auditing payload variables inside Supabase ledger. Channels unlock automatically.</p>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<h3 style='margin:0; font-weight:700; color:#fff;'>👑 Institutional VIP Node Active</h3>", unsafe_allow_html=True)
-            st.markdown(f"<p style='color: #818cf8; margin:4px 0 0 0; font-size:0.92rem; font-weight:600;'>Secure Socket Connection Verified: {st.session_state.user_email}</p>", unsafe_allow_html=True)
-    with c_right:
-        st.markdown("<div style='text-align: right;'>", unsafe_allow_html=True)
-        if st.session_state.role == "FREE":
-            st.markdown("<span class='glow-badge-rose'>⚠️ RUNNING EVALUATION SUITE</span>", unsafe_allow_html=True)
-        elif st.session_state.role == "PENDING_VIP":
-            st.markdown("<span class='glow-badge-rose' style='border-color:rgba(245,158,11,0.3); color:#facc15; background:rgba(245,158,11,0.02);'>⏳ AUDITING MATRIX PAYLOAD</span>", unsafe_allow_html=True)
-        else:
-            st.markdown("<span class='glow-badge-green'>● CORE PIPELINE SECURE</span>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    # --- ULTIMATE HIGH-END HERO BANNER INJECTION (TOP LEVEL) ---
+    if st.session_state.role == "FREE":
+        st.markdown(f"""
+        <div class='hero-banner-container'>
+            <div style='display: flex; justify-content: space-between; align-items: center;'>
+                <div>
+                    <h1 class='hero-title'>Built for serious traders.</h1>
+                    <p class='hero-subtitle'>Welcome to Alpha Suite framework, {st.session_state.user_email}. You are currently evaluating limited data nodes.</p>
+                </div>
+                <div>
+                    <span class='glow-badge-rose'>⚠️ EVALUATION MODE</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif st.session_state.role == "PENDING_VIP":
+        st.markdown(f"""
+        <div class='hero-banner-container' style='background: linear-gradient(135deg, #b45309 0%, #1e1b4b 50%, #090a0f 100%);'>
+            <div style='display: flex; justify-content: space-between; align-items: center;'>
+                <div>
+                    <h1 class='hero-title'>Auditing Settlement Payload Logs...</h1>
+                    <p class='hero-subtitle'>Your transaction key layer is under database verification. Terminal sync unlocks automatically.</p>
+                </div>
+                <div>
+                    <span class='glow-badge-rose' style='border-color:#f59e0b; color:#facc15;'>⏳ PENDING VALIDATION</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div class='hero-banner-container' style='background: linear-gradient(135deg, #065f46 0%, #1e1b4b 50%, #090a0f 100%);'>
+            <div style='display: flex; justify-content: space-between; align-items: center;'>
+                <div>
+                    <h1 class='hero-title'>Institutional VIP Node Active</h1>
+                    <p class='hero-subtitle'>Welcome back, Executive Operator. Core trading desks are fully synchronized and live.</p>
+                </div>
+                <div>
+                    <span class='glow-badge-green'>● SECURE NODE UNLOCKED</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Elite VIP Channels Join Injector
     if st.session_state.role == "USER":
         st.markdown("<div class='premium-card' style='background: linear-gradient(90deg, rgba(99,102,241,0.06) 0%, rgba(79,70,229,0.12) 100%); border: 1px solid rgba(99, 102, 241, 0.25); text-align:center;'>", unsafe_allow_html=True)
-        st.link_button("✈️ SYNC & ENTER VIP TELEGRAM ALPHA STREAM INSTANTLY", VIP_TELEGRAM_LINK, use_container_width=True)
+        st.link_button("✈ Presync & Enter VIP Telegram Channel Instantly", VIP_TELEGRAM_LINK, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     # --- SIDEBAR DESK ---
@@ -336,7 +372,6 @@ else:
 
     # --- COMPONENT DISPATCH CONTROLLER ---
     
-    # 💳 1. ADVANCED BROKER INTERFACE PAYMENT GATEWAY
     if workspace_mode == "💳 Activate VIP Tier":
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
         st.markdown("<h2 style='color: #fff; font-weight:700; margin-top:0;'>💳 Premium VIP Desk Gateway</h2>", unsafe_allow_html=True)
@@ -353,7 +388,6 @@ else:
         with c_right:
             st.markdown("<span style='color:#818cf8; font-weight:600; font-size:0.9rem;'>🔑 USDT TRC20 Wallet Destination Address</span>", unsafe_allow_html=True)
             st.code("TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8", language="text")
-            
             st.markdown("<span style='color:#818cf8; font-weight:600; font-size:0.9rem;'>🇮🇳 National Banking UPI Handle</span>", unsafe_allow_html=True)
             st.code("manissh.jariwala@okaxis", language="text")
             
@@ -373,7 +407,6 @@ else:
                 except: st.error("Sync drop.")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # 📢 2. DUAL METRIC METRO LAYOUT DASHBOARD
     elif workspace_mode == "📢 Live Trading Hub":
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
         m1, m2 = st.columns(2)
@@ -395,7 +428,6 @@ else:
                 st.markdown(f"<div style='background:rgba(16,185,129,0.01); border-left:4px solid #10b981; padding:16px; border-radius:8px;'><b>⚡ Live Data Pipeline String</b><br><span style='color:#ffffff; font-weight:500;'>{latest_signal}</span></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # ADMIN BROADCAST PORTAL
         if st.session_state.role == "ADMIN":
             st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
             st.markdown("### 🛠️ Admin Broadcast Console")
@@ -416,14 +448,12 @@ else:
                         st.success("Telegram Broadcaster Active.")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # HIGH PERFORMANCE INTERACTIVE DATAFRAME MATRIX
         if sheet_active and is_vip_or_admin:
             st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
             st.markdown("<h4 style='margin-top:0; font-weight:700; color:#fff;'>📊 Institutional Dynamic Sheet Matrix View</h4>", unsafe_allow_html=True)
             st.dataframe(df.tail(6), use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # CHARTS INSPIRED BROKER CHAT STREAM
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
         st.markdown("<h4 style='margin-top:0; font-weight:700; color:#fff;'>📢 Institutional Alpha Broadcast Feed</h4>", unsafe_allow_html=True)
         
@@ -439,7 +469,6 @@ else:
             except: pass
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # 🤖 3. AGENT LIVE LOG CHANNELS
     elif workspace_mode == "🤖 AI Agent Activity Log":
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
         st.markdown("<h2 style='color: #fff; font-weight:700; margin-top:0;'>🤖 Multi-Agent Live Computational Logs</h2>", unsafe_allow_html=True)
@@ -460,7 +489,6 @@ else:
         if st.button("🔄 Force Core Telemetry Refresh", use_container_width=True): st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ℹ️ 4. PLATFORM COMPLIANCE PAGES
     elif workspace_mode == "ℹ️ About Architecture":
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
         st.markdown("<h2 style='color:#fff; font-weight:700; margin-top:0;'>ℹ️ Operational Architecture Infrastructure</h2>", unsafe_allow_html=True)
