@@ -26,7 +26,6 @@ st.markdown("""
         border-right: 1px solid rgba(129, 140, 248, 0.08) !important;
     }
     
-    /* Dynamic Ultra-Premium Corporate Header Hero Banner Template */
     .hero-banner-container {
         background: linear-gradient(135deg, #4f46e5 0%, #1e1b4b 50%, #090a0f 100%);
         border: 1px solid rgba(255, 255, 255, 0.08);
@@ -330,66 +329,34 @@ else:
 
     # --- WORKSPACE DISPATCH ---
     
-    # 📰 NEW WORKSPACE: FINANCIAL MARKET INSIGHTS (BLOG STREAM)
-    if workspace_mode == "📰 Financial Market Insights":
-        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-        st.markdown("<h2 style='color:#fff; margin-top:0;'>📰 Financial Market Insights & Research Blogs</h2>", unsafe_allow_html=True)
-        st.write("Explore professional market analytics and automated network logs compiled by our algorithmic editors.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        # ADMIN MODE: BLOG PUBLISHER ENGINE
-        if st.session_state.role == "ADMIN":
-            st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-            st.markdown("### ✍️ Premium Blog Content Publisher (Admin Panel)")
-            b_title = st.text_input("Blog Post Title")
-            b_content = st.text_area("Write Content Matrix (Supports Text & HTML Tags)", height=200)
-            
-            if st.button("🚀 Push Blog Post to Terminal Hub", use_container_width=True):
-                if b_title and b_content:
-                    try:
-                        supabase.table("blogs").insert({"title": b_title, "content": b_content, "author": "Manissh S Jariwala (Admin)"}).execute()
-                        st.success("Blog content published successfully to global node!")
-                        time.sleep(0.5)
-                        st.rerun()
-                    except: st.error("Table initialization check pending.")
-                else: st.warning("Please fill out title and content arrays.")
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-        # LIVE VIEW: FETCH AND DISPLAY PUBLISHED BLOGS
-        try:
-            blogs = supabase.table("blogs").select("*").order("created_at", desc=True).execute()
-            if len(blogs.data) == 0:
-                st.info("🔄 No research papers are logged in the active network node right now.")
-            else:
-                for post in blogs.data:
-                    st.markdown(f"""
-                    <div class='premium-card' style='border-left: 4px solid #6366f1;'>
-                        <h3 style='color:#ffffff; margin:0 0 5px 0;'>✨ {post['title']}</h3>
-                        <p style='color:#9ca3af; font-size:0.82rem; margin-bottom:15px;'>✍️ Author: {post['author']} | 🕒 Published: {post['created_at'][:16].replace('T', ' ')}</p>
-                        <div style='color:#cbd5e1; line-height:1.6; font-size:0.98rem;'>{post['content']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-        except:
-            st.info("ℹ️ Connect or create a 'blogs' table inside Supabase grid structure to store your articles safely.")
-
-    elif workspace_mode == "💳 Activate VIP Tier":
+    # 💳 1. ADVANCED PAYMENT GATEWAY DESK (FIXED STRIP ALIGNMENT)
+    if workspace_mode == "💳 Activate VIP Tier":
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
         st.markdown("<h2 style='color: #fff; font-weight:700; margin-top:0;'>💳 Premium VIP Desk Gateway</h2>", unsafe_allow_html=True)
-        c_left, c_right = st.columns([1, 1.6])
-        with c_left:
-            st.markdown("<div style='background: white; padding: 18px; border-radius: 12px; width: 180px; margin: 0 auto;'>", unsafe_allow_html=True)
-            usdt_address = "TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8"
-            qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=144x144&data={usdt_address}&color=07080a&bgcolor=ffffff"
-            st.image(qr_api_url, width=144)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with c_right:
-            st.markdown("<span>🔑 USDT TRC20 Wallet Destination Address</span>", unsafe_allow_html=True)
-            st.code("TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8", language="text")
-            st.markdown("<span>🇮🇳 National Banking UPI Handle</span>", unsafe_allow_html=True)
-            st.code("manissh.jariwala@okaxis", language="text")
+        st.write("Complete your structural security payload log below to unlock dynamic data channels.")
         st.write("")
+        
+        # Enclosed row layout to fix the alignment shift
+        c_left, c_right = st.columns([1, 2])
+        with c_left:
+            st.markdown("<div style='background: white; padding: 18px; border-radius: 16px; width: 186px; margin: 0 auto; box-shadow: 0 10px 25px rgba(0,0,0,0.4); text-align: center;'>", unsafe_allow_html=True)
+            usdt_address = "TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8"
+            qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={usdt_address}&color=07080a&bgcolor=ffffff"
+            st.image(qr_api_url, width=150)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with c_right:
+            st.markdown("<span style='color:#818cf8; font-weight:600; font-size:0.95rem;'>🔑 USDT TRC20 Wallet Destination Address</span>", unsafe_allow_html=True)
+            st.code("TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8", language="text")
+            
+            st.markdown("<br><span style='color:#818cf8; font-weight:600; font-size:0.95rem;'>🇮🇳 National Banking UPI Handle</span>", unsafe_allow_html=True)
+            st.code("manissh.jariwala@okaxis", language="text")
+            
+        st.markdown("<br><hr style='border-color: rgba(255,255,255,0.05);'><br><h4>🧾 Submit Settlement Credentials</h4>", unsafe_allow_html=True)
         inner_txid = st.text_input("Transaction reference ID (TXID) Token Input", key="inner_tx")
         inner_wa = st.text_input("WhatsApp Alerts Communication Number", key="inner_wa")
+        st.write("")
+        
         if st.button("Deploy Settlement Verification Keys 🚀", use_container_width=True):
             if inner_txid and inner_wa:
                 try:
@@ -402,6 +369,7 @@ else:
                 except: st.error("Sync drop.")
         st.markdown("</div>", unsafe_allow_html=True)
 
+    # 📢 2. DUAL METRIC METRO LAYOUT DASHBOARD
     elif workspace_mode == "📢 Live Trading Hub":
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
         m1, m2 = st.columns(2)
@@ -452,6 +420,40 @@ else:
                     st.markdown(f'<div class="chat-message-premium"><strong>📢 {sig["sender"]}</strong><br><p style="color:#ffffff; margin:4px 0 0 0;">{sig["message"]}</p></div>', unsafe_allow_html=True)
             except: pass
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # 📰 3. FINANCIAL MARKET INSIGHTS WORKSPACE
+    elif workspace_mode == "📰 Financial Market Insights":
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color:#fff; margin-top:0;'>📰 Financial Market Insights & Research Blogs</h2>", unsafe_allow_html=True)
+        st.write("Explore professional market analytics and automated network logs compiled by our algorithmic editors.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        if st.session_state.role == "ADMIN":
+            st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+            st.markdown("### ✍️ Premium Blog Content Publisher (Admin Panel)")
+            b_title = st.text_input("Blog Post Title")
+            b_content = st.text_area("Write Content Matrix (Supports Text & HTML Tags)", height=200)
+            if st.button("🚀 Push Blog Post to Terminal Hub", use_container_width=True):
+                if b_title and b_content:
+                    try:
+                        supabase.table("blogs").insert({"title": b_title, "content": b_content, "author": "Manissh S Jariwala (Admin)"}).execute()
+                        st.success("Blog content published successfully!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    except: st.error("Table initialization check pending.")
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        try:
+            blogs = supabase.table("blogs").select("*").order("created_at", desc=True).execute()
+            for post in blogs.data:
+                st.markdown(f"""
+                <div class='premium-card' style='border-left: 4px solid #6366f1;'>
+                    <h3 style='color:#ffffff; margin:0 0 5px 0;'>✨ {post['title']}</h3>
+                    <p style='color:#9ca3af; font-size:0.82rem; margin-bottom:15px;'>✍️ Author: {post['author']} | 🕒 Published: {post['created_at'][:16].replace('T', ' ')}</p>
+                    <div style='color:#cbd5e1; line-height:1.6; font-size:0.98rem;'>{post['content']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        except: st.info("ℹ️ Connect 'blogs' table inside Supabase grid structure to show articles.")
 
     elif workspace_mode == "🤖 AI Agent Activity Log":
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
