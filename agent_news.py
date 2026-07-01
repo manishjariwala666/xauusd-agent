@@ -97,3 +97,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+def auto_update_legal():
+    pages = {
+        "Privacy Policy": "This is our official Privacy Policy...",
+        "Cookie Policy": "This is our Cookie Policy...",
+        "Terms of Service": "These are our Terms of Service..."
+    }
+    for title, content in pages.items():
+        supabase.table("blogs").upsert({"title": title, "content": content}).execute()
+
+# Sabse niche add karein
+auto_update_legal()
