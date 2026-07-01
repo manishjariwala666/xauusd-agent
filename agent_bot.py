@@ -1,4 +1,32 @@
-- name: Execute Telegram Alert Agent
+name: Autonomous Financial AI News Agent
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-ai-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone Code Repository Matrix
+        uses: actions/checkout@v3
+
+      - name: Initialize Isolated Python Environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Deploy Core Dependent Telemetry Packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests yfinance supabase
+
+      - name: Execute Autonomous Agent Core Pipeline
+        run: python agent_news.py
+
+      - name: Execute Telegram Alert Agent
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: python agent_bot.py
