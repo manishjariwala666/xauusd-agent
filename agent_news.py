@@ -40,7 +40,7 @@ def generate_ai_insights(metrics):
     content_html = f"Gold CMP: {metrics['gold_price']} | Trend: {metrics['gold_trend']}"
     return title_payload, content_html
 
-# 3. Legal function (Fixed to use 'signals' table)
+# 3. Legal function
 def auto_update_legal():
     pages = {
         "Privacy Policy": "Official Privacy Policy content...",
@@ -48,17 +48,25 @@ def auto_update_legal():
         "Terms of Service": "Official Terms of Service content..."
     }
     for title, content in pages.items():
-        # Table fixed to 'signals'
+        # Using signals table exclusively
         supabase.table("signals").upsert({"title": title, "content": content}).execute()
 
-# 4. Main function (Fixed to use 'signals' table)
+# 4. Main function
 def main():
     print("Initializing Autonomous Financial AI Agent...")
+    
+    # Check if table 'signals' exists by performing a dummy fetch
+    try:
+        supabase.table("signals").select("id").limit(1).execute()
+    except Exception as e:
+        print(f"Critical Database Error: {e}")
+        return
+
     auto_update_legal() 
     metrics = fetch_market_intelligence()
     title, content = generate_ai_insights(metrics)
     
-    # Table fixed to 'signals'
+    # Push signal to 'signals' table
     signal_payload = {"title": title, "content": content, "author": "Autonomous AI Sub-Agent (Agent 5)"}
     supabase.table("signals").upsert(signal_payload).execute()
     print("Success! Data synced to 'signals' table.")
