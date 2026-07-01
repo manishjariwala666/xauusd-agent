@@ -33,6 +33,14 @@ st.markdown("""
         border: 1px solid #374151;
         margin-bottom: 15px;
     }
+    .wallet-box {
+        background-color: #1e3a8a;
+        padding: 18px;
+        border-radius: 10px;
+        border: 1px solid #3b82f6;
+        color: white;
+        margin-bottom: 20px;
+    }
     .log-box {
         background-color: #070a12;
         padding: 12px;
@@ -62,36 +70,71 @@ if "role" not in st.session_state:
 if "user_email" not in st.session_state:
     st.session_state.user_email = None
 
-# --- AUTHENTICATION CORNER ---
+# --- AUTHENTICATION & REGISTRATION ---
 if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center; margin-top: 40px;'>🔒 XAUUSD VIP AI Terminal</h2>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1.2, 1])
+    st.markdown("<p style='text-align: center; color: gray;'>Algorithmic Multi-Agent Intelligence Network</p>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 1.3, 1])
+    
     with col2:
-        email_input = st.text_input("Registered Email ID")
-        whatsapp_input = st.text_input("WhatsApp Security Key", type="password")
-        if st.button("Access Terminal", use_container_width=True):
-            if email_input == "manishadmin" and whatsapp_input == "goldmaster77":
-                st.session_state.logged_in = True
-                st.session_state.role = "ADMIN"
-                st.session_state.user_email = "Manissh S Jariwala (Admin)"
-                st.rerun()
-            else:
-                try:
-                    res = supabase.table("users").select("*").eq("email", email_input).eq("whatsapp", whatsapp_input).execute()
-                    if len(res.data) > 0:
-                        st.session_state.logged_in = True
-                        st.session_state.role = "USER"
-                        st.session_state.user_email = res.data[0]["email"]
-                        st.rerun()
-                    else:
-                        st.error("Invalid VIP Access Credentials.")
-                except:
-                    st.error("Authentication Network Error.")
+        tab1, tab2 = st.tabs(["🔑 Sign In Terminal", "💳 Activate VIP Subscription"])
+        
+        with tab1:
+            email_input = st.text_input("Registered Email ID", key="login_email")
+            whatsapp_input = st.text_input("WhatsApp Security Key (Password)", type="password", key="login_pass")
+            
+            if st.button("Access Hub", use_container_width=True):
+                if email_input == "manishadmin" and whatsapp_input == "goldmaster77":
+                    st.session_state.logged_in = True
+                    st.session_state.role = "ADMIN"
+                    st.session_state.user_email = "Manissh S Jariwala (Admin)"
+                    st.rerun()
+                else:
+                    try:
+                        res = supabase.table("users").select("*").eq("email", email_input).eq("whatsapp", whatsapp_input).execute()
+                        if len(res.data) > 0:
+                            st.session_state.logged_in = True
+                            st.session_state.role = "USER"
+                            st.session_state.user_email = res.data[0]["email"]
+                            st.rerun()
+                        else:
+                            st.error("Invalid VIP Access Credentials.")
+                    except:
+                        st.error("Authentication Network Error.")
+                        
+        with tab2:
+            st.markdown(f"""
+            <div class='wallet-box'>
+                <b>✨ VIP Deposit Wallet Address (USDT TRC20):</b><br>
+                <code style='color:#facc15; font-size:1.05rem; word-break: break-all;'>TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8</code><br><br>
+                <b>UPI ID (Indian Users Bank Transfer):</b><br>
+                <code style='color:#facc15; font-size:1.05rem;'>manissh.jariwala@okaxis</code><br><br>
+                <span style='font-size:0.85rem; color:#9ca3af;'>⚠️ Note: Send TRON-based tokens only. Submit TXID below for instant verification.</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            reg_email = st.text_input("Enter Email", key="reg_email")
+            reg_whatsapp = st.text_input("WhatsApp Number", key="reg_wa")
+            reg_txid = st.text_input("Payment Reference / Transaction ID (TXID)", key="reg_tx")
+            
+            if st.button("Submit VIP Activation Request", use_container_width=True):
+                if reg_email and reg_whatsapp and reg_txid:
+                    try:
+                        supabase.table("users").insert({"email": reg_email, "whatsapp": reg_whatsapp, "txid": reg_txid, "status": "Pending"}).execute()
+                        st.success("Payment Logged Successfully! Admin will verify and activate your hub within 15 minutes.")
+                    except:
+                        st.error("Registration synchronization error.")
+                else:
+                    st.warning("Please fill out all activation fields.")
 
 # --- LIVE WORKSPACE ---
 else:
-    st.sidebar.markdown(f"### 🛡️ Terminal Sessions")
+    # Sidebar Navigation System
+    st.sidebar.markdown(f"### 🛡️ Secure Session Active")
     st.sidebar.markdown(f"**User:** `{st.session_state.user_email}`")
+    st.sidebar.markdown(f"**Access Tier:** `{st.session_state.role}`")
+    
     workspace_mode = st.sidebar.radio("Navigate View", ["📢 Live Trading Hub", "🤖 AI Agent Activity Log"])
     
     if st.sidebar.button("Exit Dashboard 🚪", use_container_width=True):
@@ -100,11 +143,10 @@ else:
         st.session_state.user_email = None
         st.rerun()
 
-    # CRITICAL PRICE ENGINE FIX: Using standard base futures with adaptive anchor calibration
+    # CRITICAL PRICE ENGINE SYNC
     try:
         gold_ticker = yf.Ticker("GC=F")
         raw_price = gold_ticker.history(period="1d")["Close"].iloc[-1]
-        # Direct math adjustment to match real-time live spot pricing structure perfectly
         calibrated_spot = raw_price - 19.20
         if calibrated_spot < 3500:  
             calibrated_spot = 4024.15
@@ -112,19 +154,20 @@ else:
     except:
         live_price_str = "$4024.15"
 
-    # Fetch Google Sheet Live Signals
+    # Fetch Google Sheet Live Data Pipeline
     try:
         df = pd.read_csv(SHEET_TSV_URL, sep="\t").dropna(how='all', axis=1).fillna("")
         items = []
         for c, v in df.iloc[-1].items():
             if "Unnamed" not in str(c) and str(v).strip() and str(v).lower() != "none":
                 items.append(f"<b>{c}:</b> {v}")
-        latest_signal = " | ".join(items) if items else f"🚀 VIP Signal Active at {live_price_str}"
+        latest_signal = " | ".join(items) if items else f"🚀 VIP Trading Signal Active at {live_price_str}"
         sheet_active = True
     except:
-        latest_signal = f"🚀 XAUUSD VIP ALERT | Active CMP: {live_price_str} | Monitoring Entry Zone..."
+        latest_signal = f"🚀 XAUUSD SCALPER ALERT | Active CMP: {live_price_str} | Strategy Configured"
         sheet_active = False
 
+    # Mode 1: Trading Hub Dashboard
     if workspace_mode == "📢 Live Trading Hub":
         st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD Multi-Agent Hub</h2>", unsafe_allow_html=True)
         st.markdown(f"<div class='status-card'><span style='color:#10b981;'>●</span> <b>Real-Time Spot Price (Synced):</b> <span style='color:#f59e0b; font-size:1.2rem;'>{live_price_str}</span></div>", unsafe_allow_html=True)
@@ -132,10 +175,11 @@ else:
         st.markdown("### 🤖 Executive AI Floor")
         tl, ag = st.columns([1, 2])
         with tl:
-            st.markdown("<div class='agent-card' style='border-left: 4px solid #38bdf8;'><b>👔 Team Leader (Alpha Strategist):</b><br>'All sub-systems executing tracking parameters. Systems synchronized.'</div>", unsafe_allow_html=True)
+            st.markdown("<div class='agent-card' style='border-left: 4px solid #38bdf8;'><b>👔 Team Leader (Alpha Strategist):</b><br>'All sub-systems executing protocols. System stable.'</div>", unsafe_allow_html=True)
         with ag:
             st.markdown(f"<div class='agent-card'><b>⚡ Data Pipeline Status:</b> {latest_signal}</div>", unsafe_allow_html=True)
 
+        # Admin View Only
         if st.session_state.role == "ADMIN":
             st.markdown("### 🛠️ Admin Broadcast Console")
             signal_msg = st.text_area("Type Signal to Deploy...", value=latest_signal, height=100)
@@ -146,6 +190,7 @@ else:
                     time.sleep(0.5)
                     st.rerun()
 
+        # Signal Output Stream
         st.markdown("### 📢 Live VIP Stream Feed")
         if sheet_active:
             st.markdown(f'<div class="chat-message-admin"><strong>📢 Google Sheet Real-time Feed</strong><br><p style="color:#facc15; font-size:1.1rem; margin-top:5px;">{latest_signal}</p></div>', unsafe_allow_html=True)
@@ -157,6 +202,7 @@ else:
         except:
             pass
 
+    # Mode 2: AI Agent Detailed Runtime Logs
     elif workspace_mode == "🤖 AI Agent Activity Log":
         st.markdown("<h2 style='color: #38bdf8;'>🤖 Live AI Agent Runtime Log</h2>", unsafe_allow_html=True)
         st.caption("Real-time monitoring panel showing what agents are processing right now.")
