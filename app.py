@@ -64,18 +64,14 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --- GOOGLE SHEET TSV LINK ---
 SHEET_TSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRc2bZvbbN8-_7HXt-Cu0_UPmUpLEcpOcGQimQj8j1Q39i4Hr4E8tjhMCX5krQSAsX4kXwYpzwn5BjC/pub?output=tsv"
 
-# --- BROWSER COOKIE MANAGER (REFRESH PROOF) ---
+# --- BROWSER COOKIE MANAGER ---
 cookie_manager = stx.CookieManager()
-
-# Give some milliseconds for sync
 time.sleep(0.1)
 
-# Fetch current stored cookies
 c_logged_in = cookie_manager.get(cookie="xau_logged_in")
 c_role = cookie_manager.get(cookie="xau_role")
 c_email = cookie_manager.get(cookie="xau_email")
 
-# Load cookie data into Streamlit Session State if available
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = True if c_logged_in == "true" else False
 if "role" not in st.session_state:
@@ -83,17 +79,15 @@ if "role" not in st.session_state:
 if "user_email" not in st.session_state:
     st.session_state.user_email = c_email if c_email else None
 
-# Helper function to remove raw HTML tags for clean editing
 def clean_html_tags(text):
     return re.sub(r'<[^>]*>', '', str(text))
 
-# --- AUTHENTICATION & REGISTRATION ---
+# --- AUTHENTICATION SCREEN ---
 if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center; margin-top: 40px;'>🔒 XAUUSD VIP AI Terminal</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray;'>Algorithmic Multi-Agent Intelligence Network</p>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.3, 1])
-    
     with col2:
         tab1, tab2 = st.tabs(["🔑 Sign In Terminal", "💳 Activate VIP Subscription"])
         
@@ -106,8 +100,6 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.role = "ADMIN"
                     st.session_state.user_email = "Manissh S Jariwala (Admin)"
-                    
-                    # Store cookies for 7 days
                     cookie_manager.set("xau_logged_in", "true", max_age=604800)
                     cookie_manager.set("xau_role", "ADMIN", max_age=604800)
                     cookie_manager.set("xau_email", "Manissh S Jariwala (Admin)", max_age=604800)
@@ -119,8 +111,6 @@ if not st.session_state.logged_in:
                             st.session_state.logged_in = True
                             st.session_state.role = "USER"
                             st.session_state.user_email = res.data[0]["email"]
-                            
-                            # Store cookies for 7 days
                             cookie_manager.set("xau_logged_in", "true", max_age=604800)
                             cookie_manager.set("xau_role", "USER", max_age=604800)
                             cookie_manager.set("xau_email", res.data[0]["email"], max_age=604800)
@@ -152,12 +142,9 @@ if not st.session_state.logged_in:
                         st.success("Payment Logged Successfully! Admin will verify and activate your hub within 15 minutes.")
                     except:
                         st.error("Registration synchronization error.")
-                else:
-                    st.warning("Please fill out all activation fields.")
 
 # --- LIVE WORKSPACE ---
 else:
-    # Sidebar Navigation System
     st.sidebar.markdown("### 🛡️ Secure Session Active")
     st.sidebar.markdown(f"**User:** `{st.session_state.user_email}`")
     st.sidebar.markdown(f"**Access Tier:** `{st.session_state.role}`")
@@ -168,8 +155,6 @@ else:
         st.session_state.logged_in = False
         st.session_state.role = None
         st.session_state.user_email = None
-        
-        # Delete cookies on logout
         cookie_manager.delete("xau_logged_in")
         cookie_manager.delete("xau_role")
         cookie_manager.delete("xau_email")
@@ -186,7 +171,7 @@ else:
     except:
         live_price_str = "$4024.15"
 
-    # Fetch Google Sheet Live Data Pipeline
+    # Fetch Google Sheet Data Pipeline
     try:
         df = pd.read_csv(SHEET_TSV_URL, sep="\t").dropna(how='all', axis=1).fillna("")
         items = []
@@ -211,7 +196,7 @@ else:
         with ag:
             st.markdown(f"<div class='agent-card'><b>⚡ Data Pipeline Status:</b> {latest_signal}</div>", unsafe_allow_html=True)
 
-        # Admin View vs User Isolation View
+        # STAGE OVERRIDE: Admin Controls Hidden for Normal VIP Users
         if st.session_state.role == "ADMIN":
             st.markdown("### 🛠️ Admin Broadcast Console")
             clean_editable_signal = clean_html_tags(latest_signal)
@@ -223,6 +208,9 @@ else:
                     st.success("Signal deployed globally!")
                     time.sleep(0.5)
                     st.rerun()
+        else:
+            # Safe Info Container for regular clients to enhance professional feel
+            st.info("ℹ️ Live Terminal connected. Institutional signal updates are managed directly by corporate system algorithms.")
 
         # Signal Output Stream
         st.markdown("### 📢 Live VIP Stream Feed")
