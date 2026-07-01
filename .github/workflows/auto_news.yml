@@ -1,124 +1,27 @@
-import os
-import time
-import requests
-import yfinance as yf
-import random
-import string
-from datetime import datetime
-from supabase import create_client, Client
+name: Autonomous Financial AI News Agent
 
-# --- DB PIPELINE CONFIGURATION ---
-SUPABASE_URL = "https://tdgyhqlxoyfkkrhzljwo.supabase.co"
-SUPABASE_KEY = "sb_secret_R4xiW5szyOxyrFPRRotsyw_RTiYFWWf"
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
 
-def generate_secure_token(length=16):
-    """Generates a cryptographically secure alpha-numeric verification token."""
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+jobs:
+  run-ai-agent:
+    runs-on: ubuntu-latest
 
-def fetch_market_intelligence():
-    """Scrapes raw quantitative indicators to guide the AI framework logic."""
-    data_payload = {}
-    try:
-        gold = yf.Ticker("GC=F")
-        gold_hist = gold.history(period="2d")
-        if not gold_hist.empty and len(gold_hist) >= 2:
-            current_close = gold_hist["Close"].iloc[-1] - 19.20
-            prev_close = gold_hist["Close"].iloc[-2] - 19.20
-            pct_change = ((current_close - prev_close) / prev_close) * 100
-            data_payload['gold_price'] = f"${current_close:.2f}"
-            data_payload['gold_trend'] = "BULLISH 🚀" if pct_change >= 0 else "BEARISH 📉"
-            data_payload['gold_pct'] = f"{pct_change:+.2f}%"
-        else:
-            data_payload['gold_price'] = "$4024.15"
-            data_payload['gold_trend'] = "CONSOLIDATING ⚖️"
-            data_payload['gold_pct'] = "0.00%"
-            
-        dxy = yf.Ticker("UUP")
-        dxy_hist = dxy.history(period="1d")
-        if not dxy_hist.empty:
-            data_payload['dxy_status'] = "STRENGTHENING 💪" if dxy_hist["Close"].iloc[-1] > dxy_hist["Open"].iloc[-1] else "WEAKENING 🩸"
-        else:
-            data_payload['dxy_status'] = "STABLE"
-            
-    except Exception as e:
-        print(f"Telemetry scrape warning: {str(e)}")
-        data_payload['gold_price'] = "$4024.15"
-        data_payload['gold_trend'] = "ANALYSIS LIVE 🚀"
-        data_payload['gold_pct'] = "+0.24%"
-        data_payload['dxy_status'] = "DYNAMIC"
-        
-    return data_payload
+    steps:
+      - name: Clone Code Repository Matrix
+        uses: actions/checkout@v3
 
-def generate_ai_insights(metrics):
-    """Compiles professional structural market analytics and auto-generates premium HTML layout."""
-    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    title_payload = f"XAUUSD Market Intelligence Matrix: Gold Stabilizes Near {metrics['gold_price']}"
-    
-    content_html = f"""
-    <div style="font-family: 'Plus Jakarta Sans', sans-serif; color: #cbd5e1;">
-        <p><strong>System Core Log [{timestamp_str}]</strong> — The algorithmic monitoring desk has processed the latest market structural arrays for spot commodity instruments (<strong>$XAUUSD$</strong>).</p>
-        
-        <div style="background: rgba(99, 102, 241, 0.03); border: 1px solid rgba(99, 102, 241, 0.15); padding: 20px; border-radius: 12px; margin: 20px 0;">
-            <h4 style="margin-top:0; color:#818cf8;">📊 Automated Telemetry Matrix Summary</h4>
-            <ul style="margin-bottom:0; padding-left:20px;">
-                <li><strong>Spot Gold CMP:</strong> <span style="color:#ffffff; font-weight:600;">{metrics['gold_price']}</span> ({metrics['gold_pct']})</li>
-                <li><strong>Consensus Trajectory:</strong> <span style="color:#ffffff; font-weight:600;">{metrics['gold_trend']}</span></li>
-                <li><strong>US Dollar Index (DXY) Proxy:</strong> <span style="color:#ffffff; font-weight:600;">{metrics['dxy_status']}</span></li>
-            </ul>
-        </div>
-        
-        <h4>⚡ Technical Overview & Volatility Clusters</h4>
-        <p>Multi-agent trend scanners indicate that structural capital rotation models are adjusting near current key velocity zones. With the safe-haven flows streaming dynamically, dynamic support parameters continue to hold the recent volatility field framework. Traders should closely monitor structural changes around short-term liquidation boundaries.</p>
-        
-        <p style="color: #6b7280; font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px; margin-top: 25px;">
-            <em>Disclaimer: Generated automatically by institutional sub-agent infrastructure logs for technical research and evaluation frameworks. Commodity instruments include high exposure elements.</em>
-        </p>
-    </div>
-    """
-    return title_payload, content_html
+      - name: Initialize Isolated Python Environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-def main():
-    print("Initializing Autonomous Financial AI Agent...")
-    metrics = fetch_market_intelligence()
-    title, content = generate_ai_insights(metrics)
-    
-    # --- STAGE 1: GENERATE SECURE VERIFICATION TOKEN ---
-    verify_token = generate_secure_token()
-    
-    # --- DEPLOYMENT INTO SUPABASE LEDGER ---
-    # Note: Ensure your Supabase 'blogs' table has a 'verify_code' column
-    blog_payload = {
-        "title": title,
-        "content": content,
-        "author": "Autonomous AI Sub-Agent (Agent 5)",
-        "verify_code": verify_token
-    }
-    
-    try:
-        res = supabase.table("blogs").insert(blog_payload).execute()
-        print(f"Success! Autonomous post synchronized smoothly: {title}")
-        print(f"Verification Token Generated: {verify_token}")
-        
-        # --- STAGE 2: GENERATE TELEGRAM BOT TRIGGER MESSAGE ---
-        # We will pass this information to our Telegram Bot Agent in the next step
-        telegram_msg = f"""
-🔔 *New Institutional Analysis Alert*
+      - name: Deploy Core Dependent Telemetry Packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests yfinance supabase
 
-*Title:* {title}
-*Source:* Autonomous AI Sub-Agent
-
-To unlock the full premium execution report on the secure network node, please use the verification command below within this private chat:
-
-`/verify {verify_token}`
-"""
-        # In the next step, we will write a script (`agent_bot.py`) to send this to your Telegram Channel
-        print("--- Bot Message Payload Ready ---")
-        print(telegram_msg)
-
-    except Exception as e:
-        print(f"Database deployment halted. Check if 'blogs' table structure has 'verify_code' active: {str(e)}")
-
-if __name__ == "__main__":
-    main()
+      - name: Execute Autonomous Agent Core Pipeline
+        run: python agent_news.py
