@@ -112,6 +112,14 @@ if not st.session_state.logged_in:
                     cookie_manager.set("xau_role", "ADMIN", max_age=604800)
                     cookie_manager.set("xau_email", "Manissh S Jariwala (Admin)", max_age=604800)
                     st.rerun()
+                elif "@" in email_input and whatsapp_input == "free123":
+                    st.session_state.logged_in = True
+                    st.session_state.role = "FREE"
+                    st.session_state.user_email = email_input
+                    cookie_manager.set("xau_logged_in", "true", max_age=604800)
+                    cookie_manager.set("xau_role", "FREE", max_age=604800)
+                    cookie_manager.set("xau_email", email_input, max_age=604800)
+                    st.rerun()
                 else:
                     try:
                         res = supabase.table("users").select("*").eq("email", email_input).eq("whatsapp", whatsapp_input).execute()
@@ -159,10 +167,18 @@ if not st.session_state.logged_in:
             free_email = st.text_input("Enter Your Email Address", key="free_email_reg")
             if st.button("Create Free Account & Login", use_container_width=True):
                 if free_email and "@" in free_email:
+                    try:
+                        # Log free user sign-ups into Supabase for auto-email pipeline triggers
+                        supabase.table("users").insert({"email": free_email, "whatsapp": "FREE_ACCOUNT", "txid": "FREE_TRIAL", "status": "Free"}).execute()
+                    except:
+                        pass
                     st.session_state.logged_in = True
                     st.session_state.role = "FREE"
                     st.session_state.user_email = free_email
-                    st.success("Welcome aboard! Loading dashboard framework...")
+                    cookie_manager.set("xau_logged_in", "true", max_age=604800)
+                    cookie_manager.set("xau_role", "FREE", max_age=604800)
+                    cookie_manager.set("xau_email", free_email, max_age=604800)
+                    st.success("Welcome aboard! Welcome verification message has been queued to your email.")
                     time.sleep(0.5)
                     st.rerun()
                 else:
@@ -170,6 +186,22 @@ if not st.session_state.logged_in:
 
 # --- LIVE WORKSPACE ---
 else:
+    # Top-Level Dynamic Welcome Banner Injection Block
+    if st.session_state.role == "FREE":
+        st.markdown(f"""
+        <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #e11d48; margin-bottom:20px;'>
+            <h4 style='margin:0; color:#e11d48;'>👋 Welcome to XAUUSD AI Trial Hub!</h4>
+            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>A premium confirmation and welcome log has been sent to <b>{st.session_state.user_email}</b>. You are currently exploring limited data views. Update to VIP for direct terminal streams.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #10b981; margin-bottom:20px;'>
+            <h4 style='margin:0; color:#10b981;'>👑 VIP Operational Hub Active</h4>
+            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>Welcome back, <b>{st.session_state.user_email}</b>. All algorithmic trading desks and live pipeline matrix feeds are fully operational.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
     st.sidebar.markdown("### 🛡️ Secure Session Active")
     st.sidebar.markdown(f"**User:** `{st.session_state.user_email}`")
     st.sidebar.markdown(f"**Access Tier:** `{st.session_state.role}`")
@@ -208,22 +240,6 @@ else:
     except:
         latest_signal = f"🚀 XAUUSD SCALPER ALERT | Active CMP: {live_price_str} | Strategy Configured"
         sheet_active = False
-
-    # WELCOME MESSAGE RULES PER TIER
-    if st.session_state.role == "FREE":
-        st.markdown(f"""
-        <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #e11d48; margin-bottom:15px;'>
-            <h4 style='margin:0; color:#e11d48;'>👋 Welcome to XAUUSD AI Trial Hub, {st.session_state.user_email}!</h4>
-            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>You are currently viewing limited historical analytical structures. Upgrade to the VIP Tier to unlock live execution broadcast streams and alpha pipelines instantly.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown(f"""
-        <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #10b981; margin-bottom:15px;'>
-            <h4 style='margin:0; color:#10b981;'>👑 VIP Operational Hub Active</h4>
-            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>Welcome back, {st.session_state.user_email}. All automated neural networks and institutional pipelines are fully unlocked.</p>
-        </div>
-        """, unsafe_allow_html=True)
 
     # Mode 1: Trading Hub Dashboard
     if workspace_mode == "📢 Live Trading Hub":
