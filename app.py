@@ -250,7 +250,6 @@ else:
     st.sidebar.markdown(f"**User:** `{st.session_state.user_email}`")
     st.sidebar.markdown(f"**Access Tier:** `{st.session_state.role}`")
     
-    # Show dynamic menus based on account tier
     nav_options = ["📢 Live Trading Hub", "🤖 AI Agent Activity Log"]
     if st.session_state.role == "FREE":
         nav_options.append("💳 Activate VIP Tier")
@@ -291,7 +290,7 @@ else:
 
     # --- MODE SELECTED CONTROLLER ---
     
-    # 💳 1. NEW MODE: DEDICATED SIDEBAR PAYMENT GATEWAY PAGE
+    # 💳 1. MODE: DEDICATED SIDEBAR PAYMENT GATEWAY PAGE
     if workspace_mode == "💳 Activate VIP Tier":
         st.markdown("<h2 style='color: #3b82f6;'>💳 Premium VIP Desk Gateway</h2>", unsafe_allow_html=True)
         st.write("Complete your security deposit payload below to activate direct data pipelines.")
@@ -299,14 +298,10 @@ else:
         c_left, c_right = st.columns([1, 1.5])
         with c_left:
             st.markdown("#### 🔳 Secure QR Scan Matrix")
-            # Elegant Simulated Barcode / QR Box
-            st.markdown("""
-            <div style='background-color: white; padding: 25px; border-radius: 12px; text-align: center; width: 220px; margin: 0 auto;'>
-                <div style='background-color: #111; width: 170px; height: 170px; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: #38bdf8; font-family: monospace; font-weight: bold; font-size: 0.85rem; border: 4px dashed #3b82f6;'>
-                    [ USDT.TRC20 ]<br>SCAN CODE TO<br>DEPOSIT PAYLOAD
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Generation of a highly stable live scannable QR Image using global charts API engine
+            usdt_address = "TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8"
+            qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={usdt_address}&color=0e1117&bgcolor=ffffff"
+            st.image(qr_api_url, caption="Scan this Barcode using Crypto Wallet Application", width=220)
             
         with c_right:
             st.markdown("#### 🔑 Transfer Payload Destination Keys")
@@ -336,7 +331,7 @@ else:
             else:
                 st.warning("Please fully fill credentials.")
 
-    # 📢 2. MODE: LIVE HUB DASHBOARD (NOW 100% EXPANDER FREE)
+    # 📢 2. MODE: LIVE HUB DASHBOARD
     elif workspace_mode == "📢 Live Trading Hub":
         st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD Multi-Agent Hub</h2>", unsafe_allow_html=True)
         st.markdown(f"<div class='status-card'><span style='color:#10b981;'>●</span> <b>Real-Time Spot Price (Synced):</b> <span style='color:#f59e0b; font-size:1.2rem;'>{live_price_str}</span></div>", unsafe_allow_html=True)
