@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 import yfinance as yf
 from supabase import create_client, Client
+import extra_streamlit_components as stx
 
 # --- SETTINGS & CONFIG ---
 st.set_page_config(page_title="XAUUSD VIP AI Terminal", page_icon="💰", layout="wide")
@@ -63,13 +64,24 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --- GOOGLE SHEET TSV LINK ---
 SHEET_TSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRc2bZvbbN8-_7HXt-Cu0_UPmUpLEcpOcGQimQj8j1Q39i4Hr4E8tjhMCX5krQSAsX4kXwYpzwn5BjC/pub?output=tsv"
 
-# --- PERSISTENT SESSION SYSTEM (REFRESH-PROOF) ---
+# --- BROWSER COOKIE MANAGER (REFRESH PROOF) ---
+cookie_manager = stx.CookieManager()
+
+# Give some milliseconds for sync
+time.sleep(0.1)
+
+# Fetch current stored cookies
+c_logged_in = cookie_manager.get(cookie="xau_logged_in")
+c_role = cookie_manager.get(cookie="xau_role")
+c_email = cookie_manager.get(cookie="xau_email")
+
+# Load cookie data into Streamlit Session State if available
 if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+    st.session_state.logged_in = True if c_logged_in == "true" else False
 if "role" not in st.session_state:
-    st.session_state.role = None
+    st.session_state.role = c_role if c_role else None
 if "user_email" not in st.session_state:
-    st.session_state.user_email = None
+    st.session_state.user_email = c_email if c_email else None
 
 # Helper function to remove raw HTML tags for clean editing
 def clean_html_tags(text):
@@ -94,6 +106,11 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.role = "ADMIN"
                     st.session_state.user_email = "Manissh S Jariwala (Admin)"
+                    
+                    # Store cookies for 7 days
+                    cookie_manager.set("xau_logged_in", "true", max_age=604800)
+                    cookie_manager.set("xau_role", "ADMIN", max_age=604800)
+                    cookie_manager.set("xau_email", "Manissh S Jariwala (Admin)", max_age=604800)
                     st.rerun()
                 else:
                     try:
@@ -102,6 +119,11 @@ if not st.session_state.logged_in:
                             st.session_state.logged_in = True
                             st.session_state.role = "USER"
                             st.session_state.user_email = res.data[0]["email"]
+                            
+                            # Store cookies for 7 days
+                            cookie_manager.set("xau_logged_in", "true", max_age=604800)
+                            cookie_manager.set("xau_role", "USER", max_age=604800)
+                            cookie_manager.set("xau_email", res.data[0]["email"], max_age=604800)
                             st.rerun()
                         else:
                             st.error("Invalid VIP Access Credentials.")
@@ -146,6 +168,11 @@ else:
         st.session_state.logged_in = False
         st.session_state.role = None
         st.session_state.user_email = None
+        
+        # Delete cookies on logout
+        cookie_manager.delete("xau_logged_in")
+        cookie_manager.delete("xau_role")
+        cookie_manager.delete("xau_email")
         st.rerun()
 
     # PRICE ENGINE SYNC
@@ -184,7 +211,7 @@ else:
         with ag:
             st.markdown(f"<div class='agent-card'><b>⚡ Data Pipeline Status:</b> {latest_signal}</div>", unsafe_allow_html=True)
 
-        # Admin View Only
+        # Admin View vs User Isolation View
         if st.session_state.role == "ADMIN":
             st.markdown("### 🛠️ Admin Broadcast Console")
             clean_editable_signal = clean_html_tags(latest_signal)
