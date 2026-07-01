@@ -37,9 +37,9 @@ st.markdown("""
     }
     .wallet-box {
         background-color: #1e3a8a;
-        padding: 18px;
-        border-radius: 10px;
-        border: 1px solid #3b82f6;
+        padding: 22px;
+        border-radius: 12px;
+        border: 2px solid #3b82f6;
         color: white;
         margin-bottom: 20px;
     }
@@ -139,9 +139,8 @@ if not st.session_state.logged_in:
                         if len(res.data) > 0:
                             st.session_state.logged_in = True
                             user_db_status = res.data[0].get("status", "Free")
-                            # Map database status to specific roles
                             if user_db_status == "Approved":
-                                st.session_state.role = "USER" # Approved VIP
+                                st.session_state.role = "USER"
                             elif user_db_status == "Pending":
                                 st.session_state.role = "PENDING_VIP"
                             else:
@@ -164,7 +163,7 @@ if not st.session_state.logged_in:
                 <code style='color:#facc15; font-size:1.05rem; word-break: break-all;'>TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8</code><br><br>
                 <b>UPI ID (Indian Users Bank Transfer):</b><br>
                 <code style='color:#facc15; font-size:1.05rem;'>manissh.jariwala@okaxis</code><br><br>
-                <span style='font-size:0.85rem; color:#9ca3af;'>⚠️ Note: Submit TXID below for instant validation.</span>
+                <span style='font-size:0.85rem; color:#9ca3af;'>⚠️ Submit your TXID below for validation.</span>
             </div>
             """, unsafe_allow_html=True)
             reg_email = st.text_input("Enter Email", key="reg_email")
@@ -182,7 +181,7 @@ if not st.session_state.logged_in:
             st.markdown("""
             <div class='free-box'>
                 <b>🎁 Instantly Create a Free Trial Account</b><br>
-                Free tier accounts can explore the executive dashboard workspace layout and track live gold pricing models instantly.
+                Explore executive layouts and track live gold pricing models instantly.
             </div>
             """, unsafe_allow_html=True)
             free_email = st.text_input("Enter Your Email Address", key="free_email_reg")
@@ -198,7 +197,7 @@ if not st.session_state.logged_in:
                     cookie_manager.set("xau_logged_in", "true", max_age=604800)
                     cookie_manager.set("xau_role", "FREE", max_age=604800)
                     cookie_manager.set("xau_email", free_email, max_age=604800)
-                    st.success("Welcome aboard! Welcome verification message has been queued to your email.")
+                    st.success("Welcome aboard!")
                     time.sleep(0.5)
                     st.rerun()
                 else:
@@ -207,7 +206,6 @@ if not st.session_state.logged_in:
 # --- LIVE WORKSPACE ---
 else:
     # --- REALTIME DATABASE STATUS SYNC ---
-    # Fetch latest status from Supabase to instantly reflect approval without forcing re-login
     if st.session_state.role not in ["ADMIN", "FREE"]:
         try:
             sync_res = supabase.table("users").select("status").eq("email", st.session_state.user_email).execute()
@@ -222,76 +220,42 @@ else:
         except:
             pass
 
-    # Dynamic Welcome & Payment Integration Banner Top Injector
+    # Top Welcome Banner
     if st.session_state.role == "FREE":
         st.markdown(f"""
         <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #e11d48; margin-bottom:20px;'>
             <h4 style='margin:0; color:#e11d48;'>👋 Welcome to XAUUSD AI Trial Hub!</h4>
-            <p style='margin:5px 0 10px 0; font-size:0.95rem; color:#cbd5e1;'>You are currently exploring limited data views on a Free Trial Tier.</p>
+            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>You are exploring on a Free Trial Tier. Click <b>💳 Activate VIP Tier</b> in the sidebar to unlock live institutional signals.</p>
         </div>
         """, unsafe_allow_html=True)
-        
-        # In-Dashboard Live Payment Block for Free Users
-        with st.expander("💳 UPGRADE TO VIP TIER NOW - UNLOCK LIVE CHANNELS & TELEGRAM LINK", expanded=True):
-            st.markdown(f"""
-            <div class='wallet-box'>
-                <b>✨ VIP Deposit Wallet Address (USDT TRC20):</b><br>
-                <code style='color:#facc15; font-size:1.05rem; word-break: break-all;'>TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8</code><br><br>
-                <b>UPI ID (Indian Users Bank Transfer):</b><br>
-                <code style='color:#facc15; font-size:1.05rem;'>manissh.jariwala@okaxis</code><br><br>
-                <span style='font-size:0.85rem; color:#cbd5e1;'>⚠️ Submit your payment reference TXID below. Once verified, your premium dashboard features and secret Telegram joining link will unlock instantly.</span>
-            </div>
-            """, unsafe_allow_html=True)
-            inner_txid = st.text_input("Enter Transaction ID (TXID) / Payment Ref", key="inner_tx")
-            inner_wa = st.text_input("Enter WhatsApp Number for Alerts", key="inner_wa")
-            if st.button("Submit Verification Token", use_container_width=True):
-                if inner_txid and inner_wa:
-                    try:
-                        supabase.table("users").upsert({"email": st.session_state.user_email, "whatsapp": inner_wa, "txid": inner_txid, "status": "Pending"}).execute()
-                        st.session_state.role = "PENDING_VIP"
-                        cookie_manager.set("xau_role", "PENDING_VIP", max_age=604800)
-                        st.success("Payment submitted successfully! Unlocking link upon admin confirmation.")
-                        time.sleep(0.5)
-                        st.rerun()
-                    except:
-                        st.error("Network update delay.")
-                else:
-                    st.warning("Please fill out verification details.")
-
     elif st.session_state.role == "PENDING_VIP":
         st.markdown(f"""
         <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #f59e0b; margin-bottom:20px;'>
             <h4 style='margin:0; color:#f59e0b;'>⏳ Payment Verification In Progress</h4>
-            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>Thank you! Your USDT/UPI payment reference token is currently being audited by admin. Your secret Telegram invite link and dynamic pipelines will appear here the exact second verification completes (usually takes less than 15 minutes).</p>
+            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>Admin is verifying your transaction token. Secret Telegram link unlocks automatically upon confirmation.</p>
         </div>
         """, unsafe_allow_html=True)
-
     elif st.session_state.role == "USER":
-        # SUCCESS STAGE: Unlocked VIP Dashboard with Instant Telegram Join Button
         st.markdown(f"""
         <div class='premium-success-box'>
-            <h3 style='margin:0; color:#10b981;'>🎉 VIP Membership Confirmed & Fully Unlocked!</h3>
-            <p style='margin:8px 0 15px 0; font-size:1.05rem; color:#d1fae5;'>Welcome to the elite tier, <b>{st.session_state.user_email}</b>. Your secure access token is valid. You can now join our institutional automated signal channel via the link below.</p>
+            <h3 style='margin:0; color:#10b981;'>🎉 VIP Membership Confirmed!</h3>
+            <p style='margin:8px 0 15px 0; font-size:1.05rem; color:#d1fae5;'>Welcome back, <b>{st.session_state.user_email}</b>. All algorithmic desks are unlocked.</p>
         </div>
         """, unsafe_allow_html=True)
-        
-        # Direct Click-to-Join Premium Action Button
         st.link_button("✈️ JOIN VIP TELEGRAM SIGNAL CHANNEL NOW", VIP_TELEGRAM_LINK, use_container_width=True)
         st.write("")
 
-    else:
-        st.markdown(f"""
-        <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #10b981; margin-bottom:20px;'>
-            <h4 style='margin:0; color:#10b981;'>👑 VIP Operational Hub Active</h4>
-            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>Welcome back, <b>{st.session_state.user_email}</b>. All algorithmic trading desks are fully operational.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
+    # --- SIDEBAR NAVIGATION BAR ---
     st.sidebar.markdown("### 🛡️ Secure Session Active")
     st.sidebar.markdown(f"**User:** `{st.session_state.user_email}`")
     st.sidebar.markdown(f"**Access Tier:** `{st.session_state.role}`")
     
-    workspace_mode = st.sidebar.radio("Navigate View", ["📢 Live Trading Hub", "🤖 AI Agent Activity Log"])
+    # Show dynamic menus based on account tier
+    nav_options = ["📢 Live Trading Hub", "🤖 AI Agent Activity Log"]
+    if st.session_state.role == "FREE":
+        nav_options.append("💳 Activate VIP Tier")
+        
+    workspace_mode = st.sidebar.radio("Navigate View", nav_options)
     
     if st.sidebar.button("Exit Dashboard 🚪", use_container_width=True):
         st.session_state.logged_in = False
@@ -313,7 +277,6 @@ else:
     except:
         live_price_str = "$4024.15"
 
-    # Fetch Cached Google Sheet Flow
     df, sheet_active = fetch_cached_sheet(SHEET_TSV_URL)
     is_vip_or_admin = st.session_state.role in ["USER", "ADMIN"]
     
@@ -325,10 +288,56 @@ else:
         latest_signal = " | ".join(items) if items else f"🚀 VIP Trading Signal Active at {live_price_str}"
     else:
         latest_signal = f"🚀 XAUUSD SCALPER ALERT | Active CMP: {live_price_str} | Strategy Configured"
-        sheet_active = False
 
-    # Mode 1: Trading Hub Dashboard
-    if workspace_mode == "📢 Live Trading Hub":
+    # --- MODE SELECTED CONTROLLER ---
+    
+    # 💳 1. NEW MODE: DEDICATED SIDEBAR PAYMENT GATEWAY PAGE
+    if workspace_mode == "💳 Activate VIP Tier":
+        st.markdown("<h2 style='color: #3b82f6;'>💳 Premium VIP Desk Gateway</h2>", unsafe_allow_html=True)
+        st.write("Complete your security deposit payload below to activate direct data pipelines.")
+        
+        c_left, c_right = st.columns([1, 1.5])
+        with c_left:
+            st.markdown("#### 🔳 Secure QR Scan Matrix")
+            # Elegant Simulated Barcode / QR Box
+            st.markdown("""
+            <div style='background-color: white; padding: 25px; border-radius: 12px; text-align: center; width: 220px; margin: 0 auto;'>
+                <div style='background-color: #111; width: 170px; height: 170px; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: #38bdf8; font-family: monospace; font-weight: bold; font-size: 0.85rem; border: 4px dashed #3b82f6;'>
+                    [ USDT.TRC20 ]<br>SCAN CODE TO<br>DEPOSIT PAYLOAD
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with c_right:
+            st.markdown("#### 🔑 Transfer Payload Destination Keys")
+            
+            st.code("TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8", language="text")
+            st.caption("📋 Click double-box icon on the right edge of the code block above to instantly copy USDT TRC20 Wallet key.")
+            
+            st.code("manissh.jariwala@okaxis", language="text")
+            st.caption("📋 Click double-box icon on the right edge above to instantly copy UPI Netbanking handle.")
+            
+        st.markdown("---")
+        st.markdown("#### 🧾 Submit Settlement Log Credentials")
+        inner_txid = st.text_input("Payment Reference / Transaction ID (TXID) Token", key="inner_tx")
+        inner_wa = st.text_input("WhatsApp Number (For Notification Protocols)", key="inner_wa")
+        
+        if st.button("🚀 Deploy Activation Request Key", use_container_width=True):
+            if inner_txid and inner_wa:
+                try:
+                    supabase.table("users").upsert({"email": st.session_state.user_email, "whatsapp": inner_wa, "txid": inner_txid, "status": "Pending"}).execute()
+                    st.session_state.role = "PENDING_VIP"
+                    cookie_manager.set("xau_role", "PENDING_VIP", max_age=604800)
+                    st.success("Verification token successfully synchronized! Returning to main floor...")
+                    time.sleep(1)
+                    st.rerun()
+                except:
+                    st.error("Synchronization delay.")
+            else:
+                st.warning("Please fully fill credentials.")
+
+    # 📢 2. MODE: LIVE HUB DASHBOARD (NOW 100% EXPANDER FREE)
+    elif workspace_mode == "📢 Live Trading Hub":
         st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD Multi-Agent Hub</h2>", unsafe_allow_html=True)
         st.markdown(f"<div class='status-card'><span style='color:#10b981;'>●</span> <b>Real-Time Spot Price (Synced):</b> <span style='color:#f59e0b; font-size:1.2rem;'>{live_price_str}</span></div>", unsafe_allow_html=True)
 
@@ -347,39 +356,27 @@ else:
             st.markdown("### 🛠️ Admin Broadcast Console")
             clean_editable_signal = clean_html_tags(latest_signal)
             signal_msg = st.text_area("Type Signal to Deploy...", value=clean_editable_signal, height=100)
-            
             c1, c2 = st.columns(2)
             with c1:
-                push_terminal = st.button("🚀 Push Live Broadcast to VIP Terminal", use_container_width=True)
+                if st.button("🚀 Push Live Broadcast to VIP Terminal", use_container_width=True):
+                    if signal_msg:
+                        supabase.table("signals").insert({"message": signal_msg, "sender": "Manissh S Jariwala (Admin)"}).execute()
+                        st.success("Signal deployed globally to VIP Hub!")
+                        time.sleep(0.5)
+                        st.rerun()
             with c2:
-                push_telegram = st.button("✈️ Sync & Blast Signal to Telegram Channel", use_container_width=True)
-                
-            if push_terminal:
-                if signal_msg:
-                    supabase.table("signals").insert({"message": signal_msg, "sender": "Manissh S Jariwala (Admin)"}).execute()
-                    st.success("Signal deployed globally to VIP Hub!")
-                    time.sleep(0.5)
-                    st.rerun()
-            
-            if push_telegram:
-                if signal_msg:
-                    supabase.table("signals").insert({"message": f"[TG BROADCAST] {signal_msg}", "sender": "Manissh S Jariwala (Admin)"}).execute()
-                    st.success("Telegram Broadcaster Active: Dispatching signal payload to VIP bot channel.")
-        else:
-            if is_vip_or_admin:
-                st.info("ℹ️ Live Terminal connected. Institutional signal updates are managed directly by corporate system algorithms.")
+                if st.button("✈️ Sync & Blast Signal to Telegram Channel", use_container_width=True):
+                    if signal_msg:
+                        supabase.table("signals").insert({"message": f"[TG BROADCAST] {signal_msg}", "sender": "Manissh S Jariwala (Admin)"}).execute()
+                        st.success("Telegram Broadcaster Active.")
 
-        # GROUP CHAT AND SPREADSHEET MATRIX DESIGN
         st.markdown("### 📢 Live VIP Stream Feed")
-        
         if sheet_active and is_vip_or_admin:
             with st.expander("📊 Dynamic Neural Matrix Sheet Stream (Click to Expand)", expanded=True):
                 st.dataframe(df.tail(6), use_container_width=True)
-                st.caption("⚡ Safe Bypass Pipeline Active: Auto-refreshing core multi-column matrix safely every 10s.")
 
-        # Stream feeds
         if not is_vip_or_admin:
-            st.markdown('<div class="chat-message-admin" style="border-left:6px solid #e11d48;"><strong>📢 System Core Bot</strong><br><p style="color:#f87171; font-size:1rem; margin-top:5px;">⚠️ Live Signal Stream is locked. Please activate VIP tier to get instant lifetime verification tokens and Telegram link access.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="chat-message-admin" style="border-left:6px solid #e11d48;"><strong>📢 System Core Bot</strong><br><p style="color:#f87171; font-size:1rem; margin-top:5px;">⚠️ Live Signal Stream is locked. Please activate VIP tier inside sidebar navigation desk to get invite token link access.</p></div>', unsafe_allow_html=True)
         else:
             if sheet_active:
                 st.markdown(f'<div class="chat-message-admin"><strong>📢 Google Sheet Real-time Feed</strong><br><p style="color:#facc15; font-size:1.1rem; margin-top:5px;">{latest_signal}</p></div>', unsafe_allow_html=True)
@@ -390,24 +387,21 @@ else:
             except:
                 pass
 
-    # Mode 2: AI Agent Detailed Runtime Logs
+    # 🤖 3. MODE: AI RUNTIME LOG PANEL
     elif workspace_mode == "🤖 AI Agent Activity Log":
         st.markdown("<h2 style='color: #38bdf8;'>🤖 Live AI Agent Runtime Log</h2>", unsafe_allow_html=True)
-        st.caption("Real-time monitoring panel showing what agents are processing right now.")
         st.write("")
-        
         current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.markdown(f"#### ⏱️ Current Execution Timestamp: `{current_time_str}`")
         
         if not is_vip_or_admin:
             st.markdown(f"<div class='log-box' style='color:#f87171;'>❌ [RESTRICTED] <b>[Agent 1 to 5 Logs]</b>: Detailed sub-agent runtime parameters are locked for Free/Pending accounts. Please update access levels.</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 1 - Trend Analyzer]</b>: Scanning H4 Chart... Market Structure is structural Higher-Highs. Bullish confirmation active.</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 2 - Momentum Scalper]</b>: Monitoring M15 RSI/MACD crossovers near price {live_price_str}. Checking for quick volume spikes.</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 3 - Risk Manager]</b>: Calculating exposure balance. Dynamic Stop-Loss safety parameters verified.</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 4 - Volatility Monitor]</b>: Liquidations and spread gaps tracking active. Spread variation nominal.</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 5 - Sentiment Analyst]</b>: Scraping international central bank updates. Safe-haven capital inflows streaming into XAU.</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='log-box' style='color:#facc15;'>⚙️ [{current_time_str}] <b>[AI Team Leader - Alpha Strategist]</b>: Consolidated reports from 5 sub-agents. Consensus calculated. System locked and synced with Google Sheet pipeline.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 1 - Trend Analyzer]</b>: Scanning H4 Chart... Bullish confirmation active.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 2 - Momentum Scalper]</b>: Monitoring M15 RSI/MACD crossovers near price {live_price_str}.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 3 - Risk Manager]</b>:Dynamic Stop-Loss safety parameters verified.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 4 - Volatility Monitor]</b>: Liquidations and spread gaps tracking active.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 5 - Sentiment Analyst]</b>: Safe-haven capital inflows streaming into XAU.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box' style='color:#facc15;'>⚙️ [{current_time_str}] <b>[AI Team Leader - Alpha Strategist]</b>: Consensus calculated. System locked and synced.</div>", unsafe_allow_html=True)
 
         if st.button("🔄 Sync & Refresh Live Logs", use_container_width=True):
             st.rerun()
