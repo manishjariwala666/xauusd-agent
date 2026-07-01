@@ -58,6 +58,30 @@ st.markdown("""
         margin-bottom: 22px;
         box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
     }
+
+    /* Fixed Clean Grid Box Layout for Gateway Desk Elements */
+    .gateway-flex-container {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 30px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .gateway-qr-wrapper {
+        background: white; 
+        padding: 16px; 
+        border-radius: 16px; 
+        width: 182px; 
+        display: inline-block;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        text-align: center;
+    }
+    .gateway-details-wrapper {
+        flex: 1;
+        min-width: 280px;
+    }
     
     .glow-header {
         font-weight: 800;
@@ -329,30 +353,38 @@ else:
 
     # --- WORKSPACE DISPATCH ---
     
-    # 💳 1. ADVANCED PAYMENT GATEWAY DESK (FIXED STRIP ALIGNMENT)
+    # 💳 1. ADVANCED PAYMENT GATEWAY DESK (HTML HYBRID LAYOUT - NO ALIGNMENT DRIFT)
     if workspace_mode == "💳 Activate VIP Tier":
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
         st.markdown("<h2 style='color: #fff; font-weight:700; margin-top:0;'>💳 Premium VIP Desk Gateway</h2>", unsafe_allow_html=True)
         st.write("Complete your structural security payload log below to unlock dynamic data channels.")
         st.write("")
         
-        # Enclosed row layout to fix the alignment shift
-        c_left, c_right = st.columns([1, 2])
-        with c_left:
-            st.markdown("<div style='background: white; padding: 18px; border-radius: 16px; width: 186px; margin: 0 auto; box-shadow: 0 10px 25px rgba(0,0,0,0.4); text-align: center;'>", unsafe_allow_html=True)
-            usdt_address = "TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8"
-            qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={usdt_address}&color=07080a&bgcolor=ffffff"
-            st.image(qr_api_url, width=150)
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-        with c_right:
-            st.markdown("<span style='color:#818cf8; font-weight:600; font-size:0.95rem;'>🔑 USDT TRC20 Wallet Destination Address</span>", unsafe_allow_html=True)
-            st.code("TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8", language="text")
-            
-            st.markdown("<br><span style='color:#818cf8; font-weight:600; font-size:0.95rem;'>🇮🇳 National Banking UPI Handle</span>", unsafe_allow_html=True)
-            st.code("manissh.jariwala@okaxis", language="text")
-            
-        st.markdown("<br><hr style='border-color: rgba(255,255,255,0.05);'><br><h4>🧾 Submit Settlement Credentials</h4>", unsafe_allow_html=True)
+        # Combined Native HTML Flex grid injection to ensure layout symmetry
+        usdt_address = "TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8"
+        qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={usdt_address}&color=07080a&bgcolor=ffffff"
+        
+        st.markdown(f"""
+        <div class="gateway-flex-container">
+            <div class="gateway-qr-wrapper">
+                <img src="{qr_api_url}" width="150" height="150" style="border-radius:8px;" alt="QR Matrix"/>
+            </div>
+            <div class="gateway-details-wrapper">
+                <span style="color:#818cf8; font-weight:600; font-size:0.95rem;">🔑 USDT TRC20 Wallet Destination Address</span>
+                <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-family: monospace; color: #ffffff; font-size: 1rem; margin-top: 6px; word-break: break-all;">
+                    TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8
+                </div>
+                <br>
+                <span style="color:#818cf8; font-weight:600; font-size:0.95rem;">🇮🇳 National Banking UPI Handle</span>
+                <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-family: monospace; color: #ffffff; font-size: 1rem; margin-top: 6px;">
+                    manissh.jariwala@okaxis
+                </div>
+            </div>
+        </div>
+        <hr style="border-color: rgba(255,255,255,0.05); margin: 25px 0;">
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<h4>🧾 Submit Settlement Credentials</h4>", unsafe_allow_html=True)
         inner_txid = st.text_input("Transaction reference ID (TXID) Token Input", key="inner_tx")
         inner_wa = st.text_input("WhatsApp Alerts Communication Number", key="inner_wa")
         st.write("")
