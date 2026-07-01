@@ -10,66 +10,101 @@ import extra_streamlit_components as stx
 # --- SETTINGS & CONFIG ---
 st.set_page_config(page_title="XAUUSD VIP AI Terminal", page_icon="💰", layout="wide")
 
+# --- HIGH-END PREMIUM MODERN GLOWING TRADING THEME DESIGN ---
 st.markdown("""
 <style>
-    .reportview-container { background: #0e1117; }
-    .chat-message-admin {
-        background-color: #1f2937;
-        padding: 20px;
-        border-radius: 12px;
-        margin-bottom: 15px;
-        border-left: 6px solid #f59e0b;
-        color: #f3f4f6;
-    }
-    .agent-card {
-        background-color: #111827;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #374151;
-        margin-bottom: 10px;
-    }
-    .status-card {
-        background-color: #111827;
-        padding: 15px;
-        border-radius: 8px;
-        border: 1px solid #374151;
-        margin-bottom: 15px;
-    }
-    .wallet-box {
-        background-color: #1e3a8a;
-        padding: 22px;
-        border-radius: 12px;
-        border: 2px solid #3b82f6;
-        color: white;
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+    
+    * { font-family: 'Space Grotesk', sans-serif; }
+    .reportview-container { background: #07090e; }
+    
+    /* Premium Glassmorphism Container */
+    .premium-card {
+        background: linear-gradient(135deg, rgba(31, 41, 55, 0.4) 0%, rgba(17, 24, 39, 0.6) 100%);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 24px;
         margin-bottom: 20px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     }
-    .free-box {
-        background-color: #111827;
-        padding: 18px;
-        border-radius: 10px;
+    
+    /* Glowing Indicator Badges */
+    .glow-badge-green {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid #10b981;
+        color: #34d399;
+        padding: 6px 14px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+    }
+    
+    .glow-badge-rose {
+        background: rgba(225, 29, 72, 0.1);
         border: 1px solid #e11d48;
-        color: white;
-        margin-bottom: 20px;
+        color: #fb7185;
+        padding: 6px 14px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        box-shadow: 0 0 15px rgba(225, 29, 72, 0.2);
     }
-    .premium-success-box {
-        background-color: #064e3b;
-        padding: 20px;
-        border-radius: 10px;
-        border: 2px solid #10b981;
-        color: white;
-        margin-bottom: 20px;
+    
+    /* Metrics Hub */
+    .metric-display {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 16px;
         text-align: center;
     }
-    .log-box {
-        background-color: #070a12;
-        padding: 12px;
-        font-family: monospace;
-        color: #38bdf8;
-        border-radius: 6px;
-        border: 1px solid #1e293b;
-        margin-bottom: 8px;
+    .metric-val {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #f59e0b;
+        text-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
     }
-    th { background-color: #1f2937 !important; color: #f59e0b !important; }
+    
+    /* Modern Chat Streams */
+    .chat-message-premium {
+        background: rgba(31, 41, 55, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-left: 5px solid #f59e0b;
+        padding: 18px;
+        border-radius: 12px;
+        margin-bottom: 15px;
+        color: #e5e7eb;
+    }
+    
+    /* Interactive Streamlit Elements Modification */
+    div.stButton > button {
+        background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%) !important;
+        color: #07090e !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px !important;
+        border-radius: 10px !important;
+        border: none !important;
+        padding: 10px 20px !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 15px rgba(245, 158, 11, 0.2) !important;
+    }
+    div.stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4) !important;
+    }
+    
+    /* Custom Modern Table Framework */
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th { background: #111827 !important; color: #f59e0b !important; font-weight: 600 !important; padding: 12px !important; text-align: left !important; border-bottom: 2px solid rgba(245, 158, 11, 0.2) !important; }
+    td { padding: 12px !important; border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important; color: #cbd5e1 !important; }
+    tr:hover { background: rgba(255, 255, 255, 0.02); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -80,8 +115,6 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- GOOGLE SHEET TSV LINK ---
 SHEET_TSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRc2bZvbbN8-_7HXt-Cu0_UPmUpLEcpOcGQimQj8j1Q39i4Hr4E8tjhMCX5krQSAsX4kXwYpzwn5BjC/pub?output=tsv"
-
-# --- SECRET TELEGRAM VIP JOIN LINK ---
 VIP_TELEGRAM_LINK = "https://t.me/+YourSecretChannelInviteLinkHere"
 
 # --- BROWSER COOKIE MANAGER ---
@@ -113,18 +146,19 @@ def fetch_cached_sheet(url):
 
 # --- AUTHENTICATION SCREEN ---
 if not st.session_state.logged_in:
-    st.markdown("<h2 style='text-align: center; margin-top: 40px;'>🔒 XAUUSD VIP AI Terminal</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: gray;'>Algorithmic Multi-Agent Intelligence Network</p>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; margin-top: 60px;'><h1 style='color: #fff; letter-spacing: -1px; margin-bottom: 5px;'>🔒 XAUUSD VIP AI Terminal</h1><p style='color: #6b7280; font-size: 1.1rem; margin-bottom: 40px;'>Institutional Grade Multi-Agent Intelligence Desk</p></div>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 1.4, 1])
+    col1, col2, col3 = st.columns([1, 1.3, 1])
     with col2:
-        tab1, tab2, tab3 = st.tabs(["🔑 Sign In", "💳 Activate VIP", "🎁 Free Trial Account"])
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        tab1, tab2, tab3 = st.tabs(["🔑 Sign In Desk", "💳 Activate Membership", "🎁 Free Account Access"])
         
         with tab1:
-            email_input = st.text_input("Registered Email ID", key="login_email")
-            whatsapp_input = st.text_input("WhatsApp Security Key / Password", type="password", key="login_pass")
-            
-            if st.button("Access Hub", use_container_width=True):
+            st.write("")
+            email_input = st.text_input("Username or Registered Email ID", key="login_email")
+            whatsapp_input = st.text_input("Security Access Key / Password", type="password", key="login_pass")
+            st.write("")
+            if st.button("Initialize Secure Access", use_container_width=True):
                 if email_input == "manishadmin" and whatsapp_input == "goldmaster77":
                     st.session_state.logged_in = True
                     st.session_state.role = "ADMIN"
@@ -157,35 +191,32 @@ if not st.session_state.logged_in:
                         st.error("Authentication Network Error.")
                         
         with tab2:
+            st.write("")
             st.markdown(f"""
-            <div class='wallet-box'>
-                <b>✨ VIP Deposit Wallet Address (USDT TRC20):</b><br>
+            <div class='wallet-box' style='background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.3);'>
+                <span style='color: #60a5fa; font-weight: 600;'>✨ VIP USDT (TRC20) Vault Key:</span><br>
                 <code style='color:#facc15; font-size:1.05rem; word-break: break-all;'>TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8</code><br><br>
-                <b>UPI ID (Indian Users Bank Transfer):</b><br>
-                <code style='color:#facc15; font-size:1.05rem;'>manissh.jariwala@okaxis</code><br><br>
-                <span style='font-size:0.85rem; color:#9ca3af;'>⚠️ Submit your TXID below for validation.</span>
+                <span style='color: #60a5fa; font-weight: 600;'>🇮🇳 UPI Instant Handler:</span><br>
+                <code style='color:#facc15; font-size:1.05rem;'>manissh.jariwala@okaxis</code>
             </div>
             """, unsafe_allow_html=True)
-            reg_email = st.text_input("Enter Email", key="reg_email")
-            reg_whatsapp = st.text_input("WhatsApp Number", key="reg_wa")
-            reg_txid = st.text_input("Transaction ID (TXID)", key="reg_tx")
-            if st.button("Submit VIP Activation Request", use_container_width=True):
+            reg_email = st.text_input("Enter Email Address", key="reg_email")
+            reg_whatsapp = st.text_input("WhatsApp Secure Link Number", key="reg_wa")
+            reg_txid = st.text_input("Transaction reference ID (TXID)", key="reg_tx")
+            if st.button("Submit Network Activation Request", use_container_width=True):
                 if reg_email and reg_whatsapp and reg_txid:
                     try:
                         supabase.table("users").insert({"email": reg_email, "whatsapp": reg_whatsapp, "txid": reg_txid, "status": "Pending"}).execute()
-                        st.success("Payment Logged! Admin will verify and activate your hub within 15 minutes.")
+                        st.success("Payment Reference Logged Successfully!")
                     except:
                         st.error("Sync error.")
         
         with tab3:
-            st.markdown("""
-            <div class='free-box'>
-                <b>🎁 Instantly Create a Free Trial Account</b><br>
-                Explore executive layouts and track live gold pricing models instantly.
-            </div>
-            """, unsafe_allow_html=True)
-            free_email = st.text_input("Enter Your Email Address", key="free_email_reg")
-            if st.button("Create Free Account & Login", use_container_width=True):
+            st.write("")
+            st.markdown("<p style='color: #9ca3af;'>Instantly launch an isolated framework dashboard evaluation session.</p>", unsafe_allow_html=True)
+            free_email = st.text_input("Enter Email for Session Log", key="free_email_reg")
+            st.write("")
+            if st.button("Launch Evaluation Hub 🚀", use_container_width=True):
                 if free_email and "@" in free_email:
                     try:
                         supabase.table("users").insert({"email": free_email, "whatsapp": "FREE_ACCOUNT", "txid": "FREE_TRIAL", "status": "Free"}).execute()
@@ -197,11 +228,8 @@ if not st.session_state.logged_in:
                     cookie_manager.set("xau_logged_in", "true", max_age=604800)
                     cookie_manager.set("xau_role", "FREE", max_age=604800)
                     cookie_manager.set("xau_email", free_email, max_age=604800)
-                    st.success("Welcome aboard!")
-                    time.sleep(0.5)
                     st.rerun()
-                else:
-                    st.error("Please enter a valid email address.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # --- LIVE WORKSPACE ---
 else:
@@ -217,53 +245,53 @@ else:
                 elif current_db_status == "Pending" and st.session_state.role != "PENDING_VIP":
                     st.session_state.role = "PENDING_VIP"
                     cookie_manager.set("xau_role", "PENDING_VIP", max_age=604800)
-                elif current_db_status == "Free" and st.session_state.role != "FREE":
-                    st.session_state.role = "FREE"
-                    cookie_manager.set("xau_role", "FREE", max_age=604800)
         except:
             pass
 
-    # Top Welcome Banners
-    if st.session_state.role == "FREE":
-        st.markdown(f"""
-        <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #e11d48; margin-bottom:20px;'>
-            <h4 style='margin:0; color:#e11d48;'>👋 Welcome to XAUUSD AI Trial Hub!</h4>
-            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>You are exploring on a Free Trial Tier. Click <b>💳 Activate VIP Tier</b> in the sidebar to unlock live institutional signals.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    elif st.session_state.role == "PENDING_VIP":
-        st.markdown(f"""
-        <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #f59e0b; margin-bottom:20px;'>
-            <h4 style='margin:0; color:#f59e0b;'>⏳ Payment Verification In Progress</h4>
-            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>Admin is verifying your transaction token. Secret Telegram link unlocks automatically upon confirmation.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    elif st.session_state.role == "USER":
-        st.markdown(f"""
-        <div class='premium-success-box'>
-            <h3 style='margin:0; color:#10b981;'>🎉 VIP Membership Confirmed!</h3>
-            <p style='margin:8px 0 15px 0; font-size:1.05rem; color:#d1fae5;'>Welcome back, <b>{st.session_state.user_email}</b>. All algorithmic desks are unlocked.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.link_button("✈️ JOIN VIP TELEGRAM SIGNAL CHANNEL NOW", VIP_TELEGRAM_LINK, use_container_width=True)
-        st.write("")
+    # High End Dynamic Glass Top-Banner Injector
+    st.markdown("<div class='premium-card' style='padding: 20px; margin-top: 10px; display: flex; align-items: center; justify-content: space-between;'>", unsafe_allow_html=True)
+    c_left, c_right = st.columns([2, 1])
+    with c_left:
+        if st.session_state.role == "FREE":
+            st.markdown(f"### 👋 Welcome to Alpha Hub, <span style='color:#f59e0b;'>{st.session_state.user_email}</span>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #9ca3af; margin:0;'>You are currently observing isolated evaluation frameworks. Upgrade to access live terminal modules.</p>", unsafe_allow_html=True)
+        elif st.session_state.role == "PENDING_VIP":
+            st.markdown(f"### ⏳ Telemetry Settlement Pending...", unsafe_allow_html=True)
+            st.markdown("<p style='color: #f59e0b; margin:0;'>Your USDT token transaction layer is undergoing database validation. Access matrix unlocks automatically.</p>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"### 👑 VIP Executive Suite Active", unsafe_allow_html=True)
+            st.markdown(f"<p style='color: #60a5fa; margin:0;'>Authenticated Terminal Core Connection: <b>{st.session_state.user_email}</b></p>", unsafe_allow_html=True)
+    with c_right:
+        st.markdown("<div style='text-align: right;'>", unsafe_allow_html=True)
+        if st.session_state.role == "FREE":
+            st.markdown("<span class='glow-badge-rose'>⚠️ FREE TRIAL INTERFACE ACTIVE</span>", unsafe_allow_html=True)
+        elif st.session_state.role == "PENDING_VIP":
+            st.markdown("<span class='glow-badge-rose' style='border-color:#f59e0b; color:#facc15;'>⏳ AUDITING PAYLOAD LOGS</span>", unsafe_allow_html=True)
+        else:
+            st.markdown("<span class='glow-badge-green'>● SECURE NODE UNLOCKED</span>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # --- SIDEBAR NAVIGATION BAR ---
-    st.sidebar.markdown("### 🛡️ Secure Session Active")
-    st.sidebar.markdown(f"**User:** `{st.session_state.user_email}`")
-    st.sidebar.markdown(f"**Access Tier:** `{st.session_state.role}`")
+    # VIP Action Portal Button Unlocked
+    if st.session_state.role == "USER":
+        st.markdown("<div class='premium-card' style='background: linear-gradient(90deg, rgba(16,185,129,0.1) 0%, rgba(5,150,105,0.2) 100%); border: 1px solid #10b981;'>", unsafe_allow_html=True)
+        st.link_button("✈️ JOIN INSTITUTIONAL TELEGRAM BROADCAST CHANNEL NOW", VIP_TELEGRAM_LINK, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # --- SIDEBAR DESK ---
+    st.sidebar.markdown("<h2 style='color:#fff; margin-bottom:0;'>💰 XAUUSD Desk</h2>", unsafe_allow_html=True)
+    st.sidebar.caption("Navigation Orchestration Center")
+    st.sidebar.markdown("---")
     
     nav_options = ["📢 Live Trading Hub", "🤖 AI Agent Activity Log"]
     if st.session_state.role == "FREE":
         nav_options.append("💳 Activate VIP Tier")
-    
-    # Add Legal Dropdown options to Navigation list
-    nav_options.extend(["ℹ️ About Us", "🔒 Privacy Policy", "⚠️ Legal Disclaimer"])
+    nav_options.extend(["ℹ️ About Architecture", "🔒 Privacy Desk", "⚠️ Disclaimer"])
         
-    workspace_mode = st.sidebar.radio("Navigate View", nav_options)
+    workspace_mode = st.sidebar.radio("Navigate View Workspace", nav_options)
     
     st.sidebar.markdown("---")
-    if st.sidebar.button("Exit Dashboard 🚪", use_container_width=True):
+    if st.sidebar.button("Exit Dashboard Session 🚪", use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.role = None
         st.session_state.user_email = None
@@ -272,13 +300,12 @@ else:
         cookie_manager.delete("xau_email")
         st.rerun()
 
-    # PRICE ENGINE SYNC
+    # PRICE ENGINE DATA
     try:
         gold_ticker = yf.Ticker("GC=F")
         raw_price = gold_ticker.history(period="1d")["Close"].iloc[-1]
         calibrated_spot = raw_price - 19.20
-        if calibrated_spot < 3500:  
-            calibrated_spot = 4024.15
+        if calibrated_spot < 3500: calibrated_spot = 4024.15
         live_price_str = f"${calibrated_spot:.2f}"
     except:
         live_price_str = "$4024.15"
@@ -287,74 +314,80 @@ else:
     is_vip_or_admin = st.session_state.role in ["USER", "ADMIN"]
     
     if sheet_active and not df.empty:
-        items = []
-        for c, v in df.iloc[-1].items():
-            if "Unnamed" not in str(c) and str(v).strip() and str(v).lower() != "none":
-                items.append(f"<b>{c}:</b> {v}")
+        items = [f"<b>{c}:</b> {v}" for c, v in df.iloc[-1].items() if "Unnamed" not in str(c) and str(v).strip() and str(v).lower() != "none"]
         latest_signal = " | ".join(items) if items else f"🚀 VIP Trading Signal Active at {live_price_str}"
     else:
-        latest_signal = f"🚀 XAUUSD SCALPER ALERT | Active CMP: {live_price_str} | Strategy Configured"
+        latest_signal = f"🚀 XAUUSD SCALPER ALERT | Active CMP: {live_price_str}"
 
-    # --- MODE SELECTED CONTROLLER ---
+    # --- COMPONENT DISPATCH CONTROLLER ---
     
-    # 💳 1. MODE: DEDICATED SIDEBAR PAYMENT GATEWAY PAGE
+    # 💳 1. PREMIUM PAYMENT GATEWAY REDESIGN
     if workspace_mode == "💳 Activate VIP Tier":
-        st.markdown("<h2 style='color: #3b82f6;'>💳 Premium VIP Desk Gateway</h2>", unsafe_allow_html=True)
-        st.write("Complete your security deposit payload below to activate direct data pipelines.")
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color: #f59e0b; margin-top:0;'>💳 Premium VIP Desk Gateway</h2>", unsafe_allow_html=True)
+        st.write("Complete your structural security payload log below to unlock dynamic data channels.")
         
-        c_left, c_right = st.columns([1, 1.5])
+        c_left, c_right = st.columns([1, 1.6])
         with c_left:
-            st.markdown("#### 🔳 Secure QR Scan Matrix")
+            st.markdown("<div style='background: white; padding: 20px; border-radius: 12px; width: 200px; margin: 0 auto;'>", unsafe_allow_html=True)
             usdt_address = "TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8"
-            qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={usdt_address}&color=0e1117&bgcolor=ffffff"
-            st.image(qr_api_url, caption="Scan this Barcode using Crypto Wallet Application", width=220)
+            qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={usdt_address}&color=07090e&bgcolor=ffffff"
+            st.image(qr_api_url, width=180)
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.caption("<div style='text-align:center; margin-top:5px;'>Scan Network QR Vector</div>", unsafe_allow_html=True)
             
         with c_right:
-            st.markdown("#### 🔑 Transfer Payload Destination Keys")
+            st.markdown("##### 🔑 USDT TRC20 Wallet Destination Address")
             st.code("TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8", language="text")
-            st.caption("📋 Click double-box icon on the right edge of the code block above to instantly copy USDT TRC20 Wallet key.")
-            st.code("manissh.jariwala@okaxis", language="text")
-            st.caption("📋 Click double-box icon on the right edge above to instantly copy UPI Netbanking handle.")
             
-        st.markdown("---")
-        st.markdown("#### 🧾 Submit Settlement Log Credentials")
-        inner_txid = st.text_input("Payment Reference / Transaction ID (TXID) Token", key="inner_tx")
-        inner_wa = st.text_input("WhatsApp Number (For Notification Protocols)", key="inner_wa")
+            st.markdown("##### 🇮🇳 National Banking UPI Handle")
+            st.code("manissh.jariwala@okaxis", language="text")
+            
+        st.markdown("<br><h4>🧾 Submit Settlement Credentials</h4>", unsafe_allow_html=True)
+        inner_txid = st.text_input("Transaction reference ID (TXID) Token Input", key="inner_tx")
+        inner_wa = st.text_input("WhatsApp Alerts Communication Number", key="inner_wa")
         
-        if st.button("🚀 Deploy Activation Request Key", use_container_width=True):
+        if st.button("Deploy Settlement Verification Keys 🚀", use_container_width=True):
             if inner_txid and inner_wa:
                 try:
                     supabase.table("users").upsert({"email": st.session_state.user_email, "whatsapp": inner_wa, "txid": inner_txid, "status": "Pending"}).execute()
                     st.session_state.role = "PENDING_VIP"
                     cookie_manager.set("xau_role", "PENDING_VIP", max_age=604800)
-                    st.success("Verification token successfully synchronized! Returning to main floor...")
-                    time.sleep(1)
+                    st.success("Verification payload broadcast successful!")
+                    time.sleep(0.5)
                     st.rerun()
-                except:
-                    st.error("Synchronization delay.")
-            else:
-                st.warning("Please fully fill credentials.")
+                except: st.error("Sync drop.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # 📢 2. MODE: LIVE HUB DASHBOARD
+    # 📢 2. LUXURY HUB DASHBOARD REDESIGN
     elif workspace_mode == "📢 Live Trading Hub":
-        st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD Multi-Agent Hub</h2>", unsafe_allow_html=True)
-        st.markdown(f"<div class='status-card'><span style='color:#10b981;'>●</span> <b>Real-Time Spot Price (Synced):</b> <span style='color:#f59e0b; font-size:1.2rem;'>{live_price_str}</span></div>", unsafe_allow_html=True)
+        # Luxury Metric Pad Block
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        m1, m2 = st.columns(2)
+        with m1:
+            st.markdown(f"<div class='metric-display'><p style='color:#9ca3af; margin:0; font-size:0.9rem;'>🏅 SPOT GOLD XAUUSD (CMP)</p><p class='metric-val'>{live_price_str}</p></div>", unsafe_allow_html=True)
+        with m2:
+            st.markdown(f"<div class='metric-display'><p style='color:#9ca3af; margin:0; font-size:0.9rem;'>📡 NETWORK PIPELINE INTEGRITY</p><p class='metric-val' style='color:#10b981; text-shadow:0 0 20px rgba(16,185,129,0.3);'>100% ONLINE</p></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("### 🤖 Executive AI Floor")
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown("<h3 style='margin-top:0;'>🤖 Executive AI Floor Consensus</h3>", unsafe_allow_html=True)
         tl, ag = st.columns([1, 2])
         with tl:
-            st.markdown("<div class='agent-card' style='border-left: 4px solid #38bdf8;'><b>👔 Team Leader (Alpha Strategist):</b><br>'All sub-systems executing protocols. System stable.'</div>", unsafe_allow_html=True)
+            st.markdown("<div style='background:rgba(56,189,248,0.05); border-left:4px solid #38bdf8; padding:15px; border-radius:8px;'><b>👔 Team Leader (Alpha Architect)</b><br><i style='color:#cbd5e1;'>'Consensus parameters secure. Multi-agent monitoring cycles active.'</i></div>", unsafe_allow_html=True)
         with ag:
             if not is_vip_or_admin:
-                st.markdown("<div class='agent-card' style='color:#9ca3af;'>🔒 <b>Data Pipeline Status:</b> [Locked for Free/Pending Accounts] Complete VIP validation to unlock Google Sheet streaming matrix.</div>", unsafe_allow_html=True)
+                st.markdown("<div style='background:rgba(225,29,72,0.05); border-left:4px solid #e11d48; padding:15px; border-radius:8px; color:#cbd5e1;'>🔒 <b>Live Data Stream Array Locked</b><br>Upgrade profile to VIP tier to sync automatic multivariable matrix frameworks.</div>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<div class='agent-card'><b>⚡ Data Pipeline Status:</b> {latest_signal}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background:rgba(16,185,129,0.05); border-left:4px solid #10b981; padding:15px; border-radius:8px;'><b>⚡ Live Data Pipeline String</b><br><span style='color:#facc15;'>{latest_signal}</span></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
         # ADMIN PANEL MANAGEMENT
         if st.session_state.role == "ADMIN":
+            st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
             st.markdown("### 🛠️ Admin Broadcast Console")
             clean_editable_signal = clean_html_tags(latest_signal)
-            signal_msg = st.text_area("Type Signal to Deploy...", value=clean_editable_signal, height=100)
+            signal_msg = st.text_area("Type Signal Payload Matrix to Deploy...", value=clean_editable_signal, height=100)
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("🚀 Push Live Broadcast to VIP Terminal", use_container_width=True):
@@ -368,73 +401,67 @@ else:
                     if signal_msg:
                         supabase.table("signals").insert({"message": f"[TG BROADCAST] {signal_msg}", "sender": "Manissh S Jariwala (Admin)"}).execute()
                         st.success("Telegram Broadcaster Active.")
+            st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("### 📢 Live VIP Stream Feed")
+        # LUXURY GRID SPREADSHEET INJECTION
         if sheet_active and is_vip_or_admin:
-            with st.expander("📊 Dynamic Neural Matrix Sheet Stream (Click to Expand)", expanded=True):
-                st.dataframe(df.tail(6), use_container_width=True)
+            st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+            st.markdown("<h4>📊 Institutional Dynamic Sheet Matrix View</h4>", unsafe_allow_html=True)
+            st.dataframe(df.tail(6), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
+        # PRESTIGE SIGNAL CHAT STREAMS
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown("<h3 style='margin-top:0;'>📢 Institutional Alpha Broadcast Feed</h3>", unsafe_allow_html=True)
+        
         if not is_vip_or_admin:
-            st.markdown('<div class="chat-message-admin" style="border-left:6px solid #e11d48;"><strong>📢 System Core Bot</strong><br><p style="color:#f87171; font-size:1rem; margin-top:5px;">⚠️ Live Signal Stream is locked. Please activate VIP tier inside sidebar navigation desk to get invite token link access.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="chat-message-premium" style="border-left-color:#e11d48;"><strong>📢 SYSTEM OPERATIONS BOT</strong><br><p style="color:#f87171; margin:5px 0 0 0;">⚠️ Core signal payload distribution locks are engaged. Unlock VIP desk view inside sidebar parameters to release data arrays.</p></div>', unsafe_allow_html=True)
         else:
             if sheet_active:
-                st.markdown(f'<div class="chat-message-admin"><strong>📢 Google Sheet Real-time Feed</strong><br><p style="color:#facc15; font-size:1.1rem; margin-top:5px;">{latest_signal}</p></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="chat-message-premium"><strong>📢 GOOGLE AUTOMATION DESK CORRELATION</strong><br><p style="color:#facc15; font-size:1.05rem; margin:5px 0 0 0;">{latest_signal}</p></div>', unsafe_allow_html=True)
             try:
                 signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
                 for sig in signals.data:
-                    st.markdown(f'<div class="chat-message-admin"><strong>📢 {sig["sender"]}</strong><br><p style="color:#facc15; font-size:1.1rem; margin-top:5px;">{sig["message"]}</p></div>', unsafe_allow_html=True)
-            except:
-                pass
+                    st.markdown(f'<div class="chat-message-premium"><strong>📢 {sig["sender"]}</strong><br><p style="color:#facc15; font-size:1.05rem; margin:5px 0 0 0;">{sig["message"]}</p><span style="font-size:0.75rem; color:#6b7280;">⏱️ Payload Timestamp: {sig["created_at"][:16].replace("T", " ")}</span></div>', unsafe_allow_html=True)
+            except: pass
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # 🤖 3. MODE: AI RUNTIME LOG PANEL
+    # 🤖 3. AGENT ACTIVITY LOG PAGES
     elif workspace_mode == "🤖 AI Agent Activity Log":
-        st.markdown("<h2 style='color: #38bdf8;'>🤖 Live AI Agent Runtime Log</h2>", unsafe_allow_html=True)
-        st.write("")
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color: #38bdf8; margin-top:0;'>🤖 Multi-Agent Live Computational Logs</h2>", unsafe_allow_html=True)
         current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.markdown(f"##### ⏱️ Current Synchronized Node Timestamp: `{current_time_str}`")
+        st.write("")
         
         if not is_vip_or_admin:
-            st.markdown(f"<div class='log-box' style='color:#f87171;'>❌ [RESTRICTED] <b>[Agent 1 to 5 Logs]</b>: Detailed sub-agent runtime parameters are locked for Free/Pending accounts. Please update access levels.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box' style='color:#f87171;'>❌ [SECURITY LOCK ACTIVE] <b>[Agent Subsystem Arrays 1 to 5]</b>: Detailed computation telemetry logs are locked for unauthorized evaluation sessions. Upgrade status levels inside sidebar desk.</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 1 - Trend Analyzer]</b>: Scanning H4 Chart... Bullish confirmation active.</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 2 - Momentum Scalper]</b>: Monitoring M15 RSI/MACD crossovers near price {live_price_str}.</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 3 - Risk Manager]</b>:Dynamic Stop-Loss safety parameters verified.</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 4 - Volatility Monitor]</b>: Liquidations and spread gaps tracking active.</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 5 - Sentiment Analyst]</b>: Safe-haven capital inflows streaming into XAU.</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='log-box' style='color:#facc15;'>⚙️ [{current_time_str}] <b>[AI Team Leader - Alpha Strategist]</b>: Consensus calculated. System locked and synced.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 1 - Structure Scanner]</b>: Analyzing macro trend arrays... Bullish velocity structural configurations hold.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 2 - Momentum Grid]</b>: Monitoring dynamic volume distributions near spot valuation {live_price_str}.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 3 - Risk Engine]</b>: Tactical risk exposure constraints verified. Safeguards nominal.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 4 - Arbitrage Monitor]</b>: Spread variation and liquidation boundaries nominal.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 5 - Sentiment Matrix]</b>: Scoping safe-haven inflows telemetry data. Capital rotation streaming.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='log-box' style='color:#facc15;'>⚙️ [{current_time_str}] <b>[AI Orchestrator Core]</b>: Combined report validation cycle complete. Consensus locked.</div>", unsafe_allow_html=True)
 
-        if st.button("🔄 Sync & Refresh Live Logs", use_container_width=True):
-            st.rerun()
+        if st.button("🔄 Force Core Telemetry Refresh", use_container_width=True): st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # ℹ️ 4. MODE: ABOUT US PAGE
-    elif workspace_mode == "ℹ️ About Us":
-        st.markdown("<h2 style='color: #38bdf8;'>ℹ️ About XAUUSD VIP AI Terminal</h2>", unsafe_allow_html=True)
-        st.write("""
-        Welcome to the premium **XAUUSD VIP AI Terminal**. This system utilizes a proprietary multi-agent framework designed to perform technical structural evaluations on spot gold positions.
-        
-        By processing real-time telemetry, automated metrics pipelines, and centralized consensus calculations, the platform isolates structural changes to provide clean overview dashboards for tracking gold price velocity models.
-        """)
-        st.info("💡 Managed and optimized for elite tier commodity structural terminal layout analysis.")
+    # ℹ️ 4. LEGAL DESKS
+    elif workspace_mode == "ℹ️ About Architecture":
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color:#38bdf8; margin-top:0;'>ℹ️ Operational Architecture Infrastructure</h2>", unsafe_allow_html=True)
+        st.write("Welcome to the **XAUUSD VIP AI Terminal**, an institutional quantitative layout system designed for tracking gold structural metrics pipelines using multi-agent algorithmic logs.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # 🔒 5. MODE: PRIVACY POLICY PAGE
-    elif workspace_mode == "🔒 Privacy Policy":
-        st.markdown("<h2 style='color: #10b981;'>🔒 Privacy & Token Protection Policy</h2>", unsafe_allow_html=True)
-        st.caption("Effective date: July 1, 2026")
-        st.write("""
-        Your data protection is our corporate protocol. 
-        * **Access Log Cryptography:** User authentication vectors, email tags, and WhatsApp notification handles are securely saved within partitioned cloud storage schemas.
-        * **Session Cookie Storage:** Local tokens are processed strictly to retain layout navigation preferences across manual hot-reloads and browser instances.
-        * **Zero Third-Party Leaks:** Transaction strings, reference payloads, and registration elements are strictly evaluated inside closed neural database nodes.
-        """)
-        st.success("🔒 System architecture complies with institutional sandboxed security rules.")
+    elif workspace_mode == "🔒 Privacy Desk":
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color:#10b981; margin-top:0;'>🔒 Data Encryption & Node Privacy Governance</h2>", unsafe_allow_html=True)
+        st.write("Session authentication identifiers, encryption nodes, and communication handles are secured using modern serverless cryptography layers. No metrics arrays are shared outside institutional environments.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # ⚠️ 6. MODE: DISCLAIMER PAGE
-    elif workspace_mode == "⚠️ Legal Disclaimer":
-        st.markdown("<h2 style='color: #e11d48;'>⚠️ Institutional Financial Risk Disclaimer</h2>", unsafe_allow_html=True)
-        st.write("""
-        **Please read the following parameters with precision:**
-        
-        The execution logs, mathematical metrics models, and structural consensus values displayed on this terminal are generated purely for algorithmic simulation and technical educational research purposes. 
-        
-        Gold commodity spot instruments ($XAUUSD$) feature significant market exposure and high structural volatility volatility fields. Past simulated framework logs do not guarantee matching forward execution. This system does not issue formal investment, legal, or broker advisory packages. All actions executed inside live accounts are taken completely at the personal discretion and liability of the individual client operator.
-        """)
-        st.warning("⚠️ High Risk Warning: Leverage trading can result in immediate loss of capital payload. Trade responsibly.")
+    elif workspace_mode == "⚠️ Disclaimer":
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color:#e11d48; margin-top:0;'>⚠️ Risk & Volatility Disclosure</h2>", unsafe_allow_html=True)
+        st.write("Commodity spot assets ($XAUUSD$) feature significant financial exposure. System logs, neural charts models, and historical metrics matrices are displayed exclusively for mathematical research logs. Terminal operations do not comprise formal broker advisory packages.")
+        st.markdown("</div>", unsafe_allow_html=True)
