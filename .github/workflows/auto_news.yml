@@ -24,7 +24,7 @@ jobs:
           pip install requests yfinance supabase
 
       - name: Execute Autonomous Agent Core Pipeline
-        run: python agent_news.py
+        run: python agent_main.py
 
       - name: Execute Telegram Alert Agent
         env:
