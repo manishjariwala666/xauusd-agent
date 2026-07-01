@@ -25,3 +25,8 @@ jobs:
 
       - name: Execute Autonomous Agent Core Pipeline
         run: python agent_news.py
+
+      - name: Execute Telegram Alert Agent
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python agent_bot.py
