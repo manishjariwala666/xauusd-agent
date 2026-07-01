@@ -40,7 +40,7 @@ def generate_ai_insights(metrics):
     content_html = f"Gold CMP: {metrics['gold_price']} | Trend: {metrics['gold_trend']}"
     return title_payload, content_html
 
-# 3. Legal function (Updated to use 'signals' table)
+# 3. Legal function (Fixed to use 'signals' table)
 def auto_update_legal():
     pages = {
         "Privacy Policy": "Official Privacy Policy content...",
@@ -48,17 +48,17 @@ def auto_update_legal():
         "Terms of Service": "Official Terms of Service content..."
     }
     for title, content in pages.items():
-        # Table name 'blogs' se badal kar 'signals' kar diya
+        # Table fixed to 'signals'
         supabase.table("signals").upsert({"title": title, "content": content}).execute()
 
-# 4. Main function (Updated to use 'signals' table)
+# 4. Main function (Fixed to use 'signals' table)
 def main():
     print("Initializing Autonomous Financial AI Agent...")
     auto_update_legal() 
     metrics = fetch_market_intelligence()
     title, content = generate_ai_insights(metrics)
     
-    # Table name 'blogs' se badal kar 'signals' kar diya
+    # Table fixed to 'signals'
     signal_payload = {"title": title, "content": content, "author": "Autonomous AI Sub-Agent (Agent 5)"}
     supabase.table("signals").upsert(signal_payload).execute()
     print("Success! Data synced to 'signals' table.")
