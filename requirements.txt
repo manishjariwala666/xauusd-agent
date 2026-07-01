@@ -3,3 +3,4 @@ pandas
 yfinance
 supabase
 extra-streamlit-components
+requests
