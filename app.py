@@ -43,6 +43,14 @@ st.markdown("""
         color: white;
         margin-bottom: 20px;
     }
+    .free-box {
+        background-color: #111827;
+        padding: 18px;
+        border-radius: 10px;
+        border: 1px solid #e11d48;
+        color: white;
+        margin-bottom: 20px;
+    }
     .log-box {
         background-color: #070a12;
         padding: 12px;
@@ -87,13 +95,13 @@ if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center; margin-top: 40px;'>🔒 XAUUSD VIP AI Terminal</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray;'>Algorithmic Multi-Agent Intelligence Network</p>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 1.3, 1])
+    col1, col2, col3 = st.columns([1, 1.4, 1])
     with col2:
-        tab1, tab2 = st.tabs(["🔑 Sign In Terminal", "💳 Activate VIP Subscription"])
+        tab1, tab2, tab3 = st.tabs(["🔑 Sign In", "💳 Activate VIP", "🎁 Free Trial Account"])
         
         with tab1:
             email_input = st.text_input("Registered Email ID", key="login_email")
-            whatsapp_input = st.text_input("WhatsApp Security Key (Password)", type="password", key="login_pass")
+            whatsapp_input = st.text_input("WhatsApp Security Key / Password", type="password", key="login_pass")
             
             if st.button("Access Hub", use_container_width=True):
                 if email_input == "manishadmin" and whatsapp_input == "goldmaster77":
@@ -103,6 +111,11 @@ if not st.session_state.logged_in:
                     cookie_manager.set("xau_logged_in", "true", max_age=604800)
                     cookie_manager.set("xau_role", "ADMIN", max_age=604800)
                     cookie_manager.set("xau_email", "Manissh S Jariwala (Admin)", max_age=604800)
+                    st.rerun()
+                elif "@" in email_input and whatsapp_input == "free123":
+                    st.session_state.logged_in = True
+                    st.session_state.role = "FREE"
+                    st.session_state.user_email = email_input
                     st.rerun()
                 else:
                     try:
@@ -127,21 +140,38 @@ if not st.session_state.logged_in:
                 <code style='color:#facc15; font-size:1.05rem; word-break: break-all;'>TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8</code><br><br>
                 <b>UPI ID (Indian Users Bank Transfer):</b><br>
                 <code style='color:#facc15; font-size:1.05rem;'>manissh.jariwala@okaxis</code><br><br>
-                <span style='font-size:0.85rem; color:#9ca3af;'>⚠️ Note: Send TRON-based tokens only. Submit TXID below for instant verification.</span>
+                <span style='font-size:0.85rem; color:#9ca3af;'>⚠️ Note: Submit TXID below for instant validation.</span>
             </div>
             """, unsafe_allow_html=True)
-            
             reg_email = st.text_input("Enter Email", key="reg_email")
             reg_whatsapp = st.text_input("WhatsApp Number", key="reg_wa")
-            reg_txid = st.text_input("Payment Reference / Transaction ID (TXID)", key="reg_tx")
-            
+            reg_txid = st.text_input("Transaction ID (TXID)", key="reg_tx")
             if st.button("Submit VIP Activation Request", use_container_width=True):
                 if reg_email and reg_whatsapp and reg_txid:
                     try:
                         supabase.table("users").insert({"email": reg_email, "whatsapp": reg_whatsapp, "txid": reg_txid, "status": "Pending"}).execute()
-                        st.success("Payment Logged Successfully! Admin will verify and activate your hub within 15 minutes.")
+                        st.success("Payment Logged! Admin will verify and activate your hub within 15 minutes.")
                     except:
-                        st.error("Registration synchronization error.")
+                        st.error("Sync error.")
+        
+        with tab3:
+            st.markdown("""
+            <div class='free-box'>
+                <b>🎁 Instantly Create a Free Trial Account</b><br>
+                Free tier accounts can explore the executive dashboard workspace layout and track live gold pricing models instantly.
+            </div>
+            """, unsafe_allow_html=True)
+            free_email = st.text_input("Enter Your Email Address", key="free_email_reg")
+            if st.button("Create Free Account & Login", use_container_width=True):
+                if free_email and "@" in free_email:
+                    st.session_state.logged_in = True
+                    st.session_state.role = "FREE"
+                    st.session_state.user_email = free_email
+                    st.success("Welcome aboard! Loading dashboard framework...")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error("Please enter a valid email address.")
 
 # --- LIVE WORKSPACE ---
 else:
@@ -184,61 +214,16 @@ else:
         latest_signal = f"🚀 XAUUSD SCALPER ALERT | Active CMP: {live_price_str} | Strategy Configured"
         sheet_active = False
 
-    # Mode 1: Trading Hub Dashboard
-    if workspace_mode == "📢 Live Trading Hub":
-        st.markdown("<h2 style='color: #f59e0b;'>💰 XAUUSD Multi-Agent Hub</h2>", unsafe_allow_html=True)
-        st.markdown(f"<div class='status-card'><span style='color:#10b981;'>●</span> <b>Real-Time Spot Price (Synced):</b> <span style='color:#f59e0b; font-size:1.2rem;'>{live_price_str}</span></div>", unsafe_allow_html=True)
-
-        st.markdown("### 🤖 Executive AI Floor")
-        tl, ag = st.columns([1, 2])
-        with tl:
-            st.markdown("<div class='agent-card' style='border-left: 4px solid #38bdf8;'><b>👔 Team Leader (Alpha Strategist):</b><br>'All sub-systems executing protocols. System stable.'</div>", unsafe_allow_html=True)
-        with ag:
-            st.markdown(f"<div class='agent-card'><b>⚡ Data Pipeline Status:</b> {latest_signal}</div>", unsafe_allow_html=True)
-
-        # STAGE OVERRIDE: Admin Controls Hidden for Normal VIP Users
-        if st.session_state.role == "ADMIN":
-            st.markdown("### 🛠️ Admin Broadcast Console")
-            clean_editable_signal = clean_html_tags(latest_signal)
-            signal_msg = st.text_area("Type Signal to Deploy...", value=clean_editable_signal, height=100)
-            
-            if st.button("🚀 Push Live Broadcast to VIP Terminal", use_container_width=True):
-                if signal_msg:
-                    supabase.table("signals").insert({"message": signal_msg, "sender": "Manissh S Jariwala (Admin)"}).execute()
-                    st.success("Signal deployed globally!")
-                    time.sleep(0.5)
-                    st.rerun()
-        else:
-            # Safe Info Container for regular clients to enhance professional feel
-            st.info("ℹ️ Live Terminal connected. Institutional signal updates are managed directly by corporate system algorithms.")
-
-        # Signal Output Stream
-        st.markdown("### 📢 Live VIP Stream Feed")
-        if sheet_active:
-            st.markdown(f'<div class="chat-message-admin"><strong>📢 Google Sheet Real-time Feed</strong><br><p style="color:#facc15; font-size:1.1rem; margin-top:5px;">{latest_signal}</p></div>', unsafe_allow_html=True)
-        
-        try:
-            signals = supabase.table("signals").select("*").order("created_at", desc=True).execute()
-            for sig in signals.data:
-                st.markdown(f'<div class="chat-message-admin"><strong>📢 {sig["sender"]}</strong><br><p style="color:#facc15; font-size:1.1rem; margin-top:5px;">{sig["message"]}</p></div>', unsafe_allow_html=True)
-        except:
-            pass
-
-    # Mode 2: AI Agent Detailed Runtime Logs
-    elif workspace_mode == "🤖 AI Agent Activity Log":
-        st.markdown("<h2 style='color: #38bdf8;'>🤖 Live AI Agent Runtime Log</h2>", unsafe_allow_html=True)
-        st.caption("Real-time monitoring panel showing what agents are processing right now.")
-        st.write("")
-        
-        current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.markdown(f"#### ⏱️ Current Execution Timestamp: `{current_time_str}`")
-        
-        st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 1 - Trend Analyzer]</b>: Scanning H4 Chart... Market Structure is structural Higher-Highs. Bullish confirmation active.</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 2 - Momentum Scalper]</b>: Monitoring M15 RSI/MACD crossovers near price {live_price_str}. Checking for quick volume spikes.</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 3 - Risk Manager]</b>: Calculating exposure balance. Dynamic Stop-Loss safety parameters verified.</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 4 - Volatility Monitor]</b>: Liquidations and spread gaps tracking active. Spread variation nominal.</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='log-box'>⏳ [{current_time_str}] <b>[Agent 5 - Sentiment Analyst]</b>: Scraping international central bank updates. Safe-haven capital inflows streaming into XAU.</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='log-box' style='color:#facc15;'>⚙️ [{current_time_str}] <b>[AI Team Leader - Alpha Strategist]</b>: Consolidated reports from 5 sub-agents. Consensus calculated. System locked and synced with Google Sheet pipeline.</div>", unsafe_allow_html=True)
-
-        if st.button("🔄 Sync & Refresh Live Logs", use_container_width=True):
-            st.rerun()
+    # WELCOME MESSAGE RULES PER TIER
+    if st.session_state.role == "FREE":
+        st.toast(f"Welcome {st.session_state.user_email}! You are exploring on a Free Trial Account.")
+        st.markdown(f"""
+        <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #e11d48; margin-bottom:15px;'>
+            <h4 style='margin:0; color:#e11d48;'>👋 Welcome to XAUUSD AI Trial Hub, {st.session_state.user_email}!</h4>
+            <p style='margin:5px 0 0 0; font-size:0.95rem; color:#cbd5e1;'>You are currently viewing limited historical analytical structures. Upgrade to the VIP Tier to unlock live execution broadcast streams and alpha pipelines instantly.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #10b981; margin-bottom:15px;'>
+            <h4 style='margin:0; color:#10b981;'>👑
