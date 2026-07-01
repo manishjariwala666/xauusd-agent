@@ -217,10 +217,13 @@ else:
                 elif current_db_status == "Pending" and st.session_state.role != "PENDING_VIP":
                     st.session_state.role = "PENDING_VIP"
                     cookie_manager.set("xau_role", "PENDING_VIP", max_age=604800)
+                elif current_db_status == "Free" and st.session_state.role != "FREE":
+                    st.session_state.role = "FREE"
+                    cookie_manager.set("xau_role", "FREE", max_age=604800)
         except:
             pass
 
-    # Top Welcome Banner
+    # Top Welcome Banners
     if st.session_state.role == "FREE":
         st.markdown(f"""
         <div style='background-color:#1e293b; padding:15px; border-radius:10px; border-left:6px solid #e11d48; margin-bottom:20px;'>
@@ -253,9 +256,13 @@ else:
     nav_options = ["📢 Live Trading Hub", "🤖 AI Agent Activity Log"]
     if st.session_state.role == "FREE":
         nav_options.append("💳 Activate VIP Tier")
+    
+    # Add Legal Dropdown options to Navigation list
+    nav_options.extend(["ℹ️ About Us", "🔒 Privacy Policy", "⚠️ Legal Disclaimer"])
         
     workspace_mode = st.sidebar.radio("Navigate View", nav_options)
     
+    st.sidebar.markdown("---")
     if st.sidebar.button("Exit Dashboard 🚪", use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.role = None
@@ -298,17 +305,14 @@ else:
         c_left, c_right = st.columns([1, 1.5])
         with c_left:
             st.markdown("#### 🔳 Secure QR Scan Matrix")
-            # Generation of a highly stable live scannable QR Image using global charts API engine
             usdt_address = "TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8"
             qr_api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={usdt_address}&color=0e1117&bgcolor=ffffff"
             st.image(qr_api_url, caption="Scan this Barcode using Crypto Wallet Application", width=220)
             
         with c_right:
             st.markdown("#### 🔑 Transfer Payload Destination Keys")
-            
             st.code("TWeNUrS2617xUssfkT9SHjU6XxZAYADaa8", language="text")
             st.caption("📋 Click double-box icon on the right edge of the code block above to instantly copy USDT TRC20 Wallet key.")
-            
             st.code("manissh.jariwala@okaxis", language="text")
             st.caption("📋 Click double-box icon on the right edge above to instantly copy UPI Netbanking handle.")
             
@@ -400,3 +404,37 @@ else:
 
         if st.button("🔄 Sync & Refresh Live Logs", use_container_width=True):
             st.rerun()
+
+    # ℹ️ 4. MODE: ABOUT US PAGE
+    elif workspace_mode == "ℹ️ About Us":
+        st.markdown("<h2 style='color: #38bdf8;'>ℹ️ About XAUUSD VIP AI Terminal</h2>", unsafe_allow_html=True)
+        st.write("""
+        Welcome to the premium **XAUUSD VIP AI Terminal**. This system utilizes a proprietary multi-agent framework designed to perform technical structural evaluations on spot gold positions.
+        
+        By processing real-time telemetry, automated metrics pipelines, and centralized consensus calculations, the platform isolates structural changes to provide clean overview dashboards for tracking gold price velocity models.
+        """)
+        st.info("💡 Managed and optimized for elite tier commodity structural terminal layout analysis.")
+
+    # 🔒 5. MODE: PRIVACY POLICY PAGE
+    elif workspace_mode == "🔒 Privacy Policy":
+        st.markdown("<h2 style='color: #10b981;'>🔒 Privacy & Token Protection Policy</h2>", unsafe_allow_html=True)
+        st.caption("Effective date: July 1, 2026")
+        st.write("""
+        Your data protection is our corporate protocol. 
+        * **Access Log Cryptography:** User authentication vectors, email tags, and WhatsApp notification handles are securely saved within partitioned cloud storage schemas.
+        * **Session Cookie Storage:** Local tokens are processed strictly to retain layout navigation preferences across manual hot-reloads and browser instances.
+        * **Zero Third-Party Leaks:** Transaction strings, reference payloads, and registration elements are strictly evaluated inside closed neural database nodes.
+        """)
+        st.success("🔒 System architecture complies with institutional sandboxed security rules.")
+
+    # ⚠️ 6. MODE: DISCLAIMER PAGE
+    elif workspace_mode == "⚠️ Legal Disclaimer":
+        st.markdown("<h2 style='color: #e11d48;'>⚠️ Institutional Financial Risk Disclaimer</h2>", unsafe_allow_html=True)
+        st.write("""
+        **Please read the following parameters with precision:**
+        
+        The execution logs, mathematical metrics models, and structural consensus values displayed on this terminal are generated purely for algorithmic simulation and technical educational research purposes. 
+        
+        Gold commodity spot instruments ($XAUUSD$) feature significant market exposure and high structural volatility volatility fields. Past simulated framework logs do not guarantee matching forward execution. This system does not issue formal investment, legal, or broker advisory packages. All actions executed inside live accounts are taken completely at the personal discretion and liability of the individual client operator.
+        """)
+        st.warning("⚠️ High Risk Warning: Leverage trading can result in immediate loss of capital payload. Trade responsibly.")
