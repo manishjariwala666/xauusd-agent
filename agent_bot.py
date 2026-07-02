@@ -1,34 +1,34 @@
-import os
 import telebot
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# Token setup
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TOKEN = "8514838628:AAE1q7YOxsEzObeVXxNE63efpE0qDy3-Iyk"
 bot = telebot.TeleBot(TOKEN)
 
-# Google Sheet setup function
 def sync_data():
-    scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets', "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name('semiotic-garden-473909-k5-12652fc38a39.json', scope)
+    scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets', "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
     client = gspread.authorize(creds)
-    # Sheet open kar raha hai
     sheet = client.open("xauusd_automation").worksheet("Sheet1")
-    return sheet.get_all_values()
+    
+    # Sirf wahi data uthaye jahan time maujood hai
+    all_data = sheet.get_all_values()
+    valid_data = [row for row in all_data if row[0] and "AM" in row[0] or "PM" in row[0]]
+    
+    return valid_data
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "Manissh bhai, XAUUSD Agent Online hai! Main aapke commands ke liye taiyar hoon.")
+    bot.reply_to(message, "Manissh bhai, XAUUSD Agent Online hai!")
 
 @bot.message_handler(commands=['update_legal'])
 def handle_update(message):
-    bot.reply_to(message, "Update process trigger ho gaya hai... Database sync ho raha hai.")
+    bot.reply_to(message, "Database sync ho raha hai...")
     try:
         data = sync_data()
-        bot.reply_to(message, "Sync Complete! Database update ho gaya hai.")
+        bot.reply_to(message, f"Sync Complete! {len(data)} rows processed.")
     except Exception as e:
         bot.reply_to(message, f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    print("Bot is running...")
     bot.infinity_polling()
