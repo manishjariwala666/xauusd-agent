@@ -27,6 +27,14 @@ def handle_update(message):
     try:
         data = sync_data()
         bot.reply_to(message, f"Sync Complete! {len(data)} rows processed.")
+        @bot.message_handler(commands=['clear'])
+def clear_chat(message):
+    # Yeh loop 100 messages tak delete karne ki koshish karega
+    for i in range(message.message_id, message.message_id - 100, -1):
+        try:
+            bot.delete_message(message.chat.id, i)
+        except:
+            continue
     except Exception as e:
         bot.reply_to(message, f"Error: {str(e)}")
 
