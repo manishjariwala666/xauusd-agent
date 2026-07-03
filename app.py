@@ -1,33 +1,39 @@
 import streamlit as st
 
-# Session state initialize
+# 1. Initialize Session
 if 'authenticated' not in st.session_state:
     st.session_state['authenticated'] = False
+    st.session_state['role'] = None
 
+# 2. Login Page
 def login_page():
     st.title("🔒 Institutional VIP Node")
-    password = st.text_input("Enter Node Key", type="password")
+    key = st.text_input("Enter Node Key", type="password")
     if st.button("Initialize Node"):
-        if password == "1234": # Yahan apna purana password daaliye
+        if key == "ADMIN_PASS": # Aapka Admin Password
             st.session_state['authenticated'] = True
+            st.session_state['role'] = 'admin'
+            st.rerun()
+        elif key == "USER_PASS": # Aapka User Password
+            st.session_state['authenticated'] = True
+            st.session_state['role'] = 'user'
             st.rerun()
         else:
             st.error("Invalid Node Key")
 
-# MAIN LOGIC
+# 3. Main Logic (Admin & User Control)
 if not st.session_state['authenticated']:
     login_page()
 else:
-    # Yahan aapka wahi purana dashboard setup
-    st.title("Market Analytics Desk")
+    if st.session_state['role'] == 'admin':
+        # Yahan ADMIN PANEL ka pura code aayega
+        st.subheader("Admin Control Panel")
+        # ... (Manage users, settings, etc.)
+    elif st.session_state['role'] == 'user':
+        # Yahan USER PANEL ka pura code aayega
+        st.subheader("User Analytics Desk")
+        # ... (Dashboard, Signals, etc.)
     
-    # 1. Live Ticker (Jo aapne manga tha)
-    st.markdown("""
-    <marquee style="color: #00ff00; font-family: monospace; font-size: 18px;">
-    NIFTY: 24,100 | SENSEX: 79,200 | BTCUSD: 98,500 | XAUUSD: 4165.64
-    </marquee>
-    """, unsafe_allow_html=True)
-    
-    # 2. Baki ka Dashboard (Purane layout jaisa)
-    st.subheader("Market Summary")
-    # Yahan aapka baki ka code...
+    if st.sidebar.button("Logout"):
+        st.session_state['authenticated'] = False
+        st.rerun()
