@@ -1,45 +1,32 @@
-import streamlit as st
+xauusd-agent/
 
-# State initialization
-if 'authenticated' not in st.session_state:
-    st.session_state['authenticated'] = False
-    st.session_state['role'] = None
+app.py
+config.py
 
-# Login Page
-def login():
-    st.title("🔒 Institutional VIP Node")
-    # Form ka use krke hum state ko persist karenge
-    with st.form("login"):
-        key = st.text_input("Enter Node Key", type="password")
-        submit = st.form_submit_button("Initialize Node")
-        
-        if submit:
-            if key == "manishadmin":
-                st.session_state.authenticated = True
-                st.session_state.role = "admin"
-                st.rerun()
-            elif key == "goldmaster77":
-                st.session_state.authenticated = True
-                st.session_state.role = "user"
-                st.rerun()
-            else:
-                st.error("Invalid Node Key")
+pages/
+    login.py
+    register.py
+    forgot_password.py
 
-# Dashboard Logic
-def dashboard():
-    if st.session_state.role == "admin":
-        st.subheader("Admin Control Panel")
-        # Admin ke features yahan
-    else:
-        st.subheader("User Analytics Desk")
-        # User ke features yahan
-    
-    if st.sidebar.button("Logout"):
-        st.session_state.authenticated = False
-        st.rerun()
+admin/
+    dashboard.py
+    ai_agents.py
+    users.py
 
-# Logic flow
-if st.session_state.authenticated:
-    dashboard()
-else:
-    login()
+user/
+    dashboard.py
+    market.py
+    portfolio.py
+
+core/
+    auth.py
+    database.py
+    security.py
+    session.py
+
+services/
+    market_api.py
+    crypto_api.py
+    xauusd_api.py
+
+utils/
