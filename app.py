@@ -1,39 +1,41 @@
 import streamlit as st
 
-# 1. Initialize Session
+# 1. Page Config (Sabse upar)
+st.set_page_config(page_title="Institutional Node", layout="wide")
+
+# 2. Session Initialization
 if 'authenticated' not in st.session_state:
     st.session_state['authenticated'] = False
     st.session_state['role'] = None
 
-# 2. Login Page
-def login_page():
+# 3. Logic: Agar logged in nahi hain toh Login Page dikhao
+if not st.session_state['authenticated']:
     st.title("🔒 Institutional VIP Node")
     key = st.text_input("Enter Node Key", type="password")
     if st.button("Initialize Node"):
-        if key == "ADMIN_PASS": # Aapka Admin Password
+        # Yahan apna purana password aur role logic daalein
+        if key == "YOUR_ADMIN_PASS":
             st.session_state['authenticated'] = True
             st.session_state['role'] = 'admin'
             st.rerun()
-        elif key == "USER_PASS": # Aapka User Password
+        elif key == "YOUR_USER_PASS":
             st.session_state['authenticated'] = True
             st.session_state['role'] = 'user'
             st.rerun()
         else:
             st.error("Invalid Node Key")
-
-# 3. Main Logic (Admin & User Control)
-if not st.session_state['authenticated']:
-    login_page()
+            
 else:
+    # 4. Yahan aapka Admin/User panel ka logic hai
     if st.session_state['role'] == 'admin':
-        # Yahan ADMIN PANEL ka pura code aayega
         st.subheader("Admin Control Panel")
-        # ... (Manage users, settings, etc.)
+        # Yahan Admin ke features daalein
     elif st.session_state['role'] == 'user':
-        # Yahan USER PANEL ka pura code aayega
         st.subheader("User Analytics Desk")
-        # ... (Dashboard, Signals, etc.)
+        # Yahan User ke features (dashboard) daalein
     
+    # Logout button
     if st.sidebar.button("Logout"):
         st.session_state['authenticated'] = False
+        st.session_state['role'] = None
         st.rerun()
