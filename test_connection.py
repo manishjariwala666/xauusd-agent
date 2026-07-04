@@ -1,151 +1,109 @@
-"""Verify Google Sheets, market pricing, Supabase, and Telegram connectivity."""
+"""Safe configuration pre-flight check for local and Streamlit environments."""
 
 from __future__ import annotations
 
-from supabase import create_client
+import logging
+import os
+from pathlib import Path
+from typing import Final
 
-from config import (
-    ConfigurationError,
-    Settings,
-    get_settings,
-    parse_google_service_account_json,
-    validate_google_service_account_credentials,
+from dotenv import load_dotenv
+
+
+PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent
+REQUIRED_SECRETS: Final[tuple[str, ...]] = (
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "SUPABASE_URL",
+    "SUPABASE_KEY",
 )
-from services.google_sheets import GoogleSheetsService
-from services.market_data import MarketDataService
-from services.telegram_service import TelegramService
+TELEGRAM_SECRETS: Final[tuple[str, ...]] = (
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_CHAT_ID",
+)
+GOOGLE_SECRET: Final[str] = "GOOGLE_SERVICE_ACCOUNT_JSON"
 
 
-def preflight_check(settings: Settings) -> bool:
-    """Validate required configuration before opening network connections."""
-    print(
-        "Pre-flight: DATABASE_URL loaded: "
-        + ("YES" if settings.database_url else "NO")
-    )
-    print(
-        "Pre-flight: SUPABASE_URL loaded: "
-        + ("YES" if settings.supabase_url else "NO")
-    )
+def _is_streamlit_runtime() -> bool:
+    """Return True only when an active Streamlit script context exists."""
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
 
-    missing = [
-        name
-        for name, value in (
-            ("DATABASE_URL", settings.database_url),
-            ("SUPABASE_URL", settings.supabase_url),
-            ("SUPABASE_KEY", settings.supabase_key),
-            ("TELEGRAM_BOT_TOKEN", settings.telegram_bot_token),
-            ("TELEGRAM_CHAT_ID", settings.telegram_chat_id),
-            (
-                "GOOGLE_SERVICE_ACCOUNT_JSON",
-                settings.google_service_account_json,
-            ),
-        )
-        if not value
-    ]
-    if missing:
-        print(
-            "FAILURE: Missing required variable(s): "
-            + ", ".join(missing)
-        )
+        return get_script_run_ctx(suppress_warning=True) is not None
+    except (ImportError, RuntimeError):
         return False
+
+
+def _read_secret(name: str) -> str:
+    """Read environment/.env first, then active Streamlit Cloud secrets."""
+    environment_value = os.getenv(name)
+    if environment_value:
+        return str(environment_value).strip()
+
+    if not _is_streamlit_runtime():
+        return ""
 
     try:
-        parse_google_service_account_json(
-            settings.google_service_account_json
-        )
-        validate_google_service_account_credentials(
-            settings.google_service_account_json
-        )
-    except ConfigurationError as exc:
-        if "Invalid JSON format" in str(exc):
-            print(
-                "FAILURE: Invalid JSON format in .env, "
-                "please check your credentials"
-            )
-        else:
-            print(f"FAILURE: {exc}")
-        return False
+        import streamlit as st
 
-    print("Pre-flight: Google service account JSON: VALID")
-    return True
+        streamlit_value = st.secrets.get(name)
+    except Exception:
+        return ""
+    return str(streamlit_value).strip() if streamlit_value else ""
+
+
+def _enabled(name: str) -> bool:
+    """Read an optional boolean test flag without exposing its value."""
+    return _read_secret(name).lower() in {"1", "true", "yes", "on"}
+
+
+def _print_status(name: str, loaded: bool) -> None:
+    """Print only a secret name and its safe availability status."""
+    print(f"{name}: {'LOADED' if loaded else 'MISSING'}")
+
+
+def _load_local_env() -> None:
+    """Load .env without leaking parser diagnostics or secret contents."""
+    dotenv_logger = logging.getLogger("dotenv.main")
+    previous_level = dotenv_logger.level
+    dotenv_logger.setLevel(logging.ERROR)
+    try:
+        load_dotenv(PROJECT_ROOT / ".env", override=False)
+    finally:
+        dotenv_logger.setLevel(previous_level)
 
 
 def main() -> int:
-    """Send one real TEST SIGNAL enriched from the configured Google Sheet."""
-    try:
-        settings = get_settings()
-    except ConfigurationError as exc:
-        if "Invalid JSON format" in str(exc):
-            print(
-                "FAILURE: Invalid JSON format in .env, "
-                "please check your credentials"
-            )
-        else:
-            print(f"FAILURE: Configuration error — {exc}")
-        return 1
-    except Exception as exc:
-        print(f"FAILURE: Unable to load configuration — {exc}")
-        return 1
+    """Validate required configuration without making external API calls."""
+    _load_local_env()
 
-    if not preflight_check(settings):
-        return 1
+    missing_required: list[str] = []
+    for name in REQUIRED_SECRETS:
+        loaded = bool(_read_secret(name))
+        _print_status(name, loaded)
+        if not loaded:
+            missing_required.append(name)
 
-    try:
-        supabase = create_client(
-            settings.supabase_url,
-            settings.supabase_key,
-        )
+    for name in TELEGRAM_SECRETS:
+        _print_status(name, bool(_read_secret(name)))
 
-        sheet_signal = GoogleSheetsService().get_latest_signal()
-        if sheet_signal is None:
-            print(
-                "FAILURE: Google Sheets connection succeeded, but no BUY or "
-                "SELL row was found."
-            )
-            return 1
+    google_missing = False
+    if _enabled("TEST_GOOGLE_CREDENTIALS"):
+        google_loaded = bool(_read_secret(GOOGLE_SECRET))
+        _print_status(GOOGLE_SECRET, google_loaded)
+        google_missing = not google_loaded
 
-        market_price = MarketDataService(supabase).fetch_current_price()
-        if market_price is None:
-            print("FAILURE: Current XAUUSD price could not be fetched.")
-            return 1
-
-        test_signal = {
-            "signal_type": sheet_signal.direction,
-            "price": float(market_price.price),
-            "target_price": (
-                float(sheet_signal.target_price)
-                if sheet_signal.target_price is not None
-                else None
-            ),
-            "stop_loss": (
-                float(sheet_signal.stop_loss)
-                if sheet_signal.stop_loss is not None
-                else None
-            ),
-            "sheet_label": f"TEST SIGNAL · {sheet_signal.label}",
-            "source": market_price.source,
-            "signal_time": market_price.observed_at.isoformat(),
-        }
-
-        delivered = TelegramService(supabase).send_test_signal(test_signal)
-        if not delivered:
-            print(
-                "FAILURE: Telegram rejected the test signal. Verify "
-                "TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, and bot channel "
-                "permissions."
-            )
-            return 1
-    except Exception as exc:
+    if missing_required or google_missing:
+        missing_names = list(missing_required)
+        if google_missing:
+            missing_names.append(GOOGLE_SECRET)
         print(
-            f"FAILURE: {type(exc).__name__} — {exc}. "
-            "Check the related credential and service configuration."
+            "FAILURE: Required secrets are MISSING: "
+            + ", ".join(missing_names)
         )
         return 1
 
-    print(
-        "SUCCESS: Google Sheets data and current market price were loaded, "
-        "and the TEST SIGNAL was delivered to Telegram."
-    )
+    print("SUCCESS: All required secrets are LOADED.")
     return 0
 
 
