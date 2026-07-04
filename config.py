@@ -1,73 +1,261 @@
+"""Application configuration loaded exclusively from environment/secrets."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
 import os
+from pathlib import Path
+from typing import Any
+
 from dotenv import load_dotenv
+import streamlit as st
 
-# Load .env file
-load_dotenv()
 
-# ==========================
-# APP CONFIGURATION
-# ==========================
+_PROJECT_ROOT = Path(__file__).resolve().parent
+load_dotenv(_PROJECT_ROOT / ".env", override=False)
 
-APP_NAME = "AI Market Analytics Pro"
 
-APP_VERSION = "1.0.0"
+class ConfigurationError(RuntimeError):
+    """Raised when required production configuration is unavailable."""
 
-COMPANY_NAME = "Aadesh Analytics"
 
-DEFAULT_ROLE = "user"
+_GOOGLE_REQUIRED_FIELDS = {
+    "type",
+    "project_id",
+    "private_key",
+    "client_email",
+    "token_uri",
+}
 
-# ==========================
-# SECURITY
-# ==========================
 
-SECRET_KEY = os.getenv(
-    "SECRET_KEY",
-    "CHANGE_THIS_SECRET_IN_PRODUCTION"
-)
+def _is_streamlit_runtime() -> bool:
+    """Return whether code is executing inside a Streamlit script context."""
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
 
-JWT_ALGORITHM = "HS256"
+        return get_script_run_ctx(suppress_warning=True) is not None
+    except (ImportError, RuntimeError):
+        return False
 
-SESSION_TIMEOUT = 3600
 
-# ==========================
-# DATABASE
-# ==========================
+def _read_secret(name: str, default: str = "") -> str:
+    """Read system/.env values first, then Streamlit Secrets on Cloud."""
+    environment_value = os.getenv(name)
+    if environment_value:
+        return str(environment_value).strip()
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "sqlite:///market.db"
-)
+    if _is_streamlit_runtime():
+        try:
+            streamlit_value = st.secrets.get(name)
+        except Exception:
+            streamlit_value = None
+        if streamlit_value:
+            return str(streamlit_value).strip()
 
-# ==========================
-# EMAIL
-# ==========================
+    return str(default).strip()
 
-SMTP_SERVER = os.getenv("SMTP_SERVER", "")
 
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+def parse_google_service_account_json(raw_value: str) -> dict[str, Any]:
+    """Parse and validate Google credentials without exposing their contents."""
+    if not raw_value.strip():
+        raise ConfigurationError(
+            "GOOGLE_SERVICE_ACCOUNT_JSON is not configured."
+        )
 
-SMTP_EMAIL = os.getenv("SMTP_EMAIL", "")
+    try:
+        credentials: Any = json.loads(raw_value)
+        # Some deployment systems store the complete JSON document as a
+        # JSON-encoded string. Decode that representation one additional time.
+        if isinstance(credentials, str):
+            credentials = json.loads(credentials)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ConfigurationError(
+            "Invalid JSON format in .env, please check your credentials"
+        ) from exc
 
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    if not isinstance(credentials, dict):
+        raise ConfigurationError(
+            "Invalid JSON format in .env, please check your credentials"
+        )
 
-# ==========================
-# ADMIN
-# ==========================
+    missing_fields = sorted(
+        field
+        for field in _GOOGLE_REQUIRED_FIELDS
+        if not credentials.get(field)
+    )
+    if missing_fields:
+        raise ConfigurationError(
+            "Google service account JSON is missing required field(s): "
+            + ", ".join(missing_fields)
+        )
 
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
+    private_key = str(credentials["private_key"]).replace("\\n", "\n").strip()
+    if not (
+        private_key.startswith("-----BEGIN PRIVATE KEY-----")
+        and private_key.endswith("-----END PRIVATE KEY-----")
+    ):
+        raise ConfigurationError(
+            "Google service account private_key is not valid PEM data."
+        )
 
-# ==========================
-# API KEYS
-# ==========================
+    credentials["private_key"] = private_key + "\n"
+    return credentials
 
-TWELVEDATA_API_KEY = os.getenv("TWELVEDATA_API_KEY", "")
 
-ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+def normalize_google_service_account_json(raw_value: str) -> str:
+    """Return one-line canonical JSON suitable for downstream libraries."""
+    credentials = parse_google_service_account_json(raw_value)
+    return json.dumps(credentials, separators=(",", ":"))
 
-NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
 
-# ==========================
-# PAYMENT
-# ==========================
+def validate_google_service_account_credentials(raw_value: str) -> None:
+    """Validate that the service-account private key can be loaded."""
+    credentials = parse_google_service_account_json(raw_value)
+    try:
+        from google.oauth2.service_account import Credentials
 
-USDT_WALLET = os.getenv("USDT_WALLET", "")
+        Credentials.from_service_account_info(
+            credentials,
+            scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+        )
+    except (TypeError, ValueError) as exc:
+        raise ConfigurationError(
+            "Google service account private_key could not be loaded. "
+            "Keep the JSON on one line and preserve escaped \\n characters."
+        ) from exc
+
+
+@dataclass(frozen=True)
+class Settings:
+    """Validated runtime settings for database, authentication, and email."""
+
+    database_url: str
+    supabase_url: str
+    supabase_key: str
+    jwt_secret: str
+    jwt_issuer: str
+    jwt_ttl_minutes: int
+    app_base_url: str
+    smtp_host: str
+    smtp_port: int
+    smtp_username: str
+    smtp_password: str
+    email_from: str
+    smtp_use_tls: bool
+    telegram_invite_url: str
+    support_whatsapp_url: str
+    telegram_bot_token: str
+    telegram_chat_id: str
+    google_service_account_json: str
+    google_sheet_name: str
+    google_worksheet_name: str
+    goldapi_key: str
+    xauusd_symbol: str
+    signal_poll_seconds: int
+    usdt_wallet_address: str
+    usdt_network: str
+    subscription_price_usdt: str
+    profit_proof_telegram_url: str
+    support_email: str
+    brand_name: str
+
+    @classmethod
+    def load(cls) -> "Settings":
+        database_url = _read_secret("DATABASE_URL")
+        supabase_url = _read_secret("SUPABASE_URL")
+        supabase_key = _read_secret("SUPABASE_KEY")
+        jwt_secret = _read_secret("JWT_SECRET")
+
+        missing = [
+            name
+            for name, value in (
+                ("DATABASE_URL", database_url),
+                ("SUPABASE_URL", supabase_url),
+                ("SUPABASE_KEY", supabase_key),
+                ("JWT_SECRET", jwt_secret),
+            )
+            if not value
+        ]
+        if missing:
+            raise ConfigurationError(
+                "Missing required configuration: " + ", ".join(missing)
+            )
+        if len(jwt_secret) < 32:
+            raise ConfigurationError(
+                "JWT_SECRET must contain at least 32 characters."
+            )
+
+        raw_google_credentials = _read_secret(
+            "GOOGLE_SERVICE_ACCOUNT_JSON"
+        )
+        google_credentials = (
+            normalize_google_service_account_json(raw_google_credentials)
+            if raw_google_credentials
+            else ""
+        )
+
+        return cls(
+            database_url=database_url,
+            supabase_url=supabase_url,
+            supabase_key=supabase_key,
+            jwt_secret=jwt_secret,
+            jwt_issuer=_read_secret("JWT_ISSUER", "ai-market-analytics-pro"),
+            jwt_ttl_minutes=int(_read_secret("JWT_TTL_MINUTES", "60")),
+            app_base_url=_read_secret("APP_BASE_URL"),
+            smtp_host=_read_secret("SMTP_HOST"),
+            smtp_port=int(_read_secret("SMTP_PORT", "587")),
+            smtp_username=_read_secret("SMTP_USERNAME"),
+            smtp_password=_read_secret("SMTP_PASSWORD"),
+            email_from=_read_secret("EMAIL_FROM"),
+            smtp_use_tls=_read_secret("SMTP_USE_TLS", "true").lower()
+            in {"1", "true", "yes", "on"},
+            telegram_invite_url=_read_secret("TELEGRAM_INVITE_URL"),
+            support_whatsapp_url=_read_secret("SUPPORT_WHATSAPP_URL"),
+            telegram_bot_token=_read_secret("TELEGRAM_BOT_TOKEN"),
+            telegram_chat_id=_read_secret("TELEGRAM_CHAT_ID"),
+            google_service_account_json=google_credentials,
+            google_sheet_name=_read_secret(
+                "GOOGLE_SHEET_NAME",
+                "xauusd_automation",
+            ),
+            google_worksheet_name=_read_secret(
+                "GOOGLE_WORKSHEET_NAME",
+                "Sheet1",
+            ),
+            goldapi_key=_read_secret("GOLDAPI_KEY"),
+            xauusd_symbol=_read_secret("XAUUSD_SYMBOL", "GC=F"),
+            signal_poll_seconds=max(
+                10,
+                int(_read_secret("SIGNAL_POLL_SECONDS", "60")),
+            ),
+            usdt_wallet_address=_read_secret("USDT_WALLET_ADDRESS"),
+            usdt_network=_read_secret("USDT_NETWORK"),
+            subscription_price_usdt=_read_secret(
+                "SUBSCRIPTION_PRICE_USDT"
+            ),
+            profit_proof_telegram_url=_read_secret(
+                "PROFIT_PROOF_TELEGRAM_URL"
+            ),
+            support_email=_read_secret("SUPPORT_EMAIL"),
+            brand_name=_read_secret(
+                "BRAND_NAME",
+                "AI Market Analytics Pro",
+            ),
+        )
+
+
+def _load_settings() -> Settings:
+    """Load and validate settings without framework-specific caching."""
+    return Settings.load()
+
+
+if _is_streamlit_runtime():
+    _settings_provider = st.cache_resource(_load_settings)
+else:
+    _settings_provider = _load_settings
+
+
+def get_settings() -> Settings:
+    """Return cached Cloud settings or direct terminal settings."""
+    return _settings_provider()

@@ -1,87 +1,116 @@
-import streamlit as st
+"""AI Market Analytics Pro public website and protected application router."""
 
-# ========= PAGE CONFIG ========= #
+from __future__ import annotations
+
+import logging
+
+import streamlit as st
+from supabase import Client, create_client
+
+from admin.dashboard import render_admin_dashboard
+from components.theme import apply_theme
+from config import ConfigurationError, get_settings
+from core.auth import (
+    ROLE_ADMIN,
+    ROLE_USER,
+    get_current_role,
+    get_current_user_email,
+    get_payment_status,
+    initialize_session,
+    is_authenticated,
+    logout_user,
+)
+from pages.landing import render_landing_page
+from pages.login import login_page
+from user.dashboard import render_user_dashboard
+
+
+LOGGER = logging.getLogger(__name__)
 
 st.set_page_config(
     page_title="AI Market Analytics Pro",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed",
 )
+apply_theme()
 
-# ========= IMPORTS ========= #
 
-try:
-    from config import APP_NAME
-    from core.auth import (
-        initialize_session,
-        is_authenticated,
-        logout_user,
-        get_current_role,
+@st.cache_resource
+def get_supabase() -> Client:
+    """Create the server-side Supabase client from protected configuration."""
+    settings = get_settings()
+    return create_client(settings.supabase_url, settings.supabase_key)
+
+
+def _show_login() -> None:
+    st.session_state.public_view = "login"
+    st.rerun()
+
+
+def _show_home() -> None:
+    st.session_state.public_view = "home"
+    st.query_params.clear()
+    st.rerun()
+
+
+def render_sidebar() -> None:
+    """Render common authenticated navigation and account controls."""
+    settings = get_settings()
+    st.sidebar.markdown(f"### {settings.brand_name}")
+    st.sidebar.write(get_current_user_email() or "Authenticated user")
+    st.sidebar.caption(f"Role: {get_current_role()}")
+    if get_current_role() == ROLE_USER:
+        st.sidebar.caption(f"Payment: {get_payment_status()}")
+    st.sidebar.warning(
+        "Trading involves risk. Analysis and signals never guarantee returns."
     )
-
-    from pages.login import login_page
-
-    from admin.dashboard import admin_dashboard
-    from user.dashboard import user_dashboard
-
-except Exception as e:
-    st.error("Project initialization failed.")
-    st.exception(e)
-    st.stop()
-
-# ========= SESSION ========= #
-
-initialize_session()
-
-# ========= SIDEBAR ========= #
-
-with st.sidebar:
-
-    st.title(APP_NAME)
-
-    st.divider()
-
-    if is_authenticated():
-
-        st.success("Logged In")
-
-        st.write(f"Role : **{get_current_role().upper()}**")
-
-        st.divider()
-
-        if st.button("Logout", use_container_width=True):
-            logout_user()
-            st.rerun()
-
-# ========= ROUTER ========= #
-
-if not is_authenticated():
-
-    login_page()
-
-else:
-
-    role = get_current_role()
-
-    if role == "admin":
-
-        admin_dashboard()
-
-    elif role == "user":
-
-        user_dashboard()
-
-    else:
-
-        st.error("Invalid User Role")
-
+    if st.sidebar.button("Sign Out", use_container_width=True):
         logout_user()
-
+        st.session_state.public_view = "home"
         st.rerun()
 
-# ========= FOOTER ========= #
 
-st.divider()
+def run() -> None:
+    """Initialize dependencies and route public, user, and admin experiences."""
+    try:
+        supabase = get_supabase()
+        initialize_session()
+    except ConfigurationError as exc:
+        LOGGER.error("Application configuration is incomplete: %s", exc)
+        st.error("Application configuration is incomplete.")
+        st.stop()
+    except Exception:
+        LOGGER.exception("Application initialization failed.")
+        st.error("The application is temporarily unavailable.")
+        st.stop()
 
-st.caption("© 2026 AI Market Analytics Pro")
+    if not is_authenticated():
+        action = str(st.query_params.get("action", ""))
+        if action in {"verify", "reset-password"}:
+            login_page()
+            return
+        if "public_view" not in st.session_state:
+            st.session_state.public_view = "home"
+        if st.session_state.public_view == "login":
+            if st.button("← Back to Website"):
+                _show_home()
+            login_page()
+        else:
+            render_landing_page(supabase, _show_login)
+        return
+
+    render_sidebar()
+    role = get_current_role()
+    if role == ROLE_ADMIN:
+        render_admin_dashboard(supabase)
+    elif role == ROLE_USER:
+        render_user_dashboard(supabase)
+    else:
+        LOGGER.warning("Rejected unsupported session role: %s", role)
+        logout_user()
+        st.error("Your session is invalid. Please sign in again.")
+
+
+if __name__ == "__main__":
+    run()

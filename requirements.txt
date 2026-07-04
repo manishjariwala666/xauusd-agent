@@ -1,71 +1,14 @@
-streamlit==1.47.0
-
-# Data Processing
-pandas==2.3.1
-numpy==2.3.1
-
-# HTTP Requests
-requests==2.32.4
-httpx==0.28.1
-
-# Environment Variables
-python-dotenv==1.1.1
-
-# Authentication & Security
-bcrypt==4.3.0
-PyJWT==2.10.1
-email-validator==2.2.0
-
-# Database
-sqlalchemy==2.0.41
-psycopg2-binary==2.9.10
-
-# Data Validation
-pydantic==2.11.7
-
-# Date & Time
-python-dateutil==2.9.0.post0
-pytz==2025.2
-
-# Charts
-plotly==6.2.0
-
-# Technical Analysis
-ta==0.11.0
-
-# Scheduler
-APScheduler==3.11.0
-
-# Email
-secure-smtplib==0.1.1
-
-# Logging
-loguru==0.7.3
-
-# Image Processing
-Pillow==11.3.0
-
-# Excel Support
-openpyxl==3.1.5
-
-# JSON Handling
-orjson==3.11.1
-
-# Retry Utilities
-tenacity==9.1.2
-
-# WebSocket
-websocket-client==1.8.0
-
-# Streamlit Extras
-streamlit-option-menu==0.4.0
-streamlit-autorefresh==1.0.1
-
-# TradingView Support
-streamlit-components==0.1.5
-
-# QR Code (USDT Payments)
-qrcode==8.2
-
-# Crypto
-cryptography==45.0.5
+streamlit
+requests
+google-genai
+python-dotenv
+supabase
+pandas
+SQLAlchemy
+psycopg[binary]
+bcrypt
+PyJWT
+yfinance
+pyTelegramBotAPI
+gspread
+loguru
