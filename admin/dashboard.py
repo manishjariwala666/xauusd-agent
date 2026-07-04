@@ -10,7 +10,6 @@ from loguru import logger
 import streamlit as st
 from sqlalchemy import text
 
-from config import get_settings
 from core.auth import ROLE_ADMIN, get_current_role, get_current_user_id
 from core.database import session_scope
 from services.content_service import (

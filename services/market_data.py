@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
+from threading import Lock
 from typing import Any
 
 from loguru import logger
@@ -28,6 +29,9 @@ class MarketPrice:
 class MarketDataService:
     """Fetch XAUUSD prices and persist enriched market signals."""
 
+    _price_cache_lock = Lock()
+    _last_successful_price: MarketPrice | None = None
+
     def __init__(self, supabase: Client | None = None) -> None:
         settings = get_settings()
         self._symbol = settings.xauusd_symbol
@@ -42,12 +46,15 @@ class MarketDataService:
         if self._goldapi_key:
             spot_price = self._fetch_goldapi_price()
             if spot_price is not None:
-                return spot_price
+                return self._remember_price(spot_price)
             logger.warning(
                 "GoldAPI failed; falling back to Yahoo symbol {}",
                 self._symbol,
             )
-        return self._fetch_yahoo_price()
+        yahoo_price = self._fetch_yahoo_price()
+        if yahoo_price is not None:
+            return self._remember_price(yahoo_price)
+        return self._cached_price()
 
     def _fetch_goldapi_price(self) -> MarketPrice | None:
         """Fetch exact XAU/USD spot pricing from GoldAPI."""
@@ -80,8 +87,8 @@ class MarketDataService:
                 observed_at=observed_at,
                 source="GOLDAPI:XAU/USD",
             )
-        except Exception:
-            logger.exception("GoldAPI XAU/USD request failed")
+        except Exception as exc:
+            logger.warning("GoldAPI XAU/USD request failed: {}", exc)
             return None
 
     def _fetch_yahoo_price(self) -> MarketPrice | None:
@@ -133,12 +140,42 @@ class MarketDataService:
                 observed_at=observed_at,
                 source=f"YAHOO_FINANCE:{self._symbol}",
             )
-        except Exception:
-            logger.exception(
-                "XAUUSD market API request failed for {}",
+        except Exception as exc:
+            logger.warning(
+                "Yahoo XAUUSD request failed for {}: {}",
                 self._symbol,
+                exc,
             )
             return None
+
+    @classmethod
+    def _remember_price(cls, price: MarketPrice) -> MarketPrice:
+        """Cache the last successful quote for transient provider outages."""
+        with cls._price_cache_lock:
+            cls._last_successful_price = price
+        return price
+
+    @classmethod
+    def _cached_price(cls) -> MarketPrice | None:
+        """Return a clearly labelled cached quote instead of raising."""
+        with cls._price_cache_lock:
+            cached = cls._last_successful_price
+        if cached is None:
+            logger.error(
+                "All XAUUSD providers failed and no cached quote is available"
+            )
+            return None
+        logger.warning(
+            "Using cached XAUUSD quote from {} observed at {}",
+            cached.source,
+            cached.observed_at.isoformat(),
+        )
+        return MarketPrice(
+            symbol=cached.symbol,
+            price=cached.price,
+            observed_at=cached.observed_at,
+            source=f"CACHED:{cached.source}",
+        )
 
     def signal_exists(self, external_key: str) -> bool:
         """Check whether a Sheet instruction was already persisted."""
