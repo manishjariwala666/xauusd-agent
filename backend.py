@@ -172,7 +172,7 @@ def _configure_telegram_webhook() -> None:
     settings = get_settings()
     if not all(
         (
-            settings.app_base_url,
+            settings.backend_base_url,
             settings.telegram_bot_token,
             settings.telegram_webhook_secret,
         )
@@ -189,7 +189,7 @@ def _configure_telegram_webhook() -> None:
             endpoint,
             json={
                 "url": (
-                    settings.app_base_url.rstrip("/")
+                    settings.backend_base_url.rstrip("/")
                     + "/webhooks/telegram"
                 ),
                 "secret_token": settings.telegram_webhook_secret,

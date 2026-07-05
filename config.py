@@ -137,6 +137,7 @@ class Settings:
     jwt_issuer: str
     jwt_ttl_minutes: int
     app_base_url: str
+    backend_base_url: str
     smtp_host: str
     smtp_port: int
     smtp_username: str
@@ -216,6 +217,7 @@ class Settings:
             jwt_issuer=_read_secret("JWT_ISSUER", "ai-market-analytics-pro"),
             jwt_ttl_minutes=int(_read_secret("JWT_TTL_MINUTES", "60")),
             app_base_url=_read_secret("APP_BASE_URL"),
+            backend_base_url=_read_secret("BACKEND_BASE_URL"),
             smtp_host=_read_secret("SMTP_HOST"),
             smtp_port=int(_read_secret("SMTP_PORT", "587")),
             smtp_username=_read_secret("SMTP_USERNAME"),
