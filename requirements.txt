@@ -12,3 +12,6 @@ yfinance
 pyTelegramBotAPI
 gspread
 loguru
+fastapi
+uvicorn[standard]
+Pillow

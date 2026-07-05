@@ -159,6 +159,19 @@ class Settings:
     profit_proof_telegram_url: str
     support_email: str
     brand_name: str
+    ai_provider: str
+    gemini_api_key: str
+    openai_api_key: str
+    ai_text_model: str
+    ai_image_model: str
+    telegram_webhook_secret: str
+    whatsapp_access_token: str
+    whatsapp_phone_number_id: str
+    whatsapp_business_account_id: str
+    whatsapp_verify_token: str
+    meta_app_secret: str
+    human_takeover_minutes: int
+    worker_poll_seconds: int
 
     @classmethod
     def load(cls) -> "Settings":
@@ -241,6 +254,39 @@ class Settings:
             brand_name=_read_secret(
                 "BRAND_NAME",
                 "AI Market Analytics Pro",
+            ),
+            ai_provider=_read_secret("AI_PROVIDER", "GEMINI").upper(),
+            gemini_api_key=_read_secret("GEMINI_API_KEY"),
+            openai_api_key=_read_secret("OPENAI_API_KEY"),
+            ai_text_model=_read_secret(
+                "AI_TEXT_MODEL",
+                "gemini-2.5-flash",
+            ),
+            ai_image_model=_read_secret(
+                "AI_IMAGE_MODEL",
+                "gpt-image-1",
+            ),
+            telegram_webhook_secret=_read_secret(
+                "TELEGRAM_WEBHOOK_SECRET"
+            ),
+            whatsapp_access_token=_read_secret(
+                "WHATSAPP_ACCESS_TOKEN"
+            ),
+            whatsapp_phone_number_id=_read_secret(
+                "WHATSAPP_PHONE_NUMBER_ID"
+            ),
+            whatsapp_business_account_id=_read_secret(
+                "WHATSAPP_BUSINESS_ACCOUNT_ID"
+            ),
+            whatsapp_verify_token=_read_secret("WHATSAPP_VERIFY_TOKEN"),
+            meta_app_secret=_read_secret("META_APP_SECRET"),
+            human_takeover_minutes=max(
+                1,
+                int(_read_secret("HUMAN_TAKEOVER_MINUTES", "30")),
+            ),
+            worker_poll_seconds=max(
+                1,
+                int(_read_secret("WORKER_POLL_SECONDS", "5")),
             ),
         )
 

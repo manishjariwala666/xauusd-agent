@@ -119,6 +119,15 @@ class TelegramService:
         """Verify connectivity using the production formatter and sender."""
         return self.send_signal(signal, test=True)
 
+    def send_text(self, chat_id: str, message: str) -> str:
+        """Send an escaped plain-text reply to one Telegram conversation."""
+        delivered = self._bot.send_message(
+            chat_id,
+            html.escape(message[:4096]),
+            disable_web_page_preview=True,
+        )
+        return str(delivered.message_id)
+
     def monitor_forever(self, stop_event: Event | None = None) -> None:
         """Continuously poll Supabase while isolating transient failures."""
         event = stop_event or Event()

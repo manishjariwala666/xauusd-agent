@@ -14,8 +14,13 @@ from core.auth import ROLE_ADMIN, get_current_role, get_current_user_id
 from core.database import session_scope
 from services.ai_agent_service import (
     list_ai_agents,
+    list_agent_runs,
     run_ai_agent,
     set_ai_agent_enabled,
+)
+from services.conversation_service import (
+    list_conversations,
+    send_human_reply,
 )
 from services.content_service import (
     CONTENT_TYPES,
@@ -626,6 +631,7 @@ def _render_ai_agents(supabase: Any) -> None:
     )
     try:
         agents = list_ai_agents()
+        conversations = list_conversations()
     except Exception:
         logger.exception("AI agent list failed")
         st.error("AI agent controls are temporarily unavailable.")
@@ -652,6 +658,21 @@ def _render_ai_agents(supabase: Any) -> None:
                     f"Last run: {agent['last_run_at'] or 'Never'}"
                 )
                 st.caption(
+                    "Next scheduled run: "
+                    f"{agent['next_scheduled_run_at'] or 'Not scheduled'}"
+                )
+                duration = agent.get("last_duration_ms")
+                st.caption(
+                    "Processing time: "
+                    f"{int(duration) / 1000:.2f}s"
+                    if duration is not None
+                    else "Processing time: —"
+                )
+                metric1, metric2, metric3 = st.columns(3)
+                metric1.metric("Success", int(agent["success_count"] or 0))
+                metric2.metric("Failure", int(agent["failure_count"] or 0))
+                metric3.metric("Queue", int(agent["queue_size"] or 0))
+                st.caption(
                     f"Last error: {agent['last_error'] or 'None'}"
                 )
 
@@ -675,6 +696,10 @@ def _render_ai_agents(supabase: Any) -> None:
                     else:
                         st.rerun()
 
+                payload = _agent_manual_payload(
+                    str(agent["agent_key"]),
+                    conversations,
+                )
                 if st.button(
                     "Manual Run",
                     key=f"agent_run_{agent['agent_key']}",
@@ -685,9 +710,130 @@ def _render_ai_agents(supabase: Any) -> None:
                         agent_key=str(agent["agent_key"]),
                         triggered_by=admin_id,
                         supabase=supabase,
+                        payload=payload,
                     )
                     (st.success if succeeded else st.error)(message)
                     st.rerun()
+
+    st.divider()
+    st.markdown("### Execution Logs")
+    try:
+        runs = list_agent_runs()
+    except Exception:
+        logger.exception("AI execution history failed")
+        st.error("Execution history is temporarily unavailable.")
+    else:
+        if runs:
+            st.dataframe(runs, use_container_width=True, hide_index=True)
+        else:
+            st.info("No AI agent executions have been recorded.")
+
+    with st.expander("Conversation & Human Takeover"):
+        if not conversations:
+            st.info("No Telegram or WhatsApp conversations yet.")
+        else:
+            options = {
+                (
+                    f"#{item['id']} · {item['channel']} · "
+                    f"{item['external_user_id']}"
+                ): item
+                for item in conversations
+            }
+            selected_label = st.selectbox(
+                "Conversation",
+                list(options),
+                key="human_takeover_conversation",
+            )
+            selected = options[selected_label]
+            st.caption(selected.get("last_message") or "No message text")
+            reply = st.text_area(
+                "Admin reply",
+                key="human_takeover_reply",
+            )
+            if st.button(
+                "Send as Admin and Pause AI",
+                type="primary",
+                key="human_takeover_send",
+            ):
+                try:
+                    send_human_reply(
+                        int(selected["id"]),
+                        admin_id,
+                        reply,
+                    )
+                except Exception:
+                    logger.exception("Human takeover reply failed")
+                    st.error("Admin reply could not be delivered.")
+                else:
+                    st.success(
+                        "Reply delivered. AI is paused for this conversation."
+                    )
+                    st.rerun()
+
+
+def _agent_manual_payload(
+    agent_key: str,
+    conversations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Collect task input without displaying prompts or internal reasoning."""
+    if agent_key == "ai_blog_agent":
+        return {
+            "topic": st.text_input(
+                "Blog topic",
+                key="manual_blog_topic",
+            ),
+            "publish": st.checkbox(
+                "Publish immediately",
+                value=False,
+                key="manual_blog_publish",
+            ),
+        }
+    if agent_key == "announcement_agent":
+        return {
+            "message": st.text_area(
+                "Broadcast message",
+                key="manual_announcement_message",
+            ),
+            "send_telegram": st.checkbox(
+                "Telegram",
+                value=True,
+                key="manual_announcement_telegram",
+            ),
+            "send_whatsapp": st.checkbox(
+                "WhatsApp",
+                value=True,
+                key="manual_announcement_whatsapp",
+            ),
+        }
+    if agent_key == "image_agent":
+        return {
+            "prompt": st.text_area(
+                "Image brief",
+                key="manual_image_prompt",
+            )
+        }
+    if agent_key in {"telegram_reply_agent", "whatsapp_reply_agent"}:
+        channel = (
+            "TELEGRAM"
+            if agent_key == "telegram_reply_agent"
+            else "WHATSAPP"
+        )
+        available = [
+            item for item in conversations if item["channel"] == channel
+        ]
+        labels = {
+            f"#{item['id']} · {item['external_user_id']}": item["id"]
+            for item in available
+        }
+        selected = st.selectbox(
+            "Conversation",
+            ["No conversation", *labels],
+            key=f"manual_conversation_{agent_key}",
+        )
+        return {
+            "conversation_id": labels.get(selected),
+        }
+    return {}
 
 
 def _render_telegram_test(supabase: Any) -> None:
