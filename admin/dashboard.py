@@ -84,23 +84,48 @@ def render_admin_dashboard(supabase: Any) -> None:
 
 def _render_overview() -> None:
     try:
-        payments = list_payment_reviews()
-        content = list_content(public_only=False, limit=200)
-        categories = list_categories(public_only=False)
+        with session_scope() as session:
+            metrics = (
+                session.execute(
+                    text(
+                        """
+                        SELECT
+                            (SELECT COUNT(*) FROM public.users)
+                                AS registered_users,
+                            (
+                                SELECT COUNT(*)
+                                FROM public.subscriptions
+                                WHERE payment_status IN (
+                                    'PENDING',
+                                    'UNDER_REVIEW'
+                                )
+                            ) AS payment_reviews,
+                            (
+                                SELECT COUNT(*)
+                                FROM public.content_items
+                                WHERE is_published = TRUE
+                            ) AS published_content,
+                            (
+                                SELECT COUNT(*)
+                                FROM public.content_categories
+                                WHERE is_active = TRUE
+                            ) AS active_categories
+                        """
+                    )
+                )
+                .mappings()
+                .one()
+            )
     except Exception:
         logger.exception("Admin overview loading failed")
         st.error("Overview metrics are temporarily unavailable.")
         return
-    pending = sum(
-        item["payment_status"] in {"PENDING", "UNDER_REVIEW"}
-        for item in payments
-    )
-    published = sum(item["is_published"] for item in content)
+
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Registered Users", len(payments))
-    col2.metric("Payment Reviews", pending)
-    col3.metric("Published Content", published)
-    col4.metric("Active Categories", sum(c["is_active"] for c in categories))
+    col1.metric("Registered Users", int(metrics["registered_users"]))
+    col2.metric("Payment Reviews", int(metrics["payment_reviews"]))
+    col3.metric("Published Content", int(metrics["published_content"]))
+    col4.metric("Active Categories", int(metrics["active_categories"]))
     st.info(
         "AI-generated drafts may be reviewed and published here, but agent "
         "prompts, credentials, and internal reasoning are never displayed."
