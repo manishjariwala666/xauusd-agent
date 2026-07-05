@@ -12,6 +12,11 @@ from sqlalchemy import text
 
 from core.auth import ROLE_ADMIN, get_current_role, get_current_user_id
 from core.database import session_scope
+from services.ai_agent_service import (
+    list_ai_agents,
+    run_ai_agent,
+    set_ai_agent_enabled,
+)
 from services.content_service import (
     CONTENT_TYPES,
     PAYMENT_STATES,
@@ -48,6 +53,7 @@ def render_admin_dashboard(supabase: Any) -> None:
         channels_tab,
         signals_tab,
         automation_tab,
+        ai_agents_tab,
     ) = st.tabs(
         [
             "Overview",
@@ -58,6 +64,7 @@ def render_admin_dashboard(supabase: Any) -> None:
             "Channel Links",
             "Signals",
             "Pipeline",
+            "AI Agents",
         ]
     )
     with overview_tab:
@@ -80,6 +87,8 @@ def render_admin_dashboard(supabase: Any) -> None:
         _render_pipeline_health()
         st.divider()
         _render_telegram_test(supabase)
+    with ai_agents_tab:
+        _render_ai_agents(supabase)
 
 
 def _render_overview() -> None:
@@ -602,6 +611,83 @@ def _render_pipeline_health() -> None:
         "Only operational status is displayed. Agent prompts and internal "
         "processing logic remain private."
     )
+
+
+def _render_ai_agents(supabase: Any) -> None:
+    """Render the protected AI-agent control surface for administrators."""
+    if get_current_role() != ROLE_ADMIN:
+        st.error("Administrator access is required.")
+        st.stop()
+
+    st.subheader("AI Agents")
+    st.caption(
+        "Operational controls only. Prompts, credentials, and internal "
+        "reasoning are never displayed."
+    )
+    try:
+        agents = list_ai_agents()
+    except Exception:
+        logger.exception("AI agent list failed")
+        st.error("AI agent controls are temporarily unavailable.")
+        return
+
+    admin_id = get_current_user_id()
+    if admin_id is None:
+        st.error("Administrator session is invalid.")
+        return
+
+    columns = st.columns(2)
+    for index, agent in enumerate(agents):
+        with columns[index % 2]:
+            with st.container(border=True):
+                st.markdown(f"### {agent['display_name']}")
+                status = str(agent["status"])
+                status_icon = {
+                    "IDLE": "⚪",
+                    "RUNNING": "🟡",
+                    "ERROR": "🔴",
+                }.get(status, "⚪")
+                st.write(f"**Status:** {status_icon} {status.title()}")
+                st.caption(
+                    f"Last run: {agent['last_run_at'] or 'Never'}"
+                )
+                st.caption(
+                    f"Last error: {agent['last_error'] or 'None'}"
+                )
+
+                enabled = st.toggle(
+                    "Enabled",
+                    value=bool(agent["is_enabled"]),
+                    key=f"agent_enabled_{agent['agent_key']}",
+                )
+                if enabled != bool(agent["is_enabled"]):
+                    try:
+                        set_ai_agent_enabled(
+                            str(agent["agent_key"]),
+                            enabled,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "AI agent toggle failed: {}",
+                            agent["agent_key"],
+                        )
+                        st.error("Agent setting could not be updated.")
+                    else:
+                        st.rerun()
+
+                if st.button(
+                    "Manual Run",
+                    key=f"agent_run_{agent['agent_key']}",
+                    use_container_width=True,
+                    disabled=not enabled or status == "RUNNING",
+                ):
+                    succeeded, message = run_ai_agent(
+                        agent_key=str(agent["agent_key"]),
+                        triggered_by=admin_id,
+                        supabase=supabase,
+                    )
+                    (st.success if succeeded else st.error)(message)
+                    st.rerun()
 
 
 def _render_telegram_test(supabase: Any) -> None:
