@@ -12,7 +12,8 @@ from core.database import get_engine
 
 _ROOT = Path(__file__).resolve().parents[1]
 _AUTOMATIC_MIGRATIONS = (
-    "005_ai_agents.sql",
+        "002_market_signals_delivery.sql",
+"005_ai_agents.sql",
     "006_production_agents.sql",
 )
 
