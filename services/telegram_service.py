@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import html
+import re
 from threading import Event
+import traceback
 from typing import Any
 
 from loguru import logger
+from sqlalchemy import text
 from supabase import Client, create_client
 import telebot
 
 from config import get_settings
+from core.database import session_scope
 
 
 class TelegramConfigurationError(RuntimeError):
@@ -20,6 +24,11 @@ class TelegramConfigurationError(RuntimeError):
 
 class TelegramService:
     """Format, deliver, and persist Telegram signal delivery state."""
+
+    SAFE_USER_ERROR = (
+        "⚠️ Service temporarily unavailable. Please try again later."
+    )
+    _TREND_MAX_AGE = timedelta(hours=6)
 
     def __init__(self, supabase: Client | None = None) -> None:
         settings = get_settings()
@@ -128,6 +137,125 @@ class TelegramService:
         )
         return str(delivered.message_id)
 
+    def send_latest_trend(self, chat_id: str) -> bool:
+        """Send only the newest valid and sufficiently fresh XAUUSD signal."""
+        signal = self.get_latest_valid_signal()
+        if signal is None:
+            self.send_text(chat_id, self.SAFE_USER_ERROR)
+            return False
+        self._bot.send_message(
+            chat_id,
+            self.format_message(signal),
+            disable_web_page_preview=True,
+        )
+        return True
+
+    def get_latest_valid_signal(self) -> dict[str, Any] | None:
+        """Load recent candidates and reject malformed, future, or stale rows."""
+        response = (
+            self._supabase.table("market_signals")
+            .select("*")
+            .in_("signal_type", ["BUY", "SELL"])
+            .order("signal_time", desc=True)
+            .order("updated_at", desc=True)
+            .limit(25)
+            .execute()
+        )
+        return self.select_latest_valid_signal(
+            list(response.data or []),
+            now=datetime.now(timezone.utc),
+            max_age=self._TREND_MAX_AGE,
+        )
+
+    @staticmethod
+    def select_latest_valid_signal(
+        signals: list[dict[str, Any]],
+        *,
+        now: datetime,
+        max_age: timedelta,
+    ) -> dict[str, Any] | None:
+        """Choose the newest valid row without ever falling back to stale data."""
+        normalized_now = (
+            now.replace(tzinfo=timezone.utc)
+            if now.tzinfo is None
+            else now.astimezone(timezone.utc)
+        )
+        valid: list[tuple[datetime, dict[str, Any]]] = []
+        for signal in signals:
+            direction = str(signal.get("signal_type") or "").upper()
+            if direction not in {"BUY", "SELL"}:
+                continue
+            try:
+                price = float(signal.get("price"))
+            except (TypeError, ValueError):
+                continue
+            if price <= 0:
+                continue
+            observed_at = TelegramService._parse_time(
+                signal.get("signal_time") or signal.get("updated_at")
+            )
+            if observed_at is None:
+                continue
+            age = normalized_now - observed_at
+            if age < timedelta(minutes=-5) or age > max_age:
+                continue
+            valid.append((observed_at, signal))
+        if not valid:
+            return None
+        valid.sort(key=lambda item: item[0], reverse=True)
+        return valid[0][1]
+
+    @staticmethod
+    def record_internal_error(
+        agent_key: str,
+        exc: BaseException,
+        traceback_text: str | None = None,
+    ) -> None:
+        """Persist an admin-only summary and traceback for operational review."""
+        summary = TelegramService._admin_error_summary(exc)
+        internal_traceback = (
+            traceback_text or traceback.format_exc()
+        ).strip()
+        if not internal_traceback or internal_traceback == "NoneType: None":
+            internal_traceback = f"{exc.__class__.__name__}: {exc}"
+        try:
+            with session_scope() as session:
+                agent_id = session.execute(
+                    text(
+                        """
+                        UPDATE public.ai_agents
+                        SET status = 'ERROR', last_error = :summary,
+                            last_run_at = NOW(),
+                            failure_count = failure_count + 1,
+                            updated_at = NOW()
+                        WHERE agent_key = :agent_key
+                        RETURNING id
+                        """
+                    ),
+                    {"agent_key": agent_key, "summary": summary},
+                ).scalar_one_or_none()
+                if agent_id is not None:
+                    session.execute(
+                        text(
+                            """
+                            INSERT INTO public.ai_agent_runs (
+                                agent_id, status, trigger_type, finished_at,
+                                error_message, result_summary
+                            ) VALUES (
+                                :agent_id, 'ERROR', 'TELEGRAM_COMMAND', NOW(),
+                                :traceback, :summary
+                            )
+                            """
+                        ),
+                        {
+                            "agent_id": agent_id,
+                            "traceback": internal_traceback[:8_000],
+                            "summary": summary,
+                        },
+                    )
+        except Exception:
+            logger.exception("Unable to persist Telegram command failure")
+
     def monitor_forever(self, stop_event: Event | None = None) -> None:
         """Continuously poll Supabase while isolating transient failures."""
         event = stop_event or Event()
@@ -212,6 +340,38 @@ class TelegramService:
             )
         except ValueError:
             return str(value)
+
+    @staticmethod
+    def _parse_time(value: Any) -> datetime | None:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(
+                str(value).replace("Z", "+00:00")
+            )
+        except (TypeError, ValueError):
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    @staticmethod
+    def _admin_error_summary(exc: BaseException) -> str:
+        """Create a bounded summary without URLs, paths, or secret-like data."""
+        message = str(exc).splitlines()[0].strip()
+        message = re.sub(r"https?://\S+", "[redacted-url]", message)
+        message = re.sub(
+            r"(?:[A-Za-z]:)?[/\\][\w./\\-]+",
+            "[redacted-path]",
+            message,
+        )
+        message = re.sub(
+            r"(?i)(token|secret|password|api[_ -]?key)\s*[=:]\s*\S+",
+            r"\1=[redacted]",
+            message,
+        )
+        summary = f"{exc.__class__.__name__}: {message or 'Command failed'}"
+        return summary[:500]
 
     @staticmethod
     def _value(value: Any) -> str:

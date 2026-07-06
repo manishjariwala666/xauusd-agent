@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from threading import Event, Thread
+import traceback
 
 from loguru import logger
 from supabase import create_client
@@ -10,7 +11,7 @@ import telebot
 
 from config import get_settings
 from services.google_sheets import GoogleSheetsService
-from services.market_data import MarketDataService
+from services.market_data import MarketDataService, MarketPrice
 from services.telegram_service import TelegramService
 
 
@@ -25,7 +26,19 @@ def run_pipeline_once(
         if sheet_signal and not market_data.signal_exists(
             sheet_signal.external_key
         ):
-            market_price = market_data.fetch_current_price()
+            market_price = (
+                MarketPrice(
+                    symbol="XAUUSD",
+                    price=sheet_signal.reference_price,
+                    observed_at=sheet_signal.observed_at,
+                    source=sheet_signal.source,
+                )
+                if (
+                    sheet_signal.reference_price is not None
+                    and sheet_signal.observed_at is not None
+                )
+                else market_data.fetch_current_price()
+            )
             if market_price is None:
                 logger.warning(
                     "Skipping new signal because market price is unavailable"
@@ -121,9 +134,29 @@ def _register_commands(
             )
         except Exception:
             logger.exception("Manual Telegram pipeline update failed")
-            bot.reply_to(message, "Pipeline update failed. Check service logs.")
+            bot.reply_to(message, TelegramService.SAFE_USER_ERROR)
         else:
             bot.reply_to(message, "Pipeline update completed.")
+
+    def handle_trend(message: telebot.types.Message) -> None:
+        """Return only a fresh persisted signal and conceal internal failures."""
+        if not is_authorized(message):
+            return
+        try:
+            settings = get_settings()
+            service = TelegramService(
+                create_client(settings.supabase_url, settings.supabase_key)
+            )
+            service.send_latest_trend(str(message.chat.id))
+        except Exception as exc:
+            internal_traceback = traceback.format_exc()
+            logger.exception("Telegram /trend command failed")
+            TelegramService.record_internal_error(
+                "telegram_reply_agent",
+                exc,
+                internal_traceback,
+            )
+            bot.reply_to(message, TelegramService.SAFE_USER_ERROR)
 
     def clear_chat(message: telebot.types.Message) -> None:
         if not is_authorized(message):
@@ -146,6 +179,7 @@ def _register_commands(
         bot.stop_polling()
 
     bot.register_message_handler(send_welcome, commands=["start"])
+    bot.register_message_handler(handle_trend, commands=["trend"])
     bot.register_message_handler(handle_update, commands=["update_legal"])
     bot.register_message_handler(clear_chat, commands=["clear"])
     bot.register_message_handler(stop_agent, commands=["stop_agent"])

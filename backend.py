@@ -7,6 +7,7 @@ import hmac
 import json
 import os
 from contextlib import asynccontextmanager
+import traceback
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
@@ -113,6 +114,25 @@ async def telegram_webhook(
     if not message or message.get("from", {}).get("is_bot"):
         return {"accepted": True}
     text_body = message.get("text") or message.get("caption") or ""
+    if _is_telegram_command(text_body, "trend"):
+        try:
+            TelegramService().send_latest_trend(str(message["chat"]["id"]))
+        except Exception as exc:
+            internal_traceback = traceback.format_exc()
+            logger.exception("Telegram /trend webhook command failed")
+            TelegramService.record_internal_error(
+                "telegram_reply_agent",
+                exc,
+                internal_traceback,
+            )
+            try:
+                TelegramService().send_text(
+                    str(message["chat"]["id"]),
+                    TelegramService.SAFE_USER_ERROR,
+                )
+            except Exception:
+                logger.exception("Telegram safe fallback delivery failed")
+        return {"accepted": True}
     media = _telegram_media(message)
     record_inbound_message(
         channel="TELEGRAM",
@@ -122,6 +142,15 @@ async def telegram_webhook(
         media=media,
     )
     return {"accepted": True}
+
+
+def _is_telegram_command(text_body: str, command: str) -> bool:
+    """Match a Telegram command with or without the bot username suffix."""
+    first_token = str(text_body or "").strip().split(maxsplit=1)[0].lower()
+    if not first_token.startswith("/"):
+        return False
+    command_name = first_token[1:].split("@", maxsplit=1)[0]
+    return command_name == command.lower()
 
 
 @app.get("/webhooks/whatsapp")
@@ -288,5 +317,4 @@ def _register_single_telegram_webhook(
         logger.exception("Telegram %s webhook registration failed", bot_name)
     else:
         logger.info("Telegram %s webhook registered successfully at %s", bot_name, path)
-
 

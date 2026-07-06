@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 import json
+import re
 from typing import Any
 
 from loguru import logger
@@ -1050,6 +1051,20 @@ def _render_ai_agents(supabase: Any) -> None:
         st.error("Administrator session is invalid.")
         return
 
+    failed_agents = [
+        agent for agent in agents if agent.get("last_error")
+    ]
+    if failed_agents:
+        with st.expander(
+            f"Operational Error Summary ({len(failed_agents)})",
+            expanded=False,
+        ):
+            for failed_agent in failed_agents:
+                st.warning(
+                    f"{failed_agent['display_name']}: "
+                    f"{_safe_admin_error(failed_agent['last_error'])}"
+                )
+
     columns = st.columns(2)
     for index, agent in enumerate(agents):
         with columns[index % 2]:
@@ -1333,6 +1348,23 @@ def _agent_manual_payload(
             "conversation_id": labels.get(selected),
         }
     return {}
+
+
+def _safe_admin_error(value: Any) -> str:
+    """Hide paths, URLs, and secret-like values in dashboard summaries."""
+    message = str(value).splitlines()[0].strip()
+    message = re.sub(r"https?://\S+", "[redacted-url]", message)
+    message = re.sub(
+        r"(?:[A-Za-z]:)?[/\\][\w./\\-]+",
+        "[redacted-path]",
+        message,
+    )
+    message = re.sub(
+        r"(?i)(token|secret|password|api[_ -]?key)\s*[=:]\s*\S+",
+        r"\1=[redacted]",
+        message,
+    )
+    return message[:500] or "Internal operation failed."
 
 
 def _render_telegram_test(supabase: Any) -> None:

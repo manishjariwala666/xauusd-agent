@@ -151,6 +151,7 @@ class Settings:
     google_service_account_json: str
     google_sheet_name: str
     google_worksheet_name: str
+    google_sheet_public_url: str
     goldapi_key: str
     xauusd_symbol: str
     signal_poll_seconds: int
@@ -237,6 +238,9 @@ class Settings:
             google_worksheet_name=_read_secret(
                 "GOOGLE_WORKSHEET_NAME",
                 "Sheet1",
+            ),
+            google_sheet_public_url=_read_secret(
+                "GOOGLE_SHEET_PUBLIC_URL"
             ),
             goldapi_key=_read_secret("GOLDAPI_KEY"),
             xauusd_symbol=_read_secret("XAUUSD_SYMBOL", "GC=F"),
