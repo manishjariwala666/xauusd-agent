@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -207,40 +208,85 @@ def _public_setting(key: str) -> str:
 
 
 def _configure_telegram_webhook() -> None:
-    """Register the production webhook without logging credentials."""
+    """Register Telegram webhooks for Signal Bot and Master AI Bot without logging secrets."""
     settings = get_settings()
-    if not all(
-        (
-            settings.backend_base_url,
-            settings.telegram_bot_token,
-            settings.telegram_webhook_secret,
-        )
-    ):
-        logger.warning(
-            "Telegram webhook registration skipped: configuration missing"
-        )
+
+    public_api_url = str(
+        getattr(settings, "public_api_url", "")
+        or getattr(settings, "backend_base_url", "")
+        or os.getenv("PUBLIC_API_URL", "")
+    ).strip()
+
+    webhook_secret = str(
+        getattr(settings, "telegram_webhook_secret", "")
+        or os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+    ).strip()
+
+    signal_token = str(
+        getattr(settings, "telegram_bot_token", "")
+        or os.getenv("TELEGRAM_BOT_TOKEN", "")
+    ).strip()
+
+    master_token = str(
+        getattr(settings, "master_ai_telegram_bot_token", "")
+        or os.getenv("MASTER_AI_TELEGRAM_BOT_TOKEN", "")
+    ).strip()
+
+    if not public_api_url or not webhook_secret:
+        logger.warning("Telegram webhook registration skipped: configuration missing")
         return
-    endpoint = (
-        f"https://api.telegram.org/bot{settings.telegram_bot_token}/setWebhook"
+
+    _register_single_telegram_webhook(
+        bot_name="signal",
+        token=signal_token,
+        public_api_url=public_api_url,
+        path="/webhooks/telegram",
+        webhook_secret=webhook_secret,
     )
+
+    _register_single_telegram_webhook(
+        bot_name="master_ai",
+        token=master_token,
+        public_api_url=public_api_url,
+        path="/webhooks/telegram/master",
+        webhook_secret=webhook_secret,
+    )
+
+
+def _register_single_telegram_webhook(
+    *,
+    bot_name: str,
+    token: str,
+    public_api_url: str,
+    path: str,
+    webhook_secret: str,
+) -> None:
+    """Register one Telegram bot webhook without exposing token values."""
+    if not token:
+        logger.warning("Telegram %s webhook registration skipped: token missing", bot_name)
+        return
+
+    webhook_url = public_api_url.rstrip("/") + path
+    telegram_url = f"https://api.telegram.org/bot{token}/setWebhook"
+
     try:
         response = requests.post(
-            endpoint,
+            telegram_url,
             json={
-                "url": (
-                    settings.backend_base_url.rstrip("/")
-                    + "/webhooks/telegram"
-                ),
-                "secret_token": settings.telegram_webhook_secret,
+                "url": webhook_url,
+                "secret_token": webhook_secret,
                 "allowed_updates": ["message", "edited_message"],
                 "drop_pending_updates": False,
             },
             timeout=30,
         )
         response.raise_for_status()
-        if not response.json().get("ok"):
+        payload = response.json()
+        if not payload.get("ok"):
             raise RuntimeError("Telegram rejected webhook registration.")
     except Exception:
-        logger.exception("Telegram webhook registration failed")
+        logger.exception("Telegram %s webhook registration failed", bot_name)
     else:
-        logger.info("Telegram webhook registered successfully")
+        logger.info("Telegram %s webhook registered successfully at %s", bot_name, path)
+
+
