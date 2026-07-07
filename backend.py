@@ -17,6 +17,8 @@ from config import get_settings
 from core.database import session_scope
 from services.conversation_service import record_inbound_message
 from services.migration_service import apply_pending_migrations
+from services.telegram_master_ai_control import try_handle_telegram_update
+from services.telegram_service import TelegramService
 
 
 @asynccontextmanager
@@ -69,6 +71,17 @@ async def telegram_webhook(
     ):
         raise HTTPException(403, "Invalid webhook signature.")
     payload = await request.json()
+
+    master_result = try_handle_telegram_update(
+        payload,
+        sender=lambda chat_id, text: TelegramService().send_text(
+            str(chat_id),
+            text,
+        ),
+    )
+    if master_result.handled:
+        return {"accepted": True}
+
     message = payload.get("message") or payload.get("edited_message")
     if not message or message.get("from", {}).get("is_bot"):
         return {"accepted": True}
