@@ -5,3 +5,4 @@ __pycache__/
 google_creds.json
 pico.save
 *.swp
+service_account.json
