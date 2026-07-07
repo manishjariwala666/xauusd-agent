@@ -1,0 +1,119 @@
+diff --git a/admin/dashboard.py b/admin/dashboard.py
+index 0000000..0000001 100644
+--- a/admin/dashboard.py
++++ b/admin/dashboard.py
+@@
+ from services.ai_agent_service import (
+     list_ai_agents,
+     list_agent_runs,
+     run_ai_agent,
+     set_ai_agent_enabled,
+ )
++from services.master_orchestrator import (
++    create_and_start_master_task,
++    list_orchestration_runs,
++)
+@@
+     admin_id = get_current_user_id()
+     if admin_id is None:
+         st.error("Administrator session is invalid.")
+         return
++
++    _render_master_ai_orchestrator(supabase, admin_id, agents)
+ 
+     columns = st.columns(2)
+@@
+         else:
+             st.info("No AI agent executions have been recorded.")
++
++    st.divider()
++    st.markdown("### Master AI Orchestration Runs")
++    try:
++        master_runs = list_orchestration_runs(limit=25)
++    except Exception:
++        logger.exception("Master AI orchestration history failed")
++        st.error("Master AI orchestration history is temporarily unavailable.")
++    else:
++        if master_runs:
++            st.dataframe(master_runs, use_container_width=True, hide_index=True)
++        else:
++            st.info("No Master AI orchestration runs have been recorded.")
++
++
++def _render_master_ai_orchestrator(
++    supabase: Any,
++    admin_id: int,
++    agents: list[dict[str, Any]],
++) -> None:
++    """Render Master AI task intake without changing existing worker controls."""
++    with st.expander("Master AI Orchestrator", expanded=False):
++        st.caption(
++            "Submit a high-level task. The Master AI plans and invokes existing "
++            "worker agents without replacing their direct/manual execution paths."
++        )
++        with st.form("master_ai_task_form"):
++            title = st.text_input(
++                "Task title",
++                placeholder="Example: Create blog content and send Telegram update",
++            )
++            description = st.text_area(
++                "Task objective",
++                placeholder="Describe the business outcome the Master AI should coordinate.",
++            )
++            enabled_agent_keys = [
++                str(agent["agent_key"])
++                for agent in agents
++                if bool(agent.get("is_enabled"))
++            ]
++            selected_agents = st.multiselect(
++                "Optional worker agents",
++                options=enabled_agent_keys,
++                help="Leave empty to let the Master AI planner choose from enabled workers.",
++            )
++            parallel = st.checkbox(
++                "Allow parallel execution where possible",
++                value=True,
++            )
++            max_attempts = st.slider(
++                "Retry attempts for transient failures",
++                min_value=1,
++                max_value=5,
++                value=2,
++            )
++            submitted = st.form_submit_button("Create and Start Master Task")
++
++        if not submitted:
++            return
++        if not title.strip():
++            st.error("Task title is required.")
++            return
++        payload: dict[str, Any] = {
++            "description": description.strip(),
++            "parallel": parallel,
++            "max_attempts": max_attempts,
++        }
++        if selected_agents:
++            payload["agent_keys"] = selected_agents
++        try:
++            progress = create_and_start_master_task(
++                task_type="ADMIN_REQUEST",
++                title=title.strip(),
++                input_payload=payload,
++                requested_by=admin_id,
++                source="ADMIN_DASHBOARD",
++                supabase=supabase,
++            )
++        except Exception:
++            logger.exception("Master AI task failed to start")
++            st.error("Master AI task could not be started.")
++            return
++        st.success(
++            "Master AI task accepted: "
++            f"{progress.completed_steps}/{progress.total_steps} steps complete "
++            f"({progress.status})."
++        )
++        st.rerun()
+ 
+     with st.expander("Conversation & Human Takeover"):
+         if not conversations:
+             st.info("No Telegram or WhatsApp conversations yet.")
