@@ -696,18 +696,24 @@ def _render_ai_agents(supabase: Any) -> None:
                     else:
                         st.rerun()
 
-                payload = _agent_manual_payload(
-                    str(agent["agent_key"]),
-                    conversations,
-                )
+                agent_key = str(agent["agent_key"])
+                payload = _agent_manual_payload(agent_key, conversations)
+                validation_error = _validate_manual_payload(agent_key, payload)
+                if validation_error:
+                    st.warning(validation_error)
+
                 if st.button(
                     "Manual Run",
                     key=f"agent_run_{agent['agent_key']}",
                     use_container_width=True,
-                    disabled=not enabled or status == "RUNNING",
+                    disabled=(
+                        not enabled
+                        or status == "RUNNING"
+                        or validation_error is not None
+                    ),
                 ):
                     succeeded, message = run_ai_agent(
-                        agent_key=str(agent["agent_key"]),
+                        agent_key=agent_key,
                         triggered_by=admin_id,
                         supabase=supabase,
                         payload=payload,
@@ -724,7 +730,7 @@ def _render_ai_agents(supabase: Any) -> None:
         st.error("Execution history is temporarily unavailable.")
     else:
         if runs:
-            st.dataframe(runs, use_container_width=True, hide_index=True)
+            _render_agent_execution_logs(runs)
         else:
             st.info("No AI agent executions have been recorded.")
 
@@ -769,6 +775,91 @@ def _render_ai_agents(supabase: Any) -> None:
                         "Reply delivered. AI is paused for this conversation."
                     )
                     st.rerun()
+
+
+def _validate_manual_payload(
+    agent_key: str,
+    payload: dict[str, Any],
+) -> str | None:
+    """Return safe user-facing validation errors before manual execution."""
+    if agent_key in {"telegram_reply_agent", "whatsapp_reply_agent"}:
+        if not payload.get("conversation_id"):
+            return "Select a conversation before running this reply agent."
+    if agent_key == "image_agent":
+        if not (payload.get("prompt") or payload.get("content_id")):
+            return "Enter an image brief or select content before running Image Agent."
+    if agent_key == "ai_blog_agent":
+        if not payload.get("topic"):
+            return "Enter a blog topic before running Blog Agent."
+    if agent_key == "announcement_agent":
+        if not payload.get("message"):
+            return "Enter a broadcast message before running Announcement Agent."
+    return None
+
+
+def _safe_text(value: Any, fallback: str = "—") -> str:
+    if value is None or value == "":
+        return fallback
+    text_value = str(value)
+    secret_markers = (
+        "key",
+        "token",
+        "secret",
+        "password",
+        "authorization",
+        "private",
+        "credential",
+    )
+    lowered = text_value.lower()
+    if any(marker in lowered for marker in secret_markers):
+        return "[redacted]"
+    return text_value
+
+
+def _render_agent_execution_logs(runs: list[dict[str, Any]]) -> None:
+    """Render execution history with expandable safe details."""
+    summary_rows = []
+    for run in runs:
+        summary_rows.append(
+            {
+                "ID": run.get("id"),
+                "Agent": run.get("display_name"),
+                "Status": run.get("status"),
+                "Trigger": run.get("trigger_type"),
+                "Started": run.get("started_at"),
+                "Duration ms": run.get("duration_ms"),
+                "Summary": _safe_text(run.get("result_summary")),
+                "Error": _safe_text(run.get("error_message")),
+            }
+        )
+
+    st.dataframe(summary_rows, use_container_width=True, hide_index=True)
+
+    latest_ten = runs[:10]
+    st.markdown("#### Latest 10 Execution Details")
+    for run in latest_ten:
+        title = (
+            f"#{run.get('id')} · {run.get('display_name')} · "
+            f"{run.get('status')} · {run.get('started_at')}"
+        )
+        with st.expander(title):
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Status", _safe_text(run.get("status")))
+            col2.metric("Trigger", _safe_text(run.get("trigger_type")))
+            duration = run.get("duration_ms")
+            col3.metric(
+                "Duration",
+                f"{int(duration) / 1000:.2f}s"
+                if duration is not None
+                else "—",
+            )
+            st.write("**Started:**", _safe_text(run.get("started_at")))
+            st.write("**Finished:**", _safe_text(run.get("finished_at")))
+            st.write("**Output summary:**")
+            st.info(_safe_text(run.get("result_summary"), "No output summary stored."))
+            if run.get("error_message"):
+                st.write("**Safe error:**")
+                st.error(_safe_text(run.get("error_message")))
 
 
 def _agent_manual_payload(

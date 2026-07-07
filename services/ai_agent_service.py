@@ -219,7 +219,7 @@ def list_agent_runs(limit: int = 100) -> list[dict[str, Any]]:
             session.execute(
                 text(
                     """
-                    SELECT r.id, a.display_name, r.status, r.trigger_type,
+                    SELECT r.id, a.agent_key, a.display_name, r.status, r.trigger_type,
                            r.started_at, r.finished_at, r.duration_ms,
                            r.result_summary, r.error_message
                     FROM public.ai_agent_runs r
