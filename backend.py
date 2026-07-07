@@ -75,6 +75,10 @@ async def telegram_webhook(
         raise HTTPException(403, "Invalid webhook signature.")
     payload = await request.json()
 
+    ignored_master_command = handle_signal_telegram_master_command_guard(payload)
+    if ignored_master_command is not None:
+        return {"accepted": True}
+
     master_result = try_handle_telegram_update(
         payload,
         sender=lambda chat_id, text: TelegramService().send_text(
