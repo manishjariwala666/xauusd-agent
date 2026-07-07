@@ -1,16 +1,19 @@
 """Telegram admin command control for the Master AI Orchestrator.
 
-This module is intentionally isolated from the existing Telegram reply agent.
-Existing Telegram message/reply behavior remains unchanged unless the webhook
-handler explicitly calls ``try_handle_telegram_update`` before passing a message
-to the normal conversation pipeline.
+Two-bot architecture:
+
+* ``TELEGRAM_BOT_TOKEN`` remains dedicated to the public Buy/Sell Signal Bot.
+* ``MASTER_AI_TELEGRAM_BOT_TOKEN`` is dedicated to the private Master AI Admin Bot.
+* ``/master`` commands are processed only in the Master AI bot context.
+* The signal/reply bot explicitly suppresses ``/master`` so it never replies to
+  admin commands and never leaks internals to public users.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from os import getenv
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Literal
 
 from services.master_orchestrator import (
     OrchestrationProgress,
@@ -22,6 +25,14 @@ from services.orchestration_redaction import redact_value
 SAFE_TELEGRAM_ERROR = "⚠️ Service temporarily unavailable. Please try again later."
 MASTER_COMMAND = "/master"
 
+SIGNAL_BOT = "SIGNAL"
+MASTER_AI_BOT = "MASTER_AI"
+SIGNAL_WEBHOOK_PATH = "/webhooks/telegram"
+MASTER_WEBHOOK_PATH = "/webhooks/telegram/master"
+SIGNAL_BOT_TOKEN_ENV = "TELEGRAM_BOT_TOKEN"
+MASTER_AI_BOT_TOKEN_ENV = "MASTER_AI_TELEGRAM_BOT_TOKEN"
+
+TelegramBotRole = Literal["SIGNAL", "MASTER_AI"]
 Sender = Callable[[int | str, str], None]
 Runner = Callable[..., OrchestrationProgress]
 StatusLoader = Callable[..., list[dict[str, Any]]]
@@ -37,6 +48,7 @@ class MasterTelegramCommandResult:
     status: str = "IGNORED"
     run_id: int | None = None
     task_type: str | None = None
+    bot_role: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,19 +98,52 @@ def try_handle_telegram_update(
     supabase: Any | None = None,
     runner: Runner = create_and_start_master_task,
     status_loader: StatusLoader = list_orchestration_runs,
+    bot_role: TelegramBotRole = MASTER_AI_BOT,
 ) -> MasterTelegramCommandResult:
-    """Handle a Telegram update only when it contains a ``/master`` command.
+    """Safely route one Telegram update under the two-bot architecture.
 
-    Return ``handled=False`` for every non-Master-AI message so the existing
-    Telegram reply agent can continue to process it unchanged.
+    ``bot_role=MASTER_AI`` is for ``/webhooks/telegram/master`` and treats every
+    update as handled so public buy/sell logic can never run in the Master AI
+    bot. ``bot_role=SIGNAL`` is for the existing ``/webhooks/telegram`` endpoint;
+    it silently consumes ``/master`` commands and returns ``handled=False`` for
+    all other messages so the existing reply/signal bot behavior is unchanged.
     """
     parsed = _extract_message(update)
     if parsed is None:
-        return MasterTelegramCommandResult(handled=False)
+        return MasterTelegramCommandResult(
+            handled=bot_role == MASTER_AI_BOT,
+            status="IGNORED_EMPTY_UPDATE",
+            bot_role=bot_role,
+        )
 
     text = parsed["text"]
+    if bot_role == SIGNAL_BOT:
+        if is_master_command(text):
+            # Public signal/reply bot must not respond to Master AI commands and
+            # must not pass them to the existing Telegram reply agent.
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=None,
+                chat_id=parsed.get("chat_id"),
+                status="IGNORED_WRONG_BOT",
+                bot_role=SIGNAL_BOT,
+            )
+        return MasterTelegramCommandResult(
+            handled=False,
+            chat_id=parsed.get("chat_id"),
+            status="PASS_TO_SIGNAL_BOT",
+            bot_role=SIGNAL_BOT,
+        )
+
+    # Master AI bot endpoint: do not allow public signal/reply behavior here.
     if not is_master_command(text):
-        return MasterTelegramCommandResult(handled=False, chat_id=parsed.get("chat_id"))
+        return MasterTelegramCommandResult(
+            handled=True,
+            response_text=None,
+            chat_id=parsed.get("chat_id"),
+            status="IGNORED_NON_MASTER_COMMAND",
+            bot_role=MASTER_AI_BOT,
+        )
 
     result = handle_master_command_text(
         text=text,
@@ -108,12 +153,20 @@ def try_handle_telegram_update(
         runner=runner,
         status_loader=status_loader,
     )
+    result = MasterTelegramCommandResult(
+        handled=result.handled,
+        response_text=result.response_text,
+        chat_id=result.chat_id,
+        status=result.status,
+        run_id=result.run_id,
+        task_type=result.task_type,
+        bot_role=MASTER_AI_BOT,
+    )
     if sender is not None and result.response_text is not None and result.chat_id is not None:
         try:
             sender(result.chat_id, result.response_text)
         except Exception:
-            # Telegram send failures must not leak implementation details and
-            # must not fall through to the normal reply agent.
+            # Telegram send failures must not expose tokens/raw exceptions.
             return MasterTelegramCommandResult(
                 handled=True,
                 response_text=SAFE_TELEGRAM_ERROR,
@@ -121,6 +174,7 @@ def try_handle_telegram_update(
                 status="ERROR",
                 run_id=result.run_id,
                 task_type=result.task_type,
+                bot_role=MASTER_AI_BOT,
             )
     return result
 
@@ -251,6 +305,13 @@ def help_text() -> str:
     )
 
 
+def get_telegram_bot_token_env(bot_role: TelegramBotRole) -> str:
+    """Return the environment variable name for a bot role without reading it."""
+    if bot_role == MASTER_AI_BOT:
+        return MASTER_AI_BOT_TOKEN_ENV
+    return SIGNAL_BOT_TOKEN_ENV
+
+
 def _status_text(rows: Iterable[dict[str, Any]]) -> str:
     safe_rows = list(rows or [])
     if not safe_rows:
@@ -308,13 +369,9 @@ def _is_authorized_admin(telegram_user_id: int | str | None) -> bool:
 
 
 def _allowed_admin_user_ids() -> set[str]:
+    """Load Telegram admin IDs from TELEGRAM_ADMIN_USER_ID(S) only."""
     values: list[str] = []
-    for name in (
-        "TELEGRAM_ADMIN_USER_ID",
-        "TELEGRAM_ADMIN_USER_IDS",
-        "MASTER_AI_TELEGRAM_ADMIN_USER_ID",
-        "MASTER_AI_TELEGRAM_ADMIN_USER_IDS",
-    ):
+    for name in ("TELEGRAM_ADMIN_USER_ID", "TELEGRAM_ADMIN_USER_IDS"):
         raw = getenv(name)
         if raw:
             values.extend(raw.replace(";", ",").split(","))
@@ -323,12 +380,7 @@ def _allowed_admin_user_ids() -> set[str]:
         from config import get_settings
 
         settings = get_settings()
-        for attr in (
-            "telegram_admin_user_id",
-            "telegram_admin_user_ids",
-            "master_ai_telegram_admin_user_id",
-            "master_ai_telegram_admin_user_ids",
-        ):
+        for attr in ("telegram_admin_user_id", "telegram_admin_user_ids"):
             raw = getattr(settings, attr, None)
             if raw:
                 if isinstance(raw, (list, tuple, set)):
@@ -365,6 +417,7 @@ def _record_command_memory_and_event(
                 "status": status,
                 "telegram_user_id": str(telegram_user_id or ""),
                 "target": target,
+                "bot_role": MASTER_AI_BOT,
             }
         )
         with session_scope() as session:

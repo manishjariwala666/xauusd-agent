@@ -6,7 +6,9 @@ from dataclasses import dataclass
 
 from services.master_orchestrator import OrchestrationProgress
 from services.telegram_master_ai_control import (
+    MASTER_AI_BOT,
     SAFE_TELEGRAM_ERROR,
+    SIGNAL_BOT,
     handle_master_command_text,
     help_text,
     is_master_command,
@@ -37,6 +39,10 @@ class FakeRunner:
             completed_steps=2,
             total_steps=2,
         )
+
+
+def update(text: str, *, user_id: int = 1001, chat_id: int = 1) -> dict:
+    return {"message": {"text": text, "chat": {"id": chat_id}, "from": {"id": user_id}}}
 
 
 def test_master_command_parser_accepts_bot_suffix() -> None:
@@ -74,13 +80,12 @@ def test_non_admin_is_blocked(monkeypatch) -> None:
     assert runner.calls == []
 
 
-def test_run_blog_routes_to_master_orchestrator(monkeypatch) -> None:
+def test_run_blog_routes_to_master_orchestrator_on_master_bot(monkeypatch) -> None:
     monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
     runner = FakeRunner()
-    result = handle_master_command_text(
-        text="/master run blog",
-        telegram_user_id=1001,
-        chat_id=55,
+    result = try_handle_telegram_update(
+        update("/master run blog", user_id=1001, chat_id=55),
+        bot_role=MASTER_AI_BOT,
         runner=runner,
     )
     assert result.handled is True
@@ -133,15 +138,17 @@ def test_service_exception_returns_fixed_telegram_error(monkeypatch) -> None:
     assert "traceback" not in result.response_text.lower()
 
 
-def test_try_handle_update_does_not_replace_reply_agent(monkeypatch) -> None:
+def test_signal_bot_does_not_replace_reply_agent_except_master_suppression(monkeypatch) -> None:
     monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
-    ignored = try_handle_telegram_update({"message": {"text": "hello", "chat": {"id": 1}, "from": {"id": 1001}}})
+    ignored = try_handle_telegram_update(update("hello"), bot_role=SIGNAL_BOT)
     assert ignored.handled is False
 
     sent: list[tuple[int | str, str]] = []
     handled = try_handle_telegram_update(
-        {"message": {"text": "/master help", "chat": {"id": 1}, "from": {"id": 1001}}},
+        update("/master help"),
+        bot_role=SIGNAL_BOT,
         sender=lambda chat_id, text: sent.append((chat_id, text)),
     )
     assert handled.handled is True
-    assert sent and sent[0][0] == 1
+    assert handled.status == "IGNORED_WRONG_BOT"
+    assert sent == []
