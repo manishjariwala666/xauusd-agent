@@ -18,7 +18,10 @@ from core.database import session_scope
 from services.conversation_service import record_inbound_message
 from services.migration_service import apply_pending_migrations
 from services.telegram_master_ai_control import try_handle_telegram_update
-from services.telegram_master_ai_webhook import router as telegram_master_ai_router
+from services.telegram_master_ai_webhook import (
+    handle_master_telegram_webhook,
+    handle_signal_telegram_master_command_guard,
+)
 from services.telegram_service import TelegramService
 
 
@@ -37,7 +40,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(telegram_master_ai_router)
 
 
 @app.get("/health")
@@ -58,6 +60,23 @@ def sitemap() -> Response:
 def robots() -> Response:
     """Serve the latest SEO-agent generated crawler rules."""
     return Response(_public_setting("SEO_ROBOTS_TXT"), media_type="text/plain")
+
+
+
+@app.post("/webhooks/telegram/master")
+async def telegram_master_ai_webhook(
+    request: Request,
+    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Receive Master AI Telegram bot updates."""
+    expected = get_settings().telegram_webhook_secret
+    if not expected:
+        raise HTTPException(503, "Telegram webhook is not configured.")
+    if not hmac.compare_digest(x_telegram_bot_api_secret_token or "", expected):
+        raise HTTPException(403, "Invalid webhook signature.")
+
+    payload = await request.json()
+    return handle_master_telegram_webhook(payload)
 
 
 @app.post("/webhooks/telegram")
