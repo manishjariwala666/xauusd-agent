@@ -81,13 +81,70 @@ RUN_TARGETS: dict[str, MasterRunTarget] = {
     "blog": MasterRunTarget(
         task_type="BLOG",
         title="AI blog workflow",
-        objective="Run the AI blog/content worker agent workflow.",
+        objective=(
+            "Run the SEO blog/content workflow. Include title, meta title, "
+            "meta description, slug, category, region, topic, featured image "
+            "brief, thumbnail brief, and landscape card preview metadata."
+        ),
     ),
     "image": MasterRunTarget(
         task_type="IMAGE",
         title="Image generation workflow",
         objective="Run the image/content creative worker agent workflow.",
     ),
+}
+
+RUN_TARGET_ALIASES: dict[str, str] = {
+    "daily": "daily_content",
+    "daily_content": "daily_content",
+    "dailycontent": "daily_content",
+    "dialy_content": "daily_content",
+    "daliy_content": "daily_content",
+    "daily_post": "daily_content",
+    "content_package": "daily_content",
+    "signal": "signal",
+    "signals": "signal",
+    "xauusd_signal": "signal",
+    "buy_sell": "signal",
+    "blog": "blog",
+    "seo": "blog",
+    "seo_blog": "blog",
+    "article": "blog",
+    "post": "blog",
+    "news": "blog",
+    "content": "blog",
+    "market_news": "blog",
+    "crypto_news": "blog",
+    "xauusd_news": "blog",
+    "image": "image",
+    "img": "image",
+    "photo": "image",
+    "thumbnail": "image",
+    "creative": "image",
+}
+
+REGION_KEYWORDS: dict[str, str] = {
+    "usa": "USA",
+    "us": "USA",
+    "america": "USA",
+    "europe": "Europe",
+    "eu": "Europe",
+    "japan": "Japan",
+    "india": "India",
+    "global": "Global",
+    "world": "Global",
+}
+
+TOPIC_KEYWORDS: dict[str, str] = {
+    "xauusd": "XAUUSD",
+    "gold": "Gold",
+    "crypto": "Crypto",
+    "bitcoin": "Crypto",
+    "btc": "Crypto",
+    "forex": "Forex",
+    "market": "Market",
+    "stock": "Stock Market",
+    "seo": "SEO",
 }
 
 
@@ -136,7 +193,8 @@ def try_handle_telegram_update(
         )
 
     # Master AI bot endpoint: do not allow public signal/reply behavior here.
-    if not is_master_command(text):
+    # Natural admin text is accepted only when it looks like a real Master AI task.
+    if not is_master_command(text) and not _looks_like_master_natural_command(text):
         return MasterTelegramCommandResult(
             handled=True,
             response_text=None,
@@ -189,8 +247,16 @@ def handle_master_command_text(
     status_loader: StatusLoader = list_orchestration_runs,
 ) -> MasterTelegramCommandResult:
     """Parse and execute one Telegram Master AI admin command."""
+    original_text = str(text or "").strip()
+    text = _normalize_master_command_text(original_text)
     if not is_master_command(text):
-        return MasterTelegramCommandResult(handled=False, chat_id=chat_id)
+        inferred_target = _infer_run_target(text)
+        if inferred_target:
+            text = f"{MASTER_COMMAND} run {inferred_target}"
+        elif _looks_like_master_natural_command(text):
+            text = f"{MASTER_COMMAND} {text}"
+        else:
+            return MasterTelegramCommandResult(handled=False, chat_id=chat_id)
 
     if not _is_authorized_admin(telegram_user_id):
         return MasterTelegramCommandResult(
@@ -225,13 +291,16 @@ def handle_master_command_text(
                     status="INVALID_COMMAND",
                 )
             run_target = RUN_TARGETS[target]
+            context = _command_context(original_text=original_text, target=target)
             progress = runner(
                 task_type=run_target.task_type,
                 title=run_target.title,
                 input_payload={
-                    "objective": run_target.objective,
+                    "objective": _objective_with_context(run_target.objective, context),
                     "telegram_command": f"/master run {target}",
+                    "telegram_raw_text": original_text,
                     "telegram_target": target,
+                    "telegram_context": context,
                     "telegram_user_id": str(telegram_user_id or ""),
                     "parallel": run_target.parallel,
                     "max_attempts": run_target.max_attempts,
@@ -274,23 +343,160 @@ def handle_master_command_text(
 
 
 def is_master_command(text: str | None) -> bool:
-    """Return True for /master commands, including bot-name suffixes."""
+    """Return True for /master commands, including common typo variants."""
     if not text:
         return False
     first = str(text).strip().split(maxsplit=1)[0].lower()
-    return first == MASTER_COMMAND or first.startswith(f"{MASTER_COMMAND}@")
+    command = first.split("@", 1)[0]
+    return command in {MASTER_COMMAND, "/mastr", "/mster", "master", "mastr"}
 
 
 def parse_master_command(text: str) -> tuple[str, str | None]:
-    """Parse supported Master AI command shape."""
-    parts = str(text or "").strip().split()
+    """Parse exact, typo, alias, and natural Master AI command shapes."""
+    normalized = _normalize_master_command_text(text)
+    parts = str(normalized or "").strip().split()
     if not parts or not is_master_command(parts[0]):
         return "", None
     if len(parts) == 1:
         return "help", None
-    command = parts[1].lower()
-    target = parts[2].lower() if len(parts) >= 3 else None
-    return command, target
+
+    remainder = " ".join(parts[1:]).strip()
+    if not remainder:
+        return "help", None
+
+    first, _, tail = remainder.partition(" ")
+    command = first.lower().strip()
+    tail = tail.strip()
+
+    if command in {"help", "h", "?", "commands"}:
+        return "help", None
+    if command in {"status", "st", "health"}:
+        return "status", None
+    if command in {"run", "start", "create", "make", "generate", "post", "publish", "do", "execute"}:
+        target = _normalize_run_target(tail)
+        return ("run", target) if target else ("help", None)
+
+    target = _normalize_run_target(remainder)
+    if target:
+        return "run", target
+
+    return command, tail or None
+
+
+def _normalize_master_command_text(text: str | None) -> str:
+    value = str(text or "").strip()
+    if not value:
+        return ""
+    first, sep, rest = value.partition(" ")
+    command = first.lower().split("@", 1)[0]
+    if command in {"/mastr", "/mster", "master", "mastr"}:
+        return f"{MASTER_COMMAND}{sep}{rest}".strip()
+    return value
+
+
+def _normalize_run_target(value: str | None) -> str | None:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return None
+
+    clean = raw.replace("-", "_").replace("/", " ").strip()
+    compact = "_".join(clean.split())
+
+    for candidate in (clean, compact, compact.replace("_", "")):
+        if candidate in RUN_TARGET_ALIASES:
+            return RUN_TARGET_ALIASES[candidate]
+
+    if "daily" in clean and "content" in clean:
+        return "daily_content"
+    if any(word in clean for word in ("signal", "buy sell", "buy/sell", "entry", "target", "sl", "tp")):
+        return "signal"
+    if any(word in clean for word in ("image", "photo", "thumbnail", "creative", "poster")) and not any(
+        word in clean for word in ("blog", "seo", "news", "article", "post")
+    ):
+        return "image"
+    if any(word in clean for word in (
+        "blog", "seo", "news", "article", "post", "content",
+        "crypto", "xauusd", "gold", "forex", "market", "usa",
+        "europe", "japan", "india",
+    )):
+        return "blog"
+    return None
+
+
+def _infer_run_target(text: str | None) -> str | None:
+    return _normalize_run_target(text)
+
+
+def _looks_like_master_natural_command(text: str | None) -> bool:
+    value = str(text or "").strip().lower()
+    if not value:
+        return False
+    if is_master_command(value):
+        return True
+    if value in {"status", "help", "commands"}:
+        return True
+    return _infer_run_target(value) is not None
+
+
+def _command_context(*, original_text: str, target: str) -> dict[str, Any]:
+    value = str(original_text or "")
+    lower = value.lower()
+
+    regions: list[str] = []
+    for keyword, region in REGION_KEYWORDS.items():
+        if keyword in lower and region not in regions:
+            regions.append(region)
+
+    topics: list[str] = []
+    for keyword, topic in TOPIC_KEYWORDS.items():
+        if keyword in lower and topic not in topics:
+            topics.append(topic)
+
+    image_required = target in {"image", "blog", "daily_content"} or any(
+        word in lower for word in ("image", "photo", "thumbnail", "poster", "creative", "landscape")
+    )
+    seo_enabled = target in {"blog", "daily_content"} or "seo" in lower
+
+    return {
+        "raw_request": value,
+        "target": target,
+        "regions": regions or (["Global"] if target in {"blog", "daily_content"} else []),
+        "topics": topics,
+        "seo_enabled": seo_enabled,
+        "image_required": image_required,
+        "admin_panel_layout": "landscape_card_with_small_thumbnail",
+        "required_blog_fields": [
+            "title",
+            "meta_title",
+            "meta_description",
+            "slug",
+            "category",
+            "region",
+            "topic",
+            "featured_image",
+            "thumbnail",
+            "seo_keywords",
+            "content_body",
+            "status",
+        ],
+    }
+
+
+def _objective_with_context(base_objective: str, context: dict[str, Any]) -> str:
+    regions = ", ".join(context.get("regions") or []) or "Global"
+    topics = ", ".join(context.get("topics") or []) or "General market"
+    return (
+        f"{base_objective}\n"
+        f"User request: {context.get('raw_request') or ''}\n"
+        f"Topics: {topics}\n"
+        f"Regions: {regions}\n"
+        f"SEO enabled: {bool(context.get('seo_enabled'))}\n"
+        f"Image required: {bool(context.get('image_required'))}\n"
+        "When creating website/blog content, prepare admin-ready metadata: "
+        "title, meta title, meta description, slug, category, region, topic, "
+        "SEO keywords, featured image brief, thumbnail brief, landscape card preview, "
+        "content body, and draft/published status."
+    )
 
 
 def help_text() -> str:
