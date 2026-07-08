@@ -57,6 +57,7 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
     slug = _slugify(str(generated["slug"] or generated["title"]))
     publish = bool(payload.get("publish", False))
     with session_scope() as session:
+        slug = _unique_slug(session, slug)
         category_id = session.execute(
             text(
                 "SELECT id FROM public.content_categories "
@@ -759,3 +760,22 @@ def _write_seo_files() -> None:
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return slug[:180] or f"post-{int(datetime.now().timestamp())}"
+
+
+def _unique_slug(session: Any, base_slug: str) -> str:
+    from sqlalchemy import text
+
+    clean = (base_slug or f"post-{int(datetime.now().timestamp())}").strip("-")
+    clean = clean[:170] or f"post-{int(datetime.now().timestamp())}"
+
+    candidate = clean
+    suffix = 2
+
+    while session.execute(
+        text("SELECT 1 FROM public.content_seo WHERE slug = :slug LIMIT 1"),
+        {"slug": candidate},
+    ).scalar() is not None:
+        candidate = f"{clean}-{suffix}"
+        suffix += 1
+
+    return candidate
