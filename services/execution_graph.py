@@ -221,17 +221,17 @@ class ExecutionGraphService:
                     SET status = :status,
                         attempt_count = CASE WHEN :status = 'RUNNING'
                             THEN attempt_count + 1 ELSE attempt_count END,
-                        output_summary = COALESCE(:output_summary, output_summary),
+                        output_summary = COALESCE(CAST(:output_summary AS TEXT), output_summary),
                         output_payload_redacted = COALESCE(
                             CAST(:output_payload_redacted AS JSONB),
                             output_payload_redacted
                         ),
-                        records_processed = COALESCE(:records_processed, records_processed),
-                        db_tables_written = COALESCE(:db_tables_written, db_tables_written),
-                        external_services_called = COALESCE(:external_services_called, external_services_called),
+                        records_processed = COALESCE(CAST(:records_processed AS INTEGER), records_processed),
+                        db_tables_written = COALESCE(CAST(:db_tables_written AS TEXT[]), db_tables_written),
+                        external_services_called = COALESCE(CAST(:external_services_called AS TEXT[]), external_services_called),
                         generated_files = CASE WHEN :generated_files IS NULL
                             THEN generated_files ELSE CAST(:generated_files AS JSONB) END,
-                        setup_warnings = COALESCE(:setup_warnings, setup_warnings),
+                        setup_warnings = COALESCE(CAST(:setup_warnings AS TEXT[]), setup_warnings),
                         safe_error = :safe_error,
                         started_at = CASE WHEN :status = 'RUNNING' THEN COALESCE(started_at, NOW()) ELSE started_at END,
                         finished_at = CASE WHEN :status IN ('COMPLETED', 'FAILED', 'SKIPPED', 'CANCELLED', 'BLOCKED') THEN NOW() ELSE finished_at END,
