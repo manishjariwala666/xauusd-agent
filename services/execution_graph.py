@@ -229,8 +229,10 @@ class ExecutionGraphService:
                         records_processed = COALESCE(CAST(:records_processed AS INTEGER), records_processed),
                         db_tables_written = COALESCE(CAST(:db_tables_written AS TEXT[]), db_tables_written),
                         external_services_called = COALESCE(CAST(:external_services_called AS TEXT[]), external_services_called),
-                        generated_files = CASE WHEN :generated_files IS NULL
-                            THEN generated_files ELSE CAST(:generated_files AS JSONB) END,
+                        generated_files = COALESCE(
+                            CAST(:generated_files AS JSONB),
+                            generated_files
+                        ),
                         setup_warnings = COALESCE(CAST(:setup_warnings AS TEXT[]), setup_warnings),
                         safe_error = :safe_error,
                         started_at = CASE WHEN :status = 'RUNNING' THEN COALESCE(started_at, NOW()) ELSE started_at END,
