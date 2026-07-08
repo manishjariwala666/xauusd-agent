@@ -435,7 +435,29 @@ def _looks_like_master_natural_command(text: str | None) -> bool:
         return True
     if value in {"status", "help", "commands"}:
         return True
-    return _infer_run_target(value) is not None
+
+    # Do not treat public buy/sell signal text as a Master AI instruction.
+    signal_only_terms = {"buy", "sell", "sl", "tp", "entry", "target"}
+    words = {word.strip(".,:;!?()[]{}") for word in value.replace("/", " ").split()}
+    if words & signal_only_terms and not any(
+        intent in value
+        for intent in (
+            "run", "start", "create", "make", "generate", "post", "publish",
+            "banao", "banavo", "chalao", "karo", "blog", "seo", "news",
+            "article", "content", "image", "daily"
+        )
+    ):
+        return False
+
+    return any(
+        intent in value
+        for intent in (
+            "run", "start", "create", "make", "generate", "post", "publish",
+            "banao", "banavo", "chalao", "karo", "blog", "seo", "news",
+            "article", "content", "image", "daily", "crypto", "xauusd",
+            "gold", "forex", "usa", "europe", "japan", "india"
+        )
+    )
 
 
 def _command_context(*, original_text: str, target: str) -> dict[str, Any]:
