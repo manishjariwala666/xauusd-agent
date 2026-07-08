@@ -222,8 +222,10 @@ class ExecutionGraphService:
                         attempt_count = CASE WHEN :status = 'RUNNING'
                             THEN attempt_count + 1 ELSE attempt_count END,
                         output_summary = COALESCE(:output_summary, output_summary),
-                        output_payload_redacted = CASE WHEN :output_payload_redacted IS NULL
-                            THEN output_payload_redacted ELSE CAST(:output_payload_redacted AS JSONB) END,
+                        output_payload_redacted = COALESCE(
+                            CAST(:output_payload_redacted AS JSONB),
+                            output_payload_redacted
+                        ),
                         records_processed = COALESCE(:records_processed, records_processed),
                         db_tables_written = COALESCE(:db_tables_written, db_tables_written),
                         external_services_called = COALESCE(:external_services_called, external_services_called),
