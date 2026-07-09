@@ -40,6 +40,9 @@ from services.google_sheets import GoogleSheetsService
 from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
 from user.dashboard import render_signal_feed
+import os
+import re
+from urllib.parse import quote
 
 
 def render_admin_dashboard(supabase: Any) -> None:
@@ -213,6 +216,79 @@ def _render_payment_reviews() -> None:
                         st.rerun()
 
 
+
+def _content_public_url(item: dict[str, Any]) -> str:
+    """Build public Streamlit article URL for a content row."""
+    slug = str(
+        item.get("seo_slug")
+        or item.get("slug")
+        or item.get("id")
+        or ""
+    ).strip()
+    if not slug:
+        return ""
+
+    base_url = (
+        os.getenv("PUBLIC_SITE_URL")
+        or os.getenv("STREAMLIT_PUBLIC_URL")
+        or "https://xauusd-buy-sell-signal.streamlit.app"
+    ).rstrip("/")
+
+    return f"{base_url}/?post={quote(slug)}"
+
+
+def _content_duplicate_key(item: dict[str, Any]) -> str:
+    """Group duplicates by content type + normalized title."""
+    content_type = str(item.get("content_type") or "").strip()
+    title = str(item.get("title") or "").strip().lower()
+    title = re.sub(r"[^a-z0-9]+", " ", title).strip()
+    return f"{content_type}:{title or item.get('id')}"
+
+
+def _duplicate_content_groups(items: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        if item.get("content_type") == "PROFIT_SCREENSHOT":
+            continue
+        key = _content_duplicate_key(item)
+        groups.setdefault(key, []).append(item)
+
+    duplicate_groups = [group for group in groups.values() if len(group) > 1]
+    for group in duplicate_groups:
+        group.sort(
+            key=lambda row: str(row.get("published_at") or row.get("created_at") or ""),
+            reverse=True,
+        )
+    duplicate_groups.sort(key=lambda group: len(group), reverse=True)
+    return duplicate_groups
+
+
+def _update_content_publish_state(
+    item: dict[str, Any],
+    *,
+    is_public: bool,
+    is_published: bool,
+) -> None:
+    admin_id = get_current_user_id()
+    if admin_id is None:
+        st.error("Administrator session is invalid.")
+        return
+
+    save_content(
+        content_id=int(item["id"]),
+        content_type=str(item["content_type"]),
+        title=str(item["title"]),
+        excerpt=str(item.get("excerpt") or ""),
+        body=str(item.get("body") or ""),
+        category_id=item.get("category_id"),
+        image_url=str(item.get("image_url") or ""),
+        external_url=str(item.get("external_url") or ""),
+        is_public=is_public,
+        is_published=is_published,
+        created_by=admin_id,
+    )
+
+
 def _render_content_manager() -> None:
     st.subheader("Posts, Announcements, Advisory & Analysis")
     try:
@@ -222,6 +298,26 @@ def _render_content_manager() -> None:
         logger.exception("Admin content manager loading failed")
         st.error("Content manager is temporarily unavailable.")
         return
+
+    duplicate_groups = _duplicate_content_groups(items)
+    if duplicate_groups:
+        total_duplicates = sum(len(group) - 1 for group in duplicate_groups)
+        st.warning(
+            f"{total_duplicates} duplicate content records found. "
+            "Public page now hides duplicate cards, but you can unpublish old records here."
+        )
+        with st.expander("Review duplicate records", expanded=False):
+            for group in duplicate_groups[:12]:
+                latest = group[0]
+                st.markdown(f"**{latest.get('title', 'Untitled')}**")
+                for record in group:
+                    status = "Published" if record.get("is_published") else "Draft"
+                    visibility = "Public" if record.get("is_public") else "Private"
+                    st.write(
+                        f"#{record['id']} · {record.get('content_type')} · "
+                        f"{status} · {visibility} · "
+                        f"{record.get('published_at') or record.get('created_at') or ''}"
+                    )
 
     options = {"Create new": None}
     options.update(
@@ -233,6 +329,71 @@ def _render_content_manager() -> None:
     )
     selection = st.selectbox("Select content", list(options))
     selected = options[selection]
+
+    if selected:
+        st.markdown("#### Selected content tools")
+        tool_cols = st.columns(3)
+
+        public_url = _content_public_url(selected)
+        if public_url:
+            tool_cols[0].link_button(
+                "Open Public Article",
+                public_url,
+                use_container_width=True,
+            )
+
+        if selected.get("is_published"):
+            if tool_cols[1].button(
+                "Quick Unpublish",
+                key=f"quick_unpublish_{selected['id']}",
+                use_container_width=True,
+            ):
+                try:
+                    _update_content_publish_state(
+                        selected,
+                        is_public=bool(selected.get("is_public")),
+                        is_published=False,
+                    )
+                except Exception:
+                    logger.exception("Quick unpublish failed")
+                    st.error("Could not unpublish content.")
+                else:
+                    st.success("Content unpublished.")
+                    st.rerun()
+        else:
+            if tool_cols[1].button(
+                "Quick Publish",
+                key=f"quick_publish_{selected['id']}",
+                use_container_width=True,
+            ):
+                try:
+                    _update_content_publish_state(
+                        selected,
+                        is_public=True,
+                        is_published=True,
+                    )
+                except Exception:
+                    logger.exception("Quick publish failed")
+                    st.error("Could not publish content.")
+                else:
+                    st.success("Content published.")
+                    st.rerun()
+
+        if tool_cols[2].button(
+            "Refresh Content List",
+            key=f"refresh_content_{selected['id']}",
+            use_container_width=True,
+        ):
+            st.rerun()
+
+        if selected.get("image_url"):
+            st.caption("Image preview")
+            st.image(str(selected["image_url"]), width=320)
+        elif selected.get("content_type") == "AI_BLOG":
+            st.info(
+                "This AI blog has no image_url. Public page will show the fallback "
+                "XAUUSD research banner."
+            )
     category_options = {"Uncategorized": None}
     category_options.update(
         {category["title"]: category["id"] for category in categories}
