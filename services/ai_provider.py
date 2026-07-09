@@ -128,8 +128,54 @@ class AIProvider:
 
 
 def _extract_json(value: str) -> str:
-    cleaned = value.strip()
-    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.I)
-    cleaned = re.sub(r"\s*```$", "", cleaned)
-    start, end = cleaned.find("{"), cleaned.rfind("}")
-    return cleaned[start : end + 1] if start >= 0 and end > start else cleaned
+    """Extract one balanced JSON object from provider text, including markdown code fences."""
+    if value is None:
+        return ""
+
+    text_value = str(value).strip()
+
+    fenced = re.search(
+        r"```(?:json)?\s*(.*?)\s*```",
+        text_value,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if fenced:
+        text_value = fenced.group(1).strip()
+
+    if text_value.startswith("{") and text_value.endswith("}"):
+        return text_value
+
+    start = text_value.find("{")
+    if start < 0:
+        return text_value
+
+    depth = 0
+    in_string = False
+    escape = False
+
+    for index in range(start, len(text_value)):
+        char = text_value[index]
+
+        if escape:
+            escape = False
+            continue
+
+        if char == "\\" and in_string:
+            escape = True
+            continue
+
+        if char == '"':
+            in_string = not in_string
+            continue
+
+        if in_string:
+            continue
+
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text_value[start:index + 1]
+
+    return text_value
