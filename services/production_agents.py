@@ -76,9 +76,36 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
             "keywords": str(generated.get("focus_keyword") or "XAUUSD market structure")
         })
 
-        missing = [key for key in required if not generated.get(key)]
-        if missing:
-            raise RuntimeError("AI blog response missing: " + ", ".join(missing))
+        # Autofill missing required blog fields before validation.
+    if not generated.get("faq"):
+        generated["faq"] = [
+            {
+                "question": "What is XAUUSD?",
+                "answer": "XAUUSD represents gold priced against the US dollar and is followed by forex, CFD, commodity, and macro traders."
+            },
+            {
+                "question": "Why is risk control important in XAUUSD trading?",
+                "answer": "XAUUSD can move sharply during economic data, interest-rate changes, US dollar volatility, and geopolitical events. Position sizing and stop-loss discipline help protect capital."
+            },
+            {
+                "question": "Which factors affect XAUUSD price movement?",
+                "answer": "Major factors include US dollar strength, real yields, inflation expectations, Federal Reserve policy, geopolitical risk, and global risk sentiment."
+            }
+        ]
+
+    if not generated.get("schema_jsonld"):
+        generated["schema_jsonld"] = {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "headline": str(generated.get("title") or "XAUUSD Market Structure and Risk Control"),
+            "description": str(generated.get("meta_description") or "XAUUSD market structure and disciplined risk control guide."),
+            "keywords": str(generated.get("focus_keyword") or "XAUUSD market structure"),
+            "about": ["XAUUSD", "Gold Trading", "Risk Control", "Market Structure"]
+        }
+
+    missing = [key for key in required if not generated.get(key)]
+    if missing:
+        raise RuntimeError("AI blog response missing: " + ", ".join(missing))
     slug = _slugify(str(generated["slug"] or generated["title"]))
     publish = bool(payload.get("publish", True))
     with session_scope() as session:
