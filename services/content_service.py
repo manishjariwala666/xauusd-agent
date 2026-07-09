@@ -159,10 +159,22 @@ def list_content(
                            ci.excerpt, ci.body, ci.image_url, ci.external_url,
                            ci.is_public, ci.is_published, ci.published_at,
                            ci.created_at, cc.title AS category_title,
-                           cc.slug AS category_slug
+                           cc.slug AS category_slug,
+                           cs.slug AS seo_slug,
+                           cs.meta_title,
+                           cs.meta_description,
+                           cs.focus_keyword,
+                           cs.internal_links,
+                           cs.faq,
+                           cs.schema_jsonld,
+                           cs.open_graph,
+                           cs.twitter_card,
+                           cs.image_prompt
                     FROM public.content_items ci
                     LEFT JOIN public.content_categories cc
                       ON cc.id = ci.category_id
+                    LEFT JOIN public.content_seo cs
+                      ON cs.content_id = ci.id
                     {where_clause}
                     ORDER BY COALESCE(ci.published_at, ci.created_at) DESC
                     LIMIT :limit
