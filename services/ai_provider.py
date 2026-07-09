@@ -29,15 +29,26 @@ class AIProvider:
         user_instruction: str,
     ) -> dict[str, Any]:
         """Generate and strictly parse one JSON object."""
-        provider = self.settings.ai_provider
-        if provider == "OPENAI":
-            raw = self._openai_text(system_instruction, user_instruction)
-        elif provider == "GEMINI":
-            raw = self._gemini_text(system_instruction, user_instruction)
-        else:
-            raise ConfigurationError(
-                "AI_PROVIDER must be GEMINI or OPENAI."
-            )
+        provider = str(self.settings.ai_provider).upper()
+        try:
+            if provider == "OPENAI":
+                raw = self._openai_text(system_instruction, user_instruction)
+            elif provider == "GEMINI":
+                raw = self._gemini_text(system_instruction, user_instruction)
+            else:
+                raise ConfigurationError(
+                    "AI_PROVIDER must be GEMINI or OPENAI."
+                )
+        except Exception as exc:
+            fallback = _fallback_blog_payload(system_instruction, user_instruction)
+            if fallback is not None:
+                logger.warning(
+                    "AI provider unavailable; using deterministic blog fallback: {}",
+                    exc,
+                )
+                return fallback
+            raise
+
         try:
             extracted = _extract_json(raw)
             parsed = json.loads(extracted)
