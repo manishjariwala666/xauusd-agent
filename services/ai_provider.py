@@ -55,44 +55,35 @@ class AIProvider:
         self,
         *,
         prompt: str,
-        output_dir: Path,
-    ) -> Path:
-        """Generate a real image with OpenAI's image endpoint."""
-        if not self.settings.openai_api_key:
-            raise ConfigurationError(
-                "OPENAI_API_KEY is required for image generation."
-            )
-        response = requests.post(
-            "https://api.openai.com/v1/images/generations",
-            headers={
-                "Authorization": f"Bearer {self.settings.openai_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self.settings.ai_image_model,
-                "prompt": prompt,
-                "size": "1536x1024",
-                "quality": "medium",
-                "output_format": "png",
-            },
-            timeout=180,
+        output_dir: str | Path,
+        filename: str = "generated.png",
+    ) -> str:
+        """Generate an image with Gemini image generation instead of OpenAI."""
+        import base64
+        from pathlib import Path
+        from google import genai
+
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY is required for image generation.")
+
+        model = os.environ.get("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image")
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        file_path = output_path / filename
+
+        client = genai.Client(api_key=api_key)
+        interaction = client.interactions.create(
+            model=model,
+            input=prompt,
         )
-        if not response.ok:
-            raise RuntimeError(
-                f"OpenAI image API error {response.status_code}: {response.text[:2000]}"
-            )
-        data = response.json()["data"][0]
-        output_dir.mkdir(parents=True, exist_ok=True)
-        destination = output_dir / f"{uuid4().hex}.png"
-        if data.get("b64_json"):
-            destination.write_bytes(base64.b64decode(data["b64_json"]))
-        elif data.get("url"):
-            image = requests.get(data["url"], timeout=120)
-            image.raise_for_status()
-            destination.write_bytes(image.content)
-        else:
-            raise RuntimeError("Image provider returned no image data.")
-        return destination
+
+        image = getattr(interaction, "output_image", None)
+        if image is None or not getattr(image, "data", None):
+            raise RuntimeError("Gemini image API returned no image data.")
+
+        file_path.write_bytes(base64.b64decode(image.data))
+        return str(file_path)
 
     def _gemini_text(self, system: str, user: str) -> str:
         if not self.settings.gemini_api_key:
