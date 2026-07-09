@@ -212,6 +212,29 @@ def _fallback_blog_banner(title: str = "XAUUSD Market Research") -> None:
     )
 
 
+
+def _dedupe_research_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep latest unique research/blog cards by slug or normalized title."""
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+
+    for item in items:
+        key = (
+            str(item.get("seo_slug") or "").strip().lower()
+            or str(item.get("title") or "").strip().lower()
+        )
+        if not key:
+            key = str(item.get("id") or "").strip()
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        unique.append(item)
+
+    return unique
+
+
 def _render_content_detail(item: dict[str, Any]) -> None:
     title = str(item.get("title") or "Research Article")
     st.markdown(f'<h1 class="section-title">{html.escape(title)}</h1>', unsafe_allow_html=True)
@@ -258,6 +281,7 @@ def _render_research_content() -> None:
         key=lambda item: item.get("published_at") or item.get("created_at"),
         reverse=True,
     )
+    items = _dedupe_research_items(items)
 
     selected_post = _query_param_value("post")
     if selected_post:
