@@ -237,6 +237,16 @@ def try_handle_telegram_update(
     return result
 
 
+def _master_natural_commands_enabled() -> bool:
+    """Natural-language Master AI commands are disabled unless explicitly enabled."""
+    try:
+        from os import getenv
+        value = getenv("MASTER_AI_ALLOW_NATURAL_COMMANDS", "false")
+    except Exception:
+        value = "false"
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def handle_master_command_text(
     *,
     text: str,
@@ -250,6 +260,9 @@ def handle_master_command_text(
     original_text = str(text or "").strip()
     text = _normalize_master_command_text(original_text)
     if not is_master_command(text):
+        if not _master_natural_commands_enabled():
+            return MasterTelegramCommandResult(handled=False, chat_id=chat_id)
+
         inferred_target = _infer_run_target(text)
         if inferred_target:
             text = f"{MASTER_COMMAND} run {inferred_target}"

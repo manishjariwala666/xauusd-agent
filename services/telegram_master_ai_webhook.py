@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from os import getenv
 from typing import Any, Callable
+from time import time
 import json
 import urllib.error
 import urllib.request
@@ -28,6 +29,56 @@ from services.telegram_master_ai_control import (
 
 Sender = Callable[[int | str, str], None]
 
+_DEDUPE_TTL_SECONDS = 300
+_SEEN_MASTER_UPDATE_KEYS: dict[str, float] = {}
+
+
+def _master_update_key(update: dict[str, Any]) -> str:
+    """Build stable key for Telegram duplicate update protection."""
+    if not isinstance(update, dict):
+        return "invalid"
+
+    update_id = update.get("update_id")
+    message = (
+        update.get("message")
+        or update.get("edited_message")
+        or update.get("channel_post")
+        or update.get("callback_query", {}).get("message")
+        or {}
+    )
+    if not isinstance(message, dict):
+        message = {}
+
+    chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+    chat_id = chat.get("id", "")
+    message_id = message.get("message_id", "")
+    text = str(message.get("text") or message.get("caption") or "").strip()
+
+    if update_id is not None:
+        return f"update:{update_id}"
+    if chat_id and message_id:
+        return f"message:{chat_id}:{message_id}"
+    return f"text:{chat_id}:{text[:200]}"
+
+
+def _is_duplicate_master_update(update: dict[str, Any]) -> bool:
+    """Return True when Telegram retries/sends the same master update again."""
+    now = time()
+    expired = [
+        key for key, seen_at in _SEEN_MASTER_UPDATE_KEYS.items()
+        if now - seen_at > _DEDUPE_TTL_SECONDS
+    ]
+    for key in expired:
+        _SEEN_MASTER_UPDATE_KEYS.pop(key, None)
+
+    key = _master_update_key(update)
+    if key in _SEEN_MASTER_UPDATE_KEYS:
+        return True
+
+    _SEEN_MASTER_UPDATE_KEYS[key] = now
+    return False
+
+
 
 def handle_master_telegram_webhook(
     update: dict[str, Any],
@@ -39,6 +90,17 @@ def handle_master_telegram_webhook(
 ) -> dict[str, Any]:
     """Handle POST /webhooks/telegram/master without exposing internals."""
     try:
+        if _is_duplicate_master_update(update):
+            return {
+                "ok": True,
+                "webhook": MASTER_WEBHOOK_PATH,
+                "bot": "master_ai",
+                "handled": False,
+                "duplicate": True,
+                "status": "DUPLICATE_IGNORED",
+                "run_id": None,
+            }
+
         kwargs: dict[str, Any] = {
             "sender": sender or send_master_ai_bot_message,
             "supabase": supabase,
