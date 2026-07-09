@@ -53,6 +53,7 @@ def render_admin_dashboard(supabase: Any) -> None:
 
     st.markdown("## Administration Console")
     (
+        command_center_tab,
         overview_tab,
         payments_tab,
         content_tab,
@@ -64,6 +65,7 @@ def render_admin_dashboard(supabase: Any) -> None:
         ai_agents_tab,
     ) = st.tabs(
         [
+            "Command Center",
             "Overview",
             "Payments",
             "Content",
@@ -75,6 +77,8 @@ def render_admin_dashboard(supabase: Any) -> None:
             "AI Agents",
         ]
     )
+    with command_center_tab:
+        _render_command_center(supabase)
     with overview_tab:
         _render_overview()
     with payments_tab:
@@ -97,6 +101,249 @@ def render_admin_dashboard(supabase: Any) -> None:
         _render_telegram_test(supabase)
     with ai_agents_tab:
         _render_ai_agents(supabase)
+
+
+
+def _admin_public_site_url() -> str:
+    return (
+        os.getenv("PUBLIC_SITE_URL")
+        or os.getenv("STREAMLIT_PUBLIC_URL")
+        or "https://xauusd-buy-sell-signal.streamlit.app"
+    ).rstrip("/")
+
+
+def _agent_by_key(agents: list[dict[str, Any]], key: str) -> dict[str, Any] | None:
+    return next((agent for agent in agents if agent.get("agent_key") == key), None)
+
+
+def _status_badge(value: str | None) -> str:
+    normalized = str(value or "unknown").upper()
+    if normalized in {"IDLE", "SUCCESS", "COMPLETED", "OK"}:
+        return f"✅ {normalized}"
+    if normalized in {"RUNNING", "QUEUED", "PROCESSING"}:
+        return f"🟡 {normalized}"
+    if normalized in {"ERROR", "FAILED", "FAILURE"}:
+        return f"🔴 {normalized}"
+    return f"⚪ {normalized}"
+
+
+def _latest_run_summary(runs: list[dict[str, Any]], agent_name: str) -> dict[str, Any] | None:
+    wanted = agent_name.lower().replace("_", " ")
+    for run in runs:
+        name = str(run.get("display_name") or run.get("agent_key") or "").lower().replace("_", " ")
+        if wanted in name or name in wanted:
+            return run
+    return None
+
+
+def _render_command_center(supabase: Any) -> None:
+    """Owner-focused admin dashboard for daily operations."""
+    st.subheader("Command Center")
+    st.caption(
+        "Daily owner controls: Master AI, blogs, sheet sync, signals, and public website checks."
+    )
+
+    try:
+        agents = list_ai_agents()
+        runs = list_agent_runs(limit=12)
+        latest_blogs = list_content(content_type="AI_BLOG", public_only=False, limit=6)
+    except Exception:
+        logger.exception("Command center loading failed")
+        st.error("Command center could not load system status.")
+        return
+
+    blog_agent = _agent_by_key(agents, "ai_blog_agent")
+    signal_agent = _agent_by_key(agents, "signal_agent")
+    telegram_agent = _agent_by_key(agents, "telegram_reply_agent")
+    whatsapp_agent = _agent_by_key(agents, "whatsapp_reply_agent")
+
+    latest_blog = latest_blogs[0] if latest_blogs else None
+    latest_blog_status = "No blog"
+    if latest_blog:
+        latest_blog_status = (
+            "Published"
+            if latest_blog.get("is_published") and latest_blog.get("is_public")
+            else "Draft / Hidden"
+        )
+
+    card_cols = st.columns(4)
+    card_cols[0].metric(
+        "Master AI Blog",
+        _status_badge(blog_agent.get("status") if blog_agent else "missing"),
+        f"{blog_agent.get('success_count', 0) if blog_agent else 0} success",
+    )
+    card_cols[1].metric(
+        "Signal Agent",
+        _status_badge(signal_agent.get("status") if signal_agent else "missing"),
+        f"{signal_agent.get('success_count', 0) if signal_agent else 0} success",
+    )
+    card_cols[2].metric(
+        "Telegram / WhatsApp",
+        (
+            "✅ Ready"
+            if telegram_agent and whatsapp_agent
+            else "⚠️ Check setup"
+        ),
+        "reply agents",
+    )
+    card_cols[3].metric(
+        "Latest Blog",
+        latest_blog_status,
+        f"#{latest_blog.get('id')}" if latest_blog else "",
+    )
+
+    st.divider()
+
+    left, right = st.columns([1.1, 0.9])
+
+    with left:
+        st.markdown("### Quick Actions")
+
+        blog_topic = st.text_input(
+            "Blog topic",
+            value="XAUUSD market structure, risk control, and today market levels",
+            key="command_center_blog_topic",
+        )
+        publish_now = st.checkbox(
+            "Publish blog immediately",
+            value=True,
+            key="command_center_blog_publish",
+        )
+
+        action_cols = st.columns(2)
+
+        if action_cols[0].button(
+            "Run Blog Now",
+            type="primary",
+            use_container_width=True,
+            key="command_center_run_blog",
+        ):
+            admin_id = get_current_user_id()
+            if admin_id is None:
+                st.error("Administrator session is invalid.")
+            elif not blog_topic.strip():
+                st.warning("Enter a blog topic first.")
+            else:
+                with st.spinner("Running Blog Agent..."):
+                    succeeded, message = run_ai_agent(
+                        "ai_blog_agent",
+                        triggered_by=admin_id,
+                        supabase=supabase,
+                        payload={
+                            "topic": blog_topic.strip(),
+                            "publish": publish_now,
+                        },
+                    )
+                if succeeded:
+                    st.success(message)
+                else:
+                    st.error(message)
+
+        if action_cols[1].button(
+            "Sync Sheet Targets",
+            use_container_width=True,
+            key="command_center_sync_sheet",
+        ):
+            try:
+                from services.xauusd_sheet_signals import append_latest_targets_to_signals
+
+                with st.spinner("Reading Sheet1 and writing Signals tab..."):
+                    result = append_latest_targets_to_signals()
+            except ModuleNotFoundError:
+                st.warning(
+                    "Sheet target sync module is not installed yet. "
+                    "Next step: add services/xauusd_sheet_signals.py."
+                )
+            except Exception as exc:
+                logger.exception("Command center sheet sync failed")
+                st.error(f"Sheet sync failed: {exc}")
+            else:
+                st.success(
+                    f"Sheet sync completed: {result.get('appended', 0)} targets copied. "
+                    f"Day High: {result.get('day_high', '')} · "
+                    f"Day Low: {result.get('day_low', '')}"
+                )
+
+        more_cols = st.columns(2)
+        more_cols[0].link_button(
+            "Open Public Website",
+            _admin_public_site_url(),
+            use_container_width=True,
+        )
+        more_cols[1].link_button(
+            "Open Latest Blog",
+            (
+                _content_public_url(latest_blog)
+                if latest_blog
+                else _admin_public_site_url()
+            ),
+            use_container_width=True,
+        )
+
+    with right:
+        st.markdown("### Today Signal Preview")
+
+        if st.button(
+            "Preview Latest Sheet Targets",
+            use_container_width=True,
+            key="command_center_preview_sheet",
+        ):
+            try:
+                from services.xauusd_sheet_signals import read_latest_target_block
+
+                block = read_latest_target_block()
+            except ModuleNotFoundError:
+                st.info("Signal preview module will be added in the Sheet sync step.")
+            except Exception as exc:
+                logger.exception("Command center signal preview failed")
+                st.error(f"Could not preview Sheet targets: {exc}")
+            else:
+                summary = block.get("summary", {})
+                st.write(
+                    {
+                        "date": block.get("date"),
+                        "day_high": summary.get("Day High"),
+                        "day_low": summary.get("Day Low"),
+                        "buy_base": summary.get("Buy Base"),
+                        "sell_base": summary.get("Sell Base"),
+                        "mode": summary.get("Mode"),
+                    }
+                )
+                st.dataframe(block.get("targets", []), use_container_width=True)
+
+        st.markdown("### Latest Blog")
+        if latest_blog:
+            st.write(f"**{latest_blog.get('title')}**")
+            st.caption(
+                f"Status: {latest_blog_status} · "
+                f"Created: {latest_blog.get('created_at') or '-'}"
+            )
+            if latest_blog.get("image_url"):
+                st.image(str(latest_blog["image_url"]), use_container_width=True)
+            else:
+                st.info("No image_url. Public page uses fallback banner.")
+        else:
+            st.info("No blog content found yet.")
+
+    st.divider()
+    st.markdown("### Recent Activity")
+
+    activity: list[dict[str, Any]] = []
+    for run in runs[:8]:
+        activity.append(
+            {
+                "Run": f"#{run.get('id')}",
+                "Agent": run.get("display_name") or run.get("agent_key"),
+                "Status": run.get("status"),
+                "Started": run.get("started_at"),
+                "Summary": run.get("result") or run.get("error") or "",
+            }
+        )
+
+    if activity:
+        st.dataframe(activity, use_container_width=True, hide_index=True)
+    else:
+        st.info("No recent activity found.")
 
 
 def _render_overview() -> None:
