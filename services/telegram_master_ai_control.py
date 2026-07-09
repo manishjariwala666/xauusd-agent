@@ -11,6 +11,8 @@ Two-bot architecture:
 
 from __future__ import annotations
 
+from services.google_sheets_service import append_master_log
+
 from dataclasses import dataclass
 from os import getenv
 from typing import Any, Callable, Iterable, Literal
@@ -247,6 +249,30 @@ def _master_natural_commands_enabled() -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+
+def _log_master_command_to_sheet(
+    *,
+    command: str,
+    status: str,
+    run_id: int | str | None = None,
+    chat_id: int | str | None = None,
+    telegram_user_id: int | str | None = None,
+    notes: str = "",
+) -> None:
+    """Best-effort Google Sheet log. Never break Telegram command flow."""
+    try:
+        append_master_log(
+            command=command,
+            status=status,
+            run_id=run_id,
+            chat_id=chat_id,
+            user_id=telegram_user_id,
+            notes=notes,
+        )
+    except Exception:
+        return
+
+
 def handle_master_command_text(
     *,
     text: str,
@@ -289,6 +315,12 @@ def handle_master_command_text(
                 status="OK",
             )
         if command == "status":
+            _log_master_command_to_sheet(
+                command="/master status",
+                status="OK",
+                chat_id=chat_id,
+                telegram_user_id=telegram_user_id,
+            )
             return MasterTelegramCommandResult(
                 handled=True,
                 response_text=_status_text(status_loader(limit=5)),
@@ -329,6 +361,14 @@ def handle_master_command_text(
                 status=progress.status,
                 telegram_user_id=telegram_user_id,
                 target=target,
+            )
+            _log_master_command_to_sheet(
+                command=f"/master run {target}",
+                status=progress.status,
+                run_id=progress.run_id,
+                chat_id=chat_id,
+                telegram_user_id=telegram_user_id,
+                notes=f"target={target}",
             )
             return MasterTelegramCommandResult(
                 handled=True,
