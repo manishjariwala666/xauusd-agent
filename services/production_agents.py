@@ -130,15 +130,19 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
                 "image_prompt": str(generated.get("image_prompt") or "")[:2000],
             },
         )
-    image_result = run_image_agent(
-        {
-            "content_id": int(content_id),
-            "prompt": str(
-                generated.get("image_prompt")
-                or f"Professional financial editorial image for {topic}"
-            ),
-        }
-    )
+    try:
+        image_result = run_image_agent(
+            {
+                "content_id": int(content_id),
+                "prompt": str(
+                    generated.get("image_prompt")
+                    or f"Professional financial editorial image for {topic}"
+                ),
+            }
+        )
+    except Exception as exc:
+        logger.warning("Blog image generation skipped: {}", exc)
+        image_result = "Image generation skipped; blog content saved."
     return (
         f"SEO blog #{content_id} saved as "
         f"{'published' if publish else 'draft'}. {image_result}"
@@ -416,7 +420,11 @@ def run_image_agent(payload: dict[str, Any]) -> str:
     if not prompt:
         raise ValueError("Image prompt or content_id is required.")
     workdir = Path("/tmp/ai-market-analytics/images")
-    source = AIProvider().generate_image(prompt=prompt, output_dir=workdir)
+    try:
+        source = AIProvider().generate_image(prompt=prompt, output_dir=workdir)
+    except Exception as exc:
+        logger.warning("Image generation skipped: {}", exc)
+        return f"Image generation skipped: {exc}"
     image = Image.open(source).convert("RGB")
     banner = ImageOps.fit(image, (1536, 1024), method=Image.Resampling.LANCZOS)
     draw = ImageDraw.Draw(banner)

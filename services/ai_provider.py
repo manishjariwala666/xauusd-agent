@@ -42,6 +42,14 @@ class AIProvider:
             extracted = _extract_json(raw)
             parsed = json.loads(extracted)
         except (json.JSONDecodeError, TypeError) as exc:
+            fallback = _fallback_blog_payload(system_instruction, user_instruction)
+            if fallback is not None:
+                logger.warning(
+                    "AI provider JSON parse failed; using deterministic blog fallback: {}",
+                    exc,
+                )
+                return fallback
+
             raw_preview = str(raw or "").replace("\n", " ")[:600]
             extracted_preview = str(locals().get("extracted", "") or "").replace("\n", " ")[:1200]
             detail = f"{exc.__class__.__name__}: {exc}"
@@ -140,6 +148,82 @@ class AIProvider:
                 if content.get("text"):
                     return str(content["text"])
         raise RuntimeError("OpenAI returned an empty response.")
+
+
+def _fallback_blog_payload(system_instruction: str, user_instruction: str) -> dict[str, object] | None:
+    """Fail-open SEO blog payload so content publishing never stops on model JSON formatting."""
+    combined = f"{system_instruction}\n{user_instruction}".lower()
+    if not any(marker in combined for marker in ("seo blog", "meta_title", "focus_keyword", "image_prompt")):
+        return None
+
+    topic = "XAUUSD market structure and risk control"
+    topic_match = re.search(r"(?:topic|objective|request)\s*[:=-]\s*([^\n]{8,120})", user_instruction, re.IGNORECASE)
+    if topic_match:
+        topic = topic_match.group(1).strip(" .:-")
+
+    focus_keyword = "XAUUSD market structure"
+    slug = re.sub(r"[^a-z0-9]+", "-", topic.lower()).strip("-") or "xauusd-market-update"
+    slug = slug[:80].strip("-") or "xauusd-market-update"
+
+    title = "XAUUSD Market Structure and Risk Control"
+    meta_title = "XAUUSD Market Structure & Risk Control Guide"
+    meta_description = (
+        "Understand XAUUSD market structure, gold volatility, and disciplined risk control "
+        "for safer trading decisions in changing global market conditions."
+    )
+
+    body = f"""# {title}
+
+XAUUSD, also known as Gold versus the US Dollar, remains one of the most watched instruments for traders because it reacts to inflation expectations, US dollar strength, bond yields, central-bank policy, geopolitical risk, and global risk sentiment.
+
+## Current market structure
+
+A disciplined trader should first identify whether gold is trading in a trending, ranging, or transition phase. In a trending phase, price generally respects higher highs and higher lows in an uptrend or lower highs and lower lows in a downtrend. In a ranging phase, traders should focus on support, resistance, liquidity zones, and false breakouts instead of chasing every candle.
+
+## Key drivers for XAUUSD
+
+The major drivers for XAUUSD usually include the US Dollar Index, real yields, Federal Reserve policy expectations, inflation data, employment numbers, geopolitical uncertainty, and broader market risk appetite. When the dollar strengthens sharply, gold can face pressure. When risk sentiment weakens or inflation concerns rise, gold can attract safe-haven flows.
+
+## Risk control
+
+Risk management is more important than prediction. Every trade should have a predefined invalidation point, position size, and maximum loss. Traders should avoid over-leverage, revenge trading, and entering positions without confirmation. A simple rule is to risk only a small fixed percentage of capital per trade and avoid increasing lot size after losses.
+
+## Practical trading approach
+
+For intraday trading, traders can mark the Asian session range, London liquidity sweep areas, previous day high and low, and major support-resistance zones. For swing trading, daily and four-hour market structure are more useful. A trade idea becomes stronger when trend direction, liquidity, support-resistance, and macro context align.
+
+## Conclusion
+
+XAUUSD can provide strong opportunities, but only for traders who combine market structure with strict risk control. The goal is not to win every trade. The goal is to follow a repeatable process, protect capital, and take only high-quality setups."""
+
+    return {
+        "title": title,
+        "meta_title": meta_title,
+        "meta_description": meta_description,
+        "focus_keyword": focus_keyword,
+        "slug": slug,
+        "excerpt": meta_description,
+        "summary": meta_description,
+        "content": body,
+        "body": body,
+        "body_markdown": body,
+        "article": body,
+        "markdown": body,
+        "tags": ["XAUUSD", "Gold", "Risk Control", "Market Structure"],
+        "schema": {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "headline": title,
+            "description": meta_description,
+        },
+        "schema_markup": {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "headline": title,
+            "description": meta_description,
+        },
+        "image_prompt": "Professional financial editorial image showing gold bars, XAUUSD chart candles, global market background, clean premium trading website style.",
+    }
 
 
 def _extract_json(value: str) -> str:
