@@ -156,14 +156,125 @@ def _render_announcements() -> None:
             st.write(item.get("excerpt") or item.get("body") or "")
 
 
+
+def _query_param_value(name: str) -> str:
+    """Return one Streamlit query param value across old/new Streamlit APIs."""
+    try:
+        value = st.query_params.get(name, "")
+        if isinstance(value, list):
+            return str(value[0]) if value else ""
+        return str(value or "")
+    except Exception:
+        try:
+            params = st.experimental_get_query_params()
+            values = params.get(name, [])
+            return str(values[0]) if values else ""
+        except Exception:
+            return ""
+
+
+def _content_slug(item: dict[str, Any]) -> str:
+    return str(
+        item.get("seo_slug")
+        or item.get("slug")
+        or item.get("id")
+        or ""
+    ).strip()
+
+
+def _fallback_blog_banner(title: str = "XAUUSD Market Research") -> None:
+    safe_title = html.escape(title or "XAUUSD Market Research")
+    st.markdown(
+        f"""
+        <div style="
+            min-height: 150px;
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 14px;
+            background:
+                radial-gradient(circle at top left, rgba(245, 158, 11, .35), transparent 32%),
+                linear-gradient(135deg, #101827 0%, #1f2937 48%, #3b2404 100%);
+            border: 1px solid rgba(255,255,255,.14);
+            display: flex;
+            align-items: end;
+        ">
+            <div>
+                <div style="font-size: 12px; letter-spacing: .16em; color: #fbbf24; font-weight: 700;">
+                    XAUUSD RESEARCH
+                </div>
+                <div style="font-size: 22px; line-height: 1.25; color: white; font-weight: 800; margin-top: 8px;">
+                    {safe_title}
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_content_detail(item: dict[str, Any]) -> None:
+    title = str(item.get("title") or "Research Article")
+    st.markdown(f'<h1 class="section-title">{html.escape(title)}</h1>', unsafe_allow_html=True)
+
+    if item.get("image_url"):
+        st.image(str(item["image_url"]), use_container_width=True)
+    else:
+        _fallback_blog_banner(title)
+
+    meta_parts = [
+        str(item.get("content_type") or "").replace("_", " "),
+        str(item.get("category_title") or ""),
+        str(item.get("published_at") or item.get("created_at") or ""),
+    ]
+    meta = " · ".join(part for part in meta_parts if part)
+    if meta:
+        st.caption(meta)
+
+    excerpt = str(item.get("excerpt") or "").strip()
+    if excerpt:
+        st.info(excerpt)
+
+    body = str(item.get("body") or "").strip()
+    if body:
+        st.markdown(body)
+    else:
+        st.warning("Article body is empty.")
+
+    st.markdown('<br>', unsafe_allow_html=True)
+    if st.button("← Back to Research"):
+        try:
+            st.query_params.clear()
+            st.rerun()
+        except Exception:
+            st.experimental_set_query_params()
+            st.experimental_rerun()
+
+
 def _render_research_content() -> None:
     items: list[dict[str, Any]] = []
     for content_type in ("AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION"):
-        items.extend(_safe_content(content_type, 3))
+        items.extend(_safe_content(content_type, 10))
     items.sort(
         key=lambda item: item.get("published_at") or item.get("created_at"),
         reverse=True,
     )
+
+    selected_post = _query_param_value("post")
+    if selected_post:
+        for item in items:
+            if _content_slug(item) == selected_post or str(item.get("id")) == selected_post:
+                _render_content_detail(item)
+                return
+        st.warning("Article not found or not published.")
+        if st.button("← Back to Research"):
+            try:
+                st.query_params.clear()
+                st.rerun()
+            except Exception:
+                st.experimental_set_query_params()
+                st.experimental_rerun()
+        return
+
     items = items[:6]
     if not items:
         return
@@ -173,17 +284,31 @@ def _render_research_content() -> None:
         for column, item in zip(columns, items[start : start + 2]):
             with column:
                 with st.container(border=True):
+                    title = str(item.get("title") or "Research Article")
                     if item.get("image_url"):
-                        st.image(item["image_url"], use_container_width=True)
+                        st.image(str(item["image_url"]), use_container_width=True)
+                    else:
+                        _fallback_blog_banner(title)
                     st.caption(
                         str(item.get("content_type", "")).replace("_", " ")
                     )
-                    st.subheader(item["title"])
+                    st.subheader(title)
                     st.write(item.get("excerpt") or "")
-                    if item.get("external_url"):
+
+                    slug = _content_slug(item)
+                    if slug:
+                        st.markdown(
+                            f'<a href="?post={quote(slug)}" target="_self" '
+                            f'style="display:block;text-align:center;padding:0.65rem 1rem;'
+                            f'border-radius:0.55rem;background:#2563eb;color:white;'
+                            f'text-decoration:none;font-weight:700;margin-top:0.75rem;">'
+                            f'Read Full Article</a>',
+                            unsafe_allow_html=True,
+                        )
+                    elif item.get("external_url"):
                         st.link_button(
                             "Read More",
-                            item["external_url"],
+                            str(item["external_url"]),
                             use_container_width=True,
                         )
 
