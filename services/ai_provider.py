@@ -39,10 +39,14 @@ class AIProvider:
                 "AI_PROVIDER must be GEMINI or OPENAI."
             )
         try:
-            parsed = json.loads(_extract_json(raw))
+            extracted = _extract_json(raw)
+            parsed = json.loads(extracted)
         except (json.JSONDecodeError, TypeError) as exc:
-            logger.error("AI provider returned invalid JSON")
-            raise RuntimeError("AI provider returned invalid JSON.") from exc
+            preview = str(raw or "").replace("\n", " ")[:800]
+            logger.error("AI provider returned invalid JSON: {}", preview)
+            raise RuntimeError(
+                "AI provider returned invalid JSON. Preview: " + preview
+            ) from exc
         if not isinstance(parsed, dict):
             raise RuntimeError("AI provider response must be a JSON object.")
         return parsed
