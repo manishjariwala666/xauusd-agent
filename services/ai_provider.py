@@ -58,8 +58,9 @@ class AIProvider:
         output_dir: str | Path,
         filename: str = "generated.png",
     ) -> str:
-        """Generate an image with Gemini image generation instead of OpenAI."""
+        """Generate an image with Gemini image generation."""
         import base64
+        import os
         from pathlib import Path
         from google import genai
 
@@ -68,6 +69,7 @@ class AIProvider:
             raise RuntimeError("GEMINI_API_KEY is required for image generation.")
 
         model = os.environ.get("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image")
+
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         file_path = output_path / filename
