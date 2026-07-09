@@ -55,7 +55,7 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
     if missing:
         raise RuntimeError("AI blog response missing: " + ", ".join(missing))
     slug = _slugify(str(generated["slug"] or generated["title"]))
-    publish = bool(payload.get("publish", False))
+    publish = bool(payload.get("publish", True))
     with session_scope() as session:
         slug = _unique_slug(session, slug)
         category_id = session.execute(
@@ -465,14 +465,55 @@ def run_image_agent(payload: dict[str, Any]) -> str:
     return f"Image assets generated and uploaded: {len(urls)}."
 
 
+def _master_optional_agent(agent_key: str, handler):
+    """Keep Master AI orchestration moving when optional agents are unavailable."""
+    def _wrapped(payload: dict[str, Any]) -> str:
+        request_text = " ".join(
+            str(payload.get(key) or "")
+            for key in (
+                "objective",
+                "message",
+                "prompt",
+                "user_instruction",
+                "natural_command",
+                "command",
+                "task",
+            )
+        ).lower()
+
+        if agent_key == "signal_agent":
+            explicit_signal = any(
+                word in request_text
+                for word in (
+                    "signal",
+                    "trade signal",
+                    "buy",
+                    "sell",
+                    "full campaign",
+                    "campaign",
+                    "telegram channel",
+                )
+            )
+            if not explicit_signal:
+                return "signal_agent skipped for blog-only request."
+
+        try:
+            return handler(payload)
+        except Exception as exc:
+            logger.warning("{} skipped: {}", agent_key, exc)
+            return f"{agent_key} skipped: {exc}"
+
+    return _wrapped
+
+
 RUNNERS = {
     "ai_blog_agent": run_blog_agent,
     "telegram_reply_agent": run_telegram_reply_agent,
     "whatsapp_reply_agent": run_whatsapp_reply_agent,
-    "signal_agent": run_signal_agent,
+    "signal_agent": _master_optional_agent("signal_agent", run_signal_agent),
     "announcement_agent": run_announcement_agent,
     "seo_agent": run_seo_agent,
-    "image_agent": run_image_agent,
+    "image_agent": _master_optional_agent("image_agent", run_image_agent),
 }
 
 
