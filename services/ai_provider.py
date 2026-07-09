@@ -42,10 +42,21 @@ class AIProvider:
             extracted = _extract_json(raw)
             parsed = json.loads(extracted)
         except (json.JSONDecodeError, TypeError) as exc:
-            preview = str(raw or "").replace("\n", " ")[:800]
-            logger.error("AI provider returned invalid JSON: {}", preview)
+            raw_preview = str(raw or "").replace("\n", " ")[:600]
+            extracted_preview = str(locals().get("extracted", "") or "").replace("\n", " ")[:1200]
+            detail = f"{exc.__class__.__name__}: {exc}"
+            logger.error(
+                "AI provider returned invalid JSON: {} extracted={}",
+                detail,
+                extracted_preview,
+            )
             raise RuntimeError(
-                "AI provider returned invalid JSON. Preview: " + preview
+                "AI provider returned invalid JSON. Error: "
+                + detail
+                + ". Extracted preview: "
+                + extracted_preview
+                + ". Raw preview: "
+                + raw_preview
             ) from exc
         if not isinstance(parsed, dict):
             raise RuntimeError("AI provider response must be a JSON object.")
@@ -90,10 +101,14 @@ class AIProvider:
     def _gemini_text(self, system: str, user: str) -> str:
         if not self.settings.gemini_api_key:
             raise ConfigurationError("GEMINI_API_KEY is not configured.")
+
+        from google.genai import types
+
         client = genai.Client(api_key=self.settings.gemini_api_key)
         response = client.models.generate_content(
             model=self.settings.ai_text_model,
-            contents=f"{system}\n\n{user}\n\nReturn valid JSON only.",
+            contents=f"{system}\n\n{user}\n\nReturn one valid JSON object only. Do not use markdown fences.",
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
         if not response.text:
             raise RuntimeError("Gemini returned an empty response.")
