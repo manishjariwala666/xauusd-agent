@@ -73,7 +73,10 @@ class AIProvider:
             },
             timeout=180,
         )
-        response.raise_for_status()
+        if not response.ok:
+            raise RuntimeError(
+                f"OpenAI image API error {response.status_code}: {response.text[:2000]}"
+            )
         data = response.json()["data"][0]
         output_dir.mkdir(parents=True, exist_ok=True)
         destination = output_dir / f"{uuid4().hex}.png"
