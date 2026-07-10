@@ -38,11 +38,14 @@ from services.content_service import (
     upload_profit_screenshot,
 )
 from services.google_sheets import GoogleSheetsService
+from services.google_sheets_service import (
+    PrivateGoogleSheetsService,
+    GoogleSheetsServiceError,
+)
 from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
 from user.dashboard import render_signal_feed
 import os
-import re
 from urllib.parse import quote
 
 
@@ -374,13 +377,37 @@ def _render_overview() -> None:
                                 SELECT COUNT(*)
                                 FROM public.content_categories
                                 WHERE is_active = TRUE
-                            ) AS active_categories
+                            ) AS active_categories,
+                            (
+                                SELECT COUNT(*)
+                                FROM public.content_items
+                                WHERE content_type IN ('BLOG', 'AI_BLOG')
+                            ) AS total_blogs,
+                            (
+                                SELECT COUNT(*)
+                                FROM public.content_items
+                                WHERE content_type IN ('BLOG', 'AI_BLOG')
+                                  AND is_published = TRUE
+                            ) AS published_blogs,
+                            (
+                                SELECT COUNT(*)
+                                FROM public.content_items
+                                WHERE content_type IN ('BLOG', 'AI_BLOG')
+                                  AND is_published = FALSE
+                            ) AS draft_blogs
                         """
                     )
                 )
                 .mappings()
                 .one()
             )
+            latest_signals = _query_latest_signals(session)
+            latest_master_commands = _query_latest_master_commands(session)
+            latest_whatsapp_messages = _query_latest_channel_messages(
+                session,
+                "WHATSAPP",
+            )
+            recent_errors = _query_recent_errors(session)
     except Exception:
         logger.exception("Admin overview loading failed")
         st.error("Overview metrics are temporarily unavailable.")
@@ -391,10 +418,210 @@ def _render_overview() -> None:
     col2.metric("Payment Reviews", int(metrics["payment_reviews"]))
     col3.metric("Published Content", int(metrics["published_content"]))
     col4.metric("Active Categories", int(metrics["active_categories"]))
+
+    blog_cols = st.columns(3)
+    blog_cols[0].metric("Total Blogs", int(metrics["total_blogs"]))
+    blog_cols[1].metric("Published Blogs", int(metrics["published_blogs"]))
+    blog_cols[2].metric("Draft Blogs", int(metrics["draft_blogs"]))
+
+    st.divider()
+    left, right = st.columns(2)
+    with left:
+        st.markdown("### Latest Signals")
+        _render_small_table(
+            latest_signals,
+            empty_message="No market signals found.",
+        )
+        st.markdown("### Latest Telegram Master Commands")
+        _render_small_table(
+            latest_master_commands,
+            empty_message="No Telegram Master commands found.",
+        )
+    with right:
+        st.markdown("### Latest WhatsApp Messages")
+        _render_small_table(
+            latest_whatsapp_messages,
+            empty_message="No WhatsApp messages found.",
+        )
+        st.markdown("### Google Sheet Sync Status")
+        _render_google_sheet_sync_status()
+
+    st.markdown("### Recent Errors")
+    _render_small_table(
+        recent_errors,
+        empty_message="No recent system errors found.",
+    )
     st.info(
         "AI-generated drafts may be reviewed and published here, but agent "
         "prompts, credentials, and internal reasoning are never displayed."
     )
+
+
+def _query_latest_signals(session: Any) -> list[dict[str, Any]]:
+    rows = (
+        session.execute(
+            text(
+                """
+                SELECT signal_type AS type,
+                       price,
+                       target_price AS target,
+                       stop_loss,
+                       source,
+                       sheet_label,
+                       signal_time
+                FROM public.market_signals
+                ORDER BY signal_time DESC
+                LIMIT 6
+                """
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [dict(row) for row in rows]
+
+
+def _query_latest_master_commands(session: Any) -> list[dict[str, Any]]:
+    if not _table_exists(session, "master_ai_events"):
+        return []
+    rows = (
+        session.execute(
+            text(
+                """
+                SELECT event_type,
+                       severity,
+                       message,
+                       created_at
+                FROM public.master_ai_events
+                WHERE event_type IN (
+                    'TELEGRAM_MASTER_COMMAND',
+                    'TELEGRAM_MASTER_WEBHOOK'
+                )
+                   OR message ILIKE '%telegram%'
+                ORDER BY created_at DESC
+                LIMIT 6
+                """
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [dict(row) for row in rows]
+
+
+def _query_latest_channel_messages(
+    session: Any,
+    channel: str,
+) -> list[dict[str, Any]]:
+    if not _table_exists(session, "ai_conversations") or not _table_exists(
+        session,
+        "ai_messages",
+    ):
+        return []
+    rows = (
+        session.execute(
+            text(
+                """
+                SELECT m.sender_type,
+                       LEFT(m.body, 180) AS message,
+                       c.external_user_id,
+                       m.created_at
+                FROM public.ai_messages m
+                JOIN public.ai_conversations c
+                  ON c.id = m.conversation_id
+                WHERE c.channel = :channel
+                ORDER BY m.created_at DESC
+                LIMIT 6
+                """
+            ),
+            {"channel": channel.upper()},
+        )
+        .mappings()
+        .all()
+    )
+    return [dict(row) for row in rows]
+
+
+def _query_recent_errors(session: Any) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if _table_exists(session, "master_ai_events"):
+        rows.extend(
+            dict(row)
+            for row in session.execute(
+                text(
+                    """
+                    SELECT 'Master AI' AS source,
+                           severity AS status,
+                           LEFT(message, 220) AS message,
+                           created_at
+                    FROM public.master_ai_events
+                    WHERE severity IN ('ERROR', 'CRITICAL')
+                    ORDER BY created_at DESC
+                    LIMIT 4
+                    """
+                )
+            )
+            .mappings()
+            .all()
+        )
+    if _table_exists(session, "ai_agent_runs"):
+        rows.extend(
+            dict(row)
+            for row in session.execute(
+                text(
+                    """
+                    SELECT agent_key AS source,
+                           status,
+                           LEFT(error, 220) AS message,
+                           COALESCE(finished_at, started_at) AS created_at
+                    FROM public.ai_agent_runs
+                    WHERE error IS NOT NULL AND error <> ''
+                    ORDER BY COALESCE(finished_at, started_at) DESC
+                    LIMIT 4
+                    """
+                )
+            )
+            .mappings()
+            .all()
+        )
+    rows.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
+    return rows[:6]
+
+
+def _table_exists(session: Any, table_name: str) -> bool:
+    return bool(
+        session.execute(
+            text("SELECT to_regclass(:table_name)"),
+            {"table_name": f"public.{table_name}"},
+        ).scalar_one_or_none()
+    )
+
+
+def _render_small_table(
+    rows: list[dict[str, Any]],
+    *,
+    empty_message: str,
+) -> None:
+    if rows:
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+    else:
+        st.info(empty_message)
+
+
+def _render_google_sheet_sync_status() -> None:
+    try:
+        service = PrivateGoogleSheetsService()
+        service.ensure_required_tabs()
+        rows = service.read_rows("errors", limit=1)
+    except GoogleSheetsServiceError as exc:
+        st.warning(f"Google Sheet not ready: {exc}")
+    except Exception:
+        logger.exception("Google Sheet sync status check failed")
+        st.error("Google Sheet sync check failed.")
+    else:
+        st.success("Google Sheet connected and required tabs are ready.")
+        if rows:
+            st.caption(f"Latest Sheet error row: {rows[-1]}")
 
 
 def _render_payment_reviews() -> None:
@@ -575,12 +802,33 @@ def _render_content_manager() -> None:
                         f"{record.get('published_at') or record.get('created_at') or ''}"
                     )
 
+    content_scopes = {
+        "Blogs": {"BLOG", "AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION"},
+        "Pages": {"PAGE"},
+        "Announcements": {"ANNOUNCEMENT"},
+        "Signals": {"SIGNAL_POST"},
+        "All content": None,
+    }
+    scope_name = st.selectbox(
+        "Content list",
+        list(content_scopes),
+        help="Filter the editor list without changing any saved records.",
+    )
+    allowed_types = content_scopes[scope_name]
+    visible_items = [
+        item for item in items
+        if item["content_type"] != "PROFIT_SCREENSHOT"
+        and (
+            allowed_types is None
+            or str(item.get("content_type") or "").upper() in allowed_types
+        )
+    ]
+
     options = {"Create new": None}
     options.update(
         {
             f"#{item['id']} · {item['title']}": item
-            for item in items
-            if item["content_type"] != "PROFIT_SCREENSHOT"
+            for item in visible_items
         }
     )
     selection = st.selectbox("Select content", list(options))
@@ -650,6 +898,7 @@ def _render_content_manager() -> None:
                 "This AI blog has no image_url. Public page will show the fallback "
                 "XAUUSD research banner."
             )
+        _render_selected_content_metadata(selected)
     category_options = {"Uncategorized": None}
     category_options.update(
         {category["title"]: category["id"] for category in categories}
@@ -811,6 +1060,40 @@ def _render_content_manager() -> None:
         else:
             st.success("Content deleted.")
             st.rerun()
+
+
+def _render_selected_content_metadata(selected: dict[str, Any]) -> None:
+    """Show CMS/SEO fields for quick review without exposing internals."""
+    st.markdown("#### Content metadata")
+    meta_cols = st.columns(4)
+    meta_cols[0].metric("Type", str(selected.get("content_type") or "—"))
+    meta_cols[1].metric(
+        "Status",
+        "Published" if selected.get("is_published") else "Draft",
+    )
+    meta_cols[2].metric(
+        "Category",
+        str(selected.get("category_title") or "Uncategorized"),
+    )
+    meta_cols[3].metric(
+        "Subcategory",
+        str(selected.get("subcategory") or "—"),
+    )
+
+    with st.expander("View SEO metadata / FAQ / schema"):
+        st.write(
+            {
+                "slug": selected.get("slug") or selected.get("seo_slug") or "",
+                "meta_title": selected.get("meta_title") or "",
+                "meta_description": selected.get("meta_description") or "",
+                "focus_keyword": selected.get("focus_keyword") or "",
+                "image_prompt": selected.get("image_prompt") or "",
+            }
+        )
+        st.markdown("**FAQ**")
+        st.json(selected.get("faq") or [])
+        st.markdown("**Schema JSON-LD**")
+        st.json(selected.get("schema_jsonld") or {})
 
 
 def _render_category_manager() -> None:
