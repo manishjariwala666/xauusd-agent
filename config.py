@@ -56,6 +56,11 @@ def _read_secret(name: str, default: str = "") -> str:
     return str(default).strip()
 
 
+def _compact_secret_token(value: str) -> str:
+    """Remove accidental pasted whitespace from opaque API/bot tokens."""
+    return "".join(str(value or "").split())
+
+
 def parse_google_service_account_json(raw_value: str) -> dict[str, Any]:
     """Parse and validate Google credentials without exposing their contents."""
     if not raw_value.strip():
@@ -232,10 +237,12 @@ class Settings:
             in {"1", "true", "yes", "on"},
             telegram_invite_url=_read_secret("TELEGRAM_INVITE_URL"),
             support_whatsapp_url=_read_secret("SUPPORT_WHATSAPP_URL"),
-            telegram_bot_token=_read_secret("TELEGRAM_BOT_TOKEN"),
+            telegram_bot_token=_compact_secret_token(
+                _read_secret("TELEGRAM_BOT_TOKEN")
+            ),
             telegram_chat_id=_read_secret("TELEGRAM_CHAT_ID"),
-            master_ai_telegram_bot_token=_read_secret(
-                "MASTER_AI_TELEGRAM_BOT_TOKEN"
+            master_ai_telegram_bot_token=_compact_secret_token(
+                _read_secret("MASTER_AI_TELEGRAM_BOT_TOKEN")
             ),
             telegram_admin_user_id=_read_secret("TELEGRAM_ADMIN_USER_ID"),
             telegram_admin_user_ids=_read_secret("TELEGRAM_ADMIN_USER_IDS"),
