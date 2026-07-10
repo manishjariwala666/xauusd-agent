@@ -68,28 +68,45 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Validate Supabase URL
+      - name: Validate runtime configuration
         if: steps.preflight.outputs.ready == 'true'
-        id: validate_supabase
+        id: validate_runtime
         shell: bash
         run: |
           python - <<'PY'
           import os
           import sys
 
+          issues = []
+
           url = os.environ.get("SUPABASE_URL", "").strip()
           if not (url.startswith("https://") and url.endswith(".supabase.co")):
-              print("::warning title=Invalid SUPABASE_URL::SUPABASE_URL must look like https://xxxx.supabase.co")
-              with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-                  f.write("### Agent skipped safely\n")
-                  f.write("Invalid SUPABASE_URL. It must be the Supabase Project API URL, not DATABASE_URL.\n")
+              issues.append(
+                  "SUPABASE_URL must be the Supabase Project API URL "
+                  "(https://xxxx.supabase.co), not DATABASE_URL."
+              )
+
+          jwt_secret = os.environ.get("JWT_SECRET", "")
+          if len(jwt_secret) < 32:
+              issues.append("JWT_SECRET must contain at least 32 characters.")
+
+          if issues:
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                  output.write("ready=false\n")
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+                  summary.write("### Agent skipped safely\n")
+                  for issue in issues:
+                      print(f"::warning title=Invalid runtime configuration::{issue}")
+                      summary.write(f"- {issue}\n")
               sys.exit(0)
 
-          print("SUPABASE_URL format valid.")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("ready=true\n")
+          print("Runtime configuration format valid.")
           PY
 
       - name: Prepare Google service account JSON
-        if: steps.preflight.outputs.ready == 'true'
+        if: steps.preflight.outputs.ready == 'true' && steps.validate_runtime.outputs.ready == 'true'
         shell: bash
         run: |
           python - <<'PY'
@@ -112,7 +129,7 @@ jobs:
           PY
 
       - name: Execute Autonomous Agent Core Pipeline
-        if: steps.preflight.outputs.ready == 'true'
+        if: steps.preflight.outputs.ready == 'true' && steps.validate_runtime.outputs.ready == 'true'
         shell: bash
         run: |
           set +e

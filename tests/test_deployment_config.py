@@ -52,3 +52,16 @@ def test_environment_template_contains_all_config_keys() -> None:
         if line and not line.startswith("#") and "=" in line
     }
     assert required <= keys
+
+
+def test_scheduled_agent_requires_runtime_validation_gate() -> None:
+    workflow = (ROOT / ".github/workflows/auto_news.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "id: validate_runtime" in workflow
+    assert (
+        "steps.preflight.outputs.ready == 'true' && "
+        "steps.validate_runtime.outputs.ready == 'true'"
+    ) in workflow
+    assert "JWT_SECRET must contain at least 32 characters." in workflow
