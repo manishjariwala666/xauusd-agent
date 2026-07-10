@@ -33,9 +33,12 @@ def apply_theme() -> None:
                 color: var(--text);
             }
             .block-container {
-                max-width: 1240px;
+                max-width: 100%;
+                width: 100%;
                 padding-top: 1.25rem;
                 padding-bottom: 3rem;
+                padding-left: clamp(.9rem, 3vw, 2.4rem);
+                padding-right: clamp(.9rem, 3vw, 2.4rem);
             }
             .site-nav {
                 display: flex;
@@ -50,9 +53,10 @@ def apply_theme() -> None:
                 margin-bottom: 1rem;
             }
             .brand {
+                text-decoration: none !important;
                 font-weight: 800;
                 letter-spacing: -.02em;
-                color: var(--text);
+                color: var(--text) !important;
             }
             .brand-dot { color: var(--gold); }
             .nav-note { color: var(--muted); font-size: .84rem; }
@@ -120,15 +124,54 @@ def apply_theme() -> None:
             }
             .section-subtitle { color: var(--muted); margin-top: -.6rem; }
             .premium-card {
+                display: block;
                 height: 100%;
                 padding: 1.15rem;
                 border: 1px solid var(--border);
                 border-radius: 16px;
                 background: linear-gradient(145deg, var(--surface-2), var(--surface));
             }
+            .clickable-card {
+                color: inherit !important;
+                text-decoration: none !important;
+                transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+            }
+            .clickable-card:hover {
+                transform: translateY(-3px);
+                border-color: rgba(244, 193, 93, .58);
+                box-shadow: 0 18px 45px rgba(0, 0, 0, .24);
+            }
             .premium-card h3 { color: var(--text); margin: .4rem 0; }
             .premium-card p { color: var(--muted); line-height: 1.6; }
             .category-icon { font-size: 1.45rem; }
+            .card-link-text {
+                margin-top: .9rem;
+                color: var(--gold);
+                font-weight: 800;
+                font-size: .9rem;
+            }
+            .announcement-card {
+                min-height: 175px;
+            }
+            .signal-desk-card {
+                height: 100%;
+                padding: 1.35rem;
+                border: 1px solid #554628;
+                border-radius: 20px;
+                background:
+                    radial-gradient(circle at top right, rgba(244, 193, 93, .18), transparent 34%),
+                    linear-gradient(140deg, #141f36, #090d18);
+            }
+            .signal-desk-card h3 {
+                margin: .35rem 0 .5rem;
+                color: var(--gold);
+                font-size: clamp(2rem, 4vw, 3rem);
+                letter-spacing: -.04em;
+            }
+            .signal-desk-card p {
+                color: #b7c4d9;
+                line-height: 1.65;
+            }
             .price-panel {
                 padding: 1.3rem;
                 border: 1px solid #554628;
@@ -211,11 +254,73 @@ def apply_theme() -> None:
                 border-radius: 12px;
                 border: 1px solid var(--border);
             }
+            .content-card {
+                display: block;
+                height: 100%;
+                overflow: hidden;
+                border: 1px solid var(--border);
+                border-radius: 18px;
+                background: linear-gradient(145deg, var(--surface-2), var(--surface));
+                color: inherit !important;
+                text-decoration: none !important;
+            }
+            .content-card .content-image,
+            .content-card .fallback-trading-card {
+                border-radius: 0;
+                border-left: 0;
+                border-right: 0;
+                border-top: 0;
+                margin: 0;
+            }
+            .content-card-body {
+                padding: 1rem 1.1rem 1.15rem;
+            }
+            .content-card h3 {
+                margin: .35rem 0 .5rem;
+                color: var(--text);
+                line-height: 1.25;
+            }
+            .content-card p {
+                color: var(--muted);
+                line-height: 1.6;
+            }
+            .fallback-trading-card {
+                min-height: 165px;
+                border-radius: 16px;
+                padding: 22px;
+                margin-bottom: 14px;
+                background:
+                    linear-gradient(120deg, rgba(255,255,255,.08), transparent 24%),
+                    radial-gradient(circle at top left, rgba(245, 158, 11, .35), transparent 34%),
+                    linear-gradient(135deg, #101827 0%, #1f2937 48%, #3b2404 100%);
+                border: 1px solid rgba(255,255,255,.14);
+                display: flex;
+                align-items: end;
+            }
+            .fallback-label {
+                font-size: 12px;
+                letter-spacing: .16em;
+                color: #fbbf24;
+                font-weight: 800;
+                text-transform: uppercase;
+            }
+            .fallback-title {
+                font-size: 22px;
+                line-height: 1.25;
+                color: white;
+                font-weight: 800;
+                margin-top: 8px;
+            }
+            .active-chip {
+                border-color: rgba(244, 193, 93, .7) !important;
+                color: var(--gold) !important;
+            }
             @media (max-width: 700px) {
                 .block-container { padding: .75rem .8rem 2rem; }
                 .site-nav { align-items: flex-start; flex-direction: column; }
                 .hero { border-radius: 18px; }
                 .nav-note { display: none; }
+                .fallback-trading-card { min-height: 135px; }
             }
             @media (prefers-reduced-motion: reduce) {
                 .market-track { animation: none; }

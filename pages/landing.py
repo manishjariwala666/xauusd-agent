@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import html
 from typing import Any, Callable
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from loguru import logger
 import streamlit as st
@@ -29,13 +29,34 @@ def render_landing_page(
     """Render the public, non-privileged marketing experience."""
     settings = get_settings()
     _render_nav(settings.brand_name, on_sign_in)
+
+    categories = _safe_categories()
+    selected_post = _query_param_value("post")
+    selected_announcement = _query_param_value("announcement")
+    selected_category = _query_param_value("category")
+
+    if selected_post:
+        _render_content_route(selected_post)
+        _render_disclaimer()
+        return
+
+    if selected_announcement:
+        _render_announcement_route(selected_announcement)
+        _render_disclaimer()
+        return
+
+    if selected_category:
+        _render_category_route(selected_category, categories, on_sign_in)
+        _render_disclaimer()
+        return
+
     _render_hero(on_sign_in)
 
     xauusd = get_xauusd_snapshot(supabase)
     crypto_quotes = get_top_crypto_gainers(20)
     render_market_ticker(xauusd, crypto_quotes)
+    _render_xauusd_signal_section(xauusd or {}, settings, on_sign_in)
 
-    categories = _safe_categories()
     _render_categories(categories)
     _render_announcements()
     _render_research_content()
@@ -58,9 +79,9 @@ def _render_nav(brand_name: str, on_sign_in: Callable[[], None]) -> None:
         st.markdown(
             f"""
             <div class="site-nav">
-                <div class="brand">
+                <a class="brand" href="?" target="_self">
                     {html.escape(brand_name)}<span class="brand-dot">.</span>
-                </div>
+                </a>
                 <div class="nav-note">
                     XAUUSD · Crypto · Research · Education
                 </div>
@@ -131,15 +152,18 @@ def _render_categories(categories: list[dict[str, Any]]) -> None:
         columns = st.columns(3)
         for column, category in zip(columns, categories[start : start + 3]):
             with column:
+                slug = str(category.get("slug") or category.get("id") or "")
+                url = _local_url(category=slug)
                 st.markdown(
                     f"""
-                    <div class="premium-card">
+                    <a class="premium-card clickable-card" href="{html.escape(url)}" target="_self">
                         <div class="category-icon">
                             {html.escape(str(category.get('icon') or '•'))}
                         </div>
                         <h3>{html.escape(str(category['title']))}</h3>
                         <p>{html.escape(str(category.get('description') or ''))}</p>
-                    </div>
+                        <div class="card-link-text">Explore category →</div>
+                    </a>
                     """,
                     unsafe_allow_html=True,
                 )
@@ -150,10 +174,24 @@ def _render_announcements() -> None:
     if not items:
         return
     st.markdown('<h2 class="section-title">Announcements</h2>', unsafe_allow_html=True)
-    for item in items:
-        with st.container(border=True):
-            st.subheader(item["title"])
-            st.write(item.get("excerpt") or item.get("body") or "")
+    for start in range(0, len(items), 2):
+        columns = st.columns(2)
+        for column, item in zip(columns, items[start : start + 2]):
+            with column:
+                slug = _content_slug(item)
+                url = _local_url(announcement=slug) if slug else "#"
+                st.markdown(
+                    f"""
+                    <a class="premium-card announcement-card clickable-card"
+                       href="{html.escape(url)}" target="_self">
+                        <div class="eyebrow">Announcement</div>
+                        <h3>{html.escape(str(item.get('title') or 'Announcement'))}</h3>
+                        <p>{html.escape(str(item.get('excerpt') or item.get('body') or ''))}</p>
+                        <div class="card-link-text">Read announcement →</div>
+                    </a>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
 
 
@@ -182,34 +220,37 @@ def _content_slug(item: dict[str, Any]) -> str:
     ).strip()
 
 
-def _fallback_blog_banner(title: str = "XAUUSD Market Research") -> None:
+def _local_url(**params: str) -> str:
+    """Build an internal Streamlit query URL for clickable public cards."""
+    clean_params = {
+        key: value
+        for key, value in params.items()
+        if value is not None and str(value).strip()
+    }
+    if not clean_params:
+        return "?"
+    return "?" + urlencode(clean_params)
+
+
+def _fallback_card_html(
+    title: str = "XAUUSD Market Research",
+    label: str = "XAUUSD RESEARCH",
+) -> str:
+    """Return a professional fallback banner when a content image is absent."""
     safe_title = html.escape(title or "XAUUSD Market Research")
-    st.markdown(
-        f"""
-        <div style="
-            min-height: 150px;
-            border-radius: 16px;
-            padding: 22px;
-            margin-bottom: 14px;
-            background:
-                radial-gradient(circle at top left, rgba(245, 158, 11, .35), transparent 32%),
-                linear-gradient(135deg, #101827 0%, #1f2937 48%, #3b2404 100%);
-            border: 1px solid rgba(255,255,255,.14);
-            display: flex;
-            align-items: end;
-        ">
-            <div>
-                <div style="font-size: 12px; letter-spacing: .16em; color: #fbbf24; font-weight: 700;">
-                    XAUUSD RESEARCH
-                </div>
-                <div style="font-size: 22px; line-height: 1.25; color: white; font-weight: 800; margin-top: 8px;">
-                    {safe_title}
-                </div>
-            </div>
+    safe_label = html.escape(label or "XAUUSD RESEARCH")
+    return f"""
+    <div class="fallback-trading-card">
+        <div>
+            <div class="fallback-label">{safe_label}</div>
+            <div class="fallback-title">{safe_title}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    </div>
+    """
+
+
+def _fallback_blog_banner(title: str = "XAUUSD Market Research") -> None:
+    st.markdown(_fallback_card_html(title), unsafe_allow_html=True)
 
 
 
@@ -237,7 +278,10 @@ def _dedupe_research_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _render_content_detail(item: dict[str, Any]) -> None:
     title = str(item.get("title") or "Research Article")
-    st.markdown(f'<h1 class="section-title">{html.escape(title)}</h1>', unsafe_allow_html=True)
+    st.markdown(
+        f'<h1 class="section-title">{html.escape(title)}</h1>',
+        unsafe_allow_html=True,
+    )
 
     if item.get("image_url"):
         st.image(str(item["image_url"]), use_container_width=True)
@@ -273,6 +317,216 @@ def _render_content_detail(item: dict[str, Any]) -> None:
             st.experimental_rerun()
 
 
+def _render_xauusd_signal_section(
+    xauusd: dict[str, Any],
+    settings: Any,
+    on_sign_in: Callable[[], None],
+) -> None:
+    """Render a public-safe signal area without exposing private AI agents."""
+    price = xauusd.get("price") or xauusd.get("last") or xauusd.get("close")
+    trend = str(
+        xauusd.get("trend") or xauusd.get("direction") or "Live watch"
+    ).title()
+    try:
+        configured_public_telegram = get_site_setting("profit_proof_telegram_url")
+    except Exception:
+        logger.exception("Public Telegram CTA setting could not be loaded")
+        configured_public_telegram = ""
+    public_telegram_url = (
+        configured_public_telegram or settings.profit_proof_telegram_url
+    )
+
+    st.markdown(
+        '<h2 class="section-title">XAUUSD Signal Desk</h2>',
+        unsafe_allow_html=True,
+    )
+    left, right = st.columns([1.3, 1])
+    with left:
+        price_text = (
+            f"${float(price):,.2f}"
+            if isinstance(price, (int, float))
+            else "Live market"
+        )
+        st.markdown(
+            f"""
+            <div class="signal-desk-card">
+                <div class="eyebrow">Public Market View</div>
+                <h3>{html.escape(price_text)}</h3>
+                <p>
+                    Gold levels are monitored with a risk-first approach.
+                    Premium buy/sell target delivery stays protected inside
+                    verified member access.
+                </p>
+                <div class="trust-row">
+                    <span class="trust-chip">{html.escape(trend)}</span>
+                    <span class="trust-chip">XAUUSD focus</span>
+                    <span class="trust-chip">Public-safe updates</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with right:
+        if public_telegram_url:
+            st.link_button(
+                "Join Telegram Updates",
+                public_telegram_url,
+                use_container_width=True,
+            )
+        if settings.support_whatsapp_url:
+            st.link_button(
+                "WhatsApp Support",
+                settings.support_whatsapp_url,
+                use_container_width=True,
+            )
+        if st.button("Subscribe / Login", use_container_width=True):
+            on_sign_in()
+
+
+def _render_content_route(selected_post: str) -> None:
+    items = _all_public_content()
+    for item in items:
+        if _matches_content_identifier(item, selected_post):
+            _render_content_detail(item)
+            return
+    st.warning("Article not found or not published.")
+    _render_back_home_button()
+
+
+def _render_announcement_route(selected_announcement: str) -> None:
+    items = _safe_content("ANNOUNCEMENT", 30)
+    for item in items:
+        if _matches_content_identifier(item, selected_announcement):
+            _render_content_detail(item)
+            return
+    st.warning("Announcement not found or not published.")
+    _render_back_home_button()
+
+
+def _render_category_route(
+    selected_category: str,
+    categories: list[dict[str, Any]],
+    on_sign_in: Callable[[], None],
+) -> None:
+    category = _find_category(categories, selected_category)
+    if not category:
+        st.warning("Category not found or not active.")
+        _render_back_home_button()
+        return
+
+    title = str(category.get("title") or "Category")
+    st.markdown(
+        f'<h1 class="section-title">{html.escape(title)}</h1>',
+        unsafe_allow_html=True,
+    )
+    description = str(category.get("description") or "").strip()
+    if description:
+        st.markdown(
+            f'<p class="section-subtitle">{html.escape(description)}</p>',
+            unsafe_allow_html=True,
+        )
+
+    items = [
+        item for item in _all_public_content()
+        if str(item.get("category_slug") or "") == str(category.get("slug") or "")
+        or str(item.get("category_id") or "") == str(category.get("id") or "")
+    ]
+    selected_type = _query_param_value("type").strip().upper()
+    available_types = sorted(
+        {
+            str(item.get("content_type") or "").strip().upper()
+            for item in items
+            if item.get("content_type")
+        }
+    )
+    if available_types:
+        _render_subcategory_links(
+            str(category.get("slug") or ""),
+            available_types,
+            selected_type,
+        )
+    if selected_type:
+        items = [
+            item for item in items
+            if str(item.get("content_type") or "").strip().upper() == selected_type
+        ]
+
+    _render_content_grid(
+        items[:12],
+        empty_message="No public posts are available in this category yet.",
+    )
+    _render_subscription(get_settings(), on_sign_in)
+
+
+def _render_subcategory_links(
+    category_slug: str,
+    content_types: list[str],
+    selected_type: str,
+) -> None:
+    links = [
+        f'<a class="social-link" '
+        f'href="{html.escape(_local_url(category=category_slug))}" '
+        f'target="_self">All</a>'
+    ]
+    for content_type in content_types:
+        label = content_type.replace("_", " ").title()
+        css_class = (
+            "social-link active-chip"
+            if content_type == selected_type
+            else "social-link"
+        )
+        links.append(
+            f'<a class="{css_class}" '
+            f'href="{html.escape(_local_url(category=category_slug, type=content_type))}" '
+            f'target="_self">{html.escape(label)}</a>'
+        )
+    st.markdown(
+        f'<div class="social-row">{"".join(links)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _find_category(
+    categories: list[dict[str, Any]],
+    selected_category: str,
+) -> dict[str, Any] | None:
+    selected = str(selected_category or "").strip()
+    for category in categories:
+        if selected in {
+            str(category.get("slug") or "").strip(),
+            str(category.get("id") or "").strip(),
+        }:
+            return category
+    return None
+
+
+def _matches_content_identifier(item: dict[str, Any], identifier: str) -> bool:
+    selected = str(identifier or "").strip()
+    return selected in {
+        _content_slug(item),
+        str(item.get("id") or "").strip(),
+    }
+
+
+def _all_public_content(limit: int = 80) -> list[dict[str, Any]]:
+    try:
+        items = list_content(public_only=True, limit=limit)
+    except Exception:
+        logger.exception("Public content loading failed: all")
+        return []
+    return _dedupe_research_items(items)
+
+
+def _render_back_home_button() -> None:
+    if st.button("← Back to Home"):
+        try:
+            st.query_params.clear()
+            st.rerun()
+        except Exception:
+            st.experimental_set_query_params()
+            st.experimental_rerun()
+
+
 def _render_research_content() -> None:
     items: list[dict[str, Any]] = []
     for content_type in ("AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION"):
@@ -283,58 +537,60 @@ def _render_research_content() -> None:
     )
     items = _dedupe_research_items(items)
 
-    selected_post = _query_param_value("post")
-    if selected_post:
-        for item in items:
-            if _content_slug(item) == selected_post or str(item.get("id")) == selected_post:
-                _render_content_detail(item)
-                return
-        st.warning("Article not found or not published.")
-        if st.button("← Back to Research"):
-            try:
-                st.query_params.clear()
-                st.rerun()
-            except Exception:
-                st.experimental_set_query_params()
-                st.experimental_rerun()
-        return
-
     items = items[:6]
     if not items:
         return
-    st.markdown('<h2 class="section-title">Latest Research & Education</h2>', unsafe_allow_html=True)
+    st.markdown(
+        '<h2 class="section-title">Latest Research & Education</h2>',
+        unsafe_allow_html=True,
+    )
+    _render_content_grid(items, empty_message="")
+
+
+def _render_content_grid(
+    items: list[dict[str, Any]],
+    *,
+    empty_message: str,
+) -> None:
+    if not items:
+        if empty_message:
+            st.info(empty_message)
+        return
     for start in range(0, len(items), 2):
         columns = st.columns(2)
         for column, item in zip(columns, items[start : start + 2]):
             with column:
-                with st.container(border=True):
-                    title = str(item.get("title") or "Research Article")
-                    if item.get("image_url"):
-                        st.image(str(item["image_url"]), use_container_width=True)
-                    else:
-                        _fallback_blog_banner(title)
-                    st.caption(
-                        str(item.get("content_type", "")).replace("_", " ")
-                    )
-                    st.subheader(title)
-                    st.write(item.get("excerpt") or "")
+                _render_content_card(item)
 
-                    slug = _content_slug(item)
-                    if slug:
-                        st.markdown(
-                            f'<a href="?post={quote(slug)}" target="_self" '
-                            f'style="display:block;text-align:center;padding:0.65rem 1rem;'
-                            f'border-radius:0.55rem;background:#2563eb;color:white;'
-                            f'text-decoration:none;font-weight:700;margin-top:0.75rem;">'
-                            f'Read Full Article</a>',
-                            unsafe_allow_html=True,
-                        )
-                    elif item.get("external_url"):
-                        st.link_button(
-                            "Read More",
-                            str(item["external_url"]),
-                            use_container_width=True,
-                        )
+
+def _render_content_card(item: dict[str, Any]) -> None:
+    title = str(item.get("title") or "Research Article")
+    content_type = str(item.get("content_type", "")).replace("_", " ").title()
+    excerpt = str(item.get("excerpt") or "").strip()
+    slug = _content_slug(item)
+    url = _local_url(post=slug) if slug else str(item.get("external_url") or "#")
+    if item.get("image_url"):
+        media = (
+            f'<img class="content-image" src="{html.escape(str(item["image_url"]))}" '
+            f'alt="{html.escape(title)}" loading="lazy">'
+        )
+    else:
+        media = _fallback_card_html(title, content_type or "Market Research")
+
+    st.markdown(
+        f"""
+        <a class="content-card clickable-card" href="{html.escape(url)}" target="_self">
+            {media}
+            <div class="content-card-body">
+                <div class="eyebrow">{html.escape(content_type or "Research")}</div>
+                <h3>{html.escape(title)}</h3>
+                <p>{html.escape(excerpt)}</p>
+                <div class="card-link-text">Read full post →</div>
+            </div>
+        </a>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _render_profit_proof(public_telegram_url: str) -> None:
