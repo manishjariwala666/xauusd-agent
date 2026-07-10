@@ -68,13 +68,22 @@ def robots() -> Response:
 @app.post("/webhooks/telegram/master")
 async def telegram_master_ai_webhook(
     request: Request,
-    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+    x_telegram_bot_api_secret_token: str | None = Header(
+        default=None,
+        alias="X-Telegram-Bot-Api-Secret-Token",
+    ),
 ) -> dict[str, Any]:
     """Receive Master AI Telegram bot updates."""
     expected = get_settings().telegram_webhook_secret
     if not expected:
         raise HTTPException(503, "Telegram webhook is not configured.")
-    if not hmac.compare_digest(x_telegram_bot_api_secret_token or "", expected):
+    if not _telegram_webhook_secret_matches(
+        x_telegram_bot_api_secret_token,
+        expected,
+    ):
+        logger.warning(
+            "Master Telegram webhook rejected: missing or mismatched secret header"
+        )
         raise HTTPException(403, "Invalid webhook signature.")
 
     payload = await request.json()
@@ -84,15 +93,22 @@ async def telegram_master_ai_webhook(
 @app.post("/webhooks/telegram")
 async def telegram_webhook(
     request: Request,
-    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+    x_telegram_bot_api_secret_token: str | None = Header(
+        default=None,
+        alias="X-Telegram-Bot-Api-Secret-Token",
+    ),
 ) -> dict[str, bool]:
     """Validate Telegram webhook secret and queue inbound messages."""
     expected = get_settings().telegram_webhook_secret
     if not expected:
         raise HTTPException(503, "Telegram webhook is not configured.")
-    if not hmac.compare_digest(
-        x_telegram_bot_api_secret_token or "", expected
+    if not _telegram_webhook_secret_matches(
+        x_telegram_bot_api_secret_token,
+        expected,
     ):
+        logger.warning(
+            "Telegram webhook rejected: missing or mismatched secret header"
+        )
         raise HTTPException(403, "Invalid webhook signature.")
     payload = await request.json()
 
@@ -295,18 +311,16 @@ def _register_single_telegram_webhook(
         logger.warning("Telegram %s webhook registration skipped: token missing", bot_name)
         return
 
-    webhook_url = public_api_url.rstrip("/") + path
     telegram_url = f"https://api.telegram.org/bot{token}/setWebhook"
 
     try:
         response = requests.post(
             telegram_url,
-            json={
-                "url": webhook_url,
-                "secret_token": webhook_secret,
-                "allowed_updates": ["message", "edited_message"],
-                "drop_pending_updates": False,
-            },
+            json=_telegram_webhook_payload(
+                public_api_url,
+                webhook_secret,
+                path=path,
+            ),
             timeout=30,
         )
         response.raise_for_status()
@@ -318,3 +332,29 @@ def _register_single_telegram_webhook(
     else:
         logger.info("Telegram %s webhook registered successfully at %s", bot_name, path)
 
+
+def _telegram_webhook_secret_matches(
+    provided: str | None,
+    expected: str,
+) -> bool:
+    """Compare Telegram webhook secrets without exposing either value."""
+    normalized_expected = str(expected or "").strip()
+    normalized_provided = str(provided or "").strip()
+    if not normalized_expected or not normalized_provided:
+        return False
+    return hmac.compare_digest(normalized_provided, normalized_expected)
+
+
+def _telegram_webhook_payload(
+    backend_base_url: str,
+    webhook_secret: str,
+    *,
+    path: str = "/webhooks/telegram",
+) -> dict[str, Any]:
+    """Build the Telegram setWebhook payload from environment values only."""
+    return {
+        "url": backend_base_url.rstrip("/") + path,
+        "secret_token": webhook_secret.strip(),
+        "allowed_updates": ["message", "edited_message"],
+        "drop_pending_updates": False,
+    }

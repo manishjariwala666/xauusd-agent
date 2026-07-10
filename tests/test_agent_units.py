@@ -1,11 +1,28 @@
 """Offline tests for deterministic production-agent behavior."""
 
 from datetime import datetime, timedelta, timezone
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message="'_UnionGenericAlias' is deprecated.*",
+    category=DeprecationWarning,
+)
 
 from services.google_sheets import GoogleSheetsService
-from services.production_agents import _seo_issues, _slugify
+from services.production_agents import (
+    _fallback_blog_payload,
+    _seo_issues,
+    _slugify,
+    run_image_agent,
+)
 from services.telegram_service import TelegramService
 from backend import _is_telegram_command
+from services.conversation_service import (
+    _extract_blog_topic,
+    _is_blog_only_command,
+    _requests_image,
+)
 
 
 def test_all_production_agent_runners_exist() -> None:
@@ -24,6 +41,45 @@ def test_all_production_agent_runners_exist() -> None:
 
 def test_slug_is_safe_and_stable() -> None:
     assert _slugify("XAUUSD: Risk & Reward!") == "xauusd-risk-reward"
+
+
+def test_blog_fallback_payload_is_publish_safe() -> None:
+    payload = _fallback_blog_payload("xauusd usa market")
+
+    assert payload["title"]
+    assert payload["slug"] == "xauusd-usa-market"
+    assert payload["meta_description"]
+    assert "Risk disclaimer" in payload["body_markdown"]
+    assert isinstance(payload["faq"], list)
+    assert isinstance(payload["schema_jsonld"], dict)
+
+
+def test_image_agent_skips_provider_failure(monkeypatch) -> None:
+    class FailingProvider:
+        def generate_image(self, **_: object) -> None:
+            raise RuntimeError("quota exhausted")
+
+    monkeypatch.setattr(
+        "services.production_agents.AIProvider",
+        lambda: FailingProvider(),
+    )
+
+    assert run_image_agent({"prompt": "gold market chart"}).startswith(
+        "Image generation skipped"
+    )
+
+
+def test_natural_blog_command_routes_as_blog_only() -> None:
+    command = "xauusd usa market ka seo blog banao"
+
+    assert _is_blog_only_command(command)
+    assert _extract_blog_topic(command) == "xauusd usa market"
+    assert not _requests_image(command)
+
+
+def test_blog_command_with_signal_is_not_blog_only() -> None:
+    assert not _is_blog_only_command("xauusd buy sell target signal blog banao")
+    assert _requests_image("xauusd seo blog banao with image")
 
 
 def test_seo_issue_detection() -> None:

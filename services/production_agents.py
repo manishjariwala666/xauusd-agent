@@ -24,7 +24,12 @@ from services.whatsapp_service import WhatsAppService
 
 
 def run_blog_agent(payload: dict[str, Any]) -> str:
-    """Generate one complete SEO blog record and persist it as a draft."""
+    """Generate one SEO blog record and persist it safely.
+
+    The blog workflow must remain durable even when the configured AI provider
+    is temporarily unavailable or quota-limited. In that case, deterministic
+    fallback content is saved instead of failing the whole agent run.
+    """
     topic = str(payload.get("topic") or "").strip()
     if not topic:
         topic = "Current XAUUSD market structure and disciplined risk control"
@@ -36,10 +41,17 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         "(array), faq (array of question/answer objects), schema_jsonld "
         "(object), image_prompt."
     )
-    generated = AIProvider().generate_json(
-        system_instruction=instruction,
-        user_instruction=f"Create a detailed SEO article about: {topic}",
-    )
+    try:
+        generated = AIProvider().generate_json(
+            system_instruction=instruction,
+            user_instruction=f"Create a detailed SEO article about: {topic}",
+        )
+    except Exception as exc:
+        logger.warning(
+            "AI blog provider failed; using deterministic fallback: {}",
+            exc.__class__.__name__,
+        )
+        generated = _fallback_blog_payload(topic)
     required = {
         "title",
         "meta_title",
@@ -53,59 +65,18 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
     }
     missing = sorted(required - generated.keys())
     if missing:
-        generated.setdefault("faq", [
-            {
-                "question": "What is XAUUSD?",
-                "answer": "XAUUSD represents gold priced against the US dollar and is followed by forex, CFD, commodity, and macro traders."
-            },
-            {
-                "question": "Why is risk control important in XAUUSD trading?",
-                "answer": "XAUUSD can move sharply during economic data, interest-rate changes, US dollar volatility, and geopolitical events. Position sizing and stop-loss discipline help protect capital."
-            },
-            {
-                "question": "Which factors affect XAUUSD price movement?",
-                "answer": "Major factors include US dollar strength, real yields, inflation expectations, Federal Reserve policy, geopolitical risk, and global risk sentiment."
-            }
-        ])
-
-        generated.setdefault("schema_jsonld", {
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": str(generated.get("title") or "XAUUSD Market Structure and Risk Control"),
-            "description": str(generated.get("meta_description") or "XAUUSD market structure and disciplined risk control guide."),
-            "keywords": str(generated.get("focus_keyword") or "XAUUSD market structure")
-        })
-
-        # Autofill missing required blog fields before validation.
-    if not generated.get("faq"):
-        generated["faq"] = [
-            {
-                "question": "What is XAUUSD?",
-                "answer": "XAUUSD represents gold priced against the US dollar and is followed by forex, CFD, commodity, and macro traders."
-            },
-            {
-                "question": "Why is risk control important in XAUUSD trading?",
-                "answer": "XAUUSD can move sharply during economic data, interest-rate changes, US dollar volatility, and geopolitical events. Position sizing and stop-loss discipline help protect capital."
-            },
-            {
-                "question": "Which factors affect XAUUSD price movement?",
-                "answer": "Major factors include US dollar strength, real yields, inflation expectations, Federal Reserve policy, geopolitical risk, and global risk sentiment."
-            }
-        ]
-
-    if not generated.get("schema_jsonld"):
-        generated["schema_jsonld"] = {
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": str(generated.get("title") or "XAUUSD Market Structure and Risk Control"),
-            "description": str(generated.get("meta_description") or "XAUUSD market structure and disciplined risk control guide."),
-            "keywords": str(generated.get("focus_keyword") or "XAUUSD market structure"),
-            "about": ["XAUUSD", "Gold Trading", "Risk Control", "Market Structure"]
-        }
-
-    missing = [key for key in required if not generated.get(key)]
-    if missing:
-        raise RuntimeError("AI blog response missing: " + ", ".join(missing))
+        logger.warning(
+            "AI blog response missing keys {}; using fallback payload.",
+            ", ".join(missing),
+        )
+    fallback = _fallback_blog_payload(topic)
+    for key in required:
+        if not generated.get(key):
+            generated[key] = fallback[key]
+    if not generated.get("internal_links"):
+        generated["internal_links"] = fallback["internal_links"]
+    if not generated.get("image_prompt"):
+        generated["image_prompt"] = fallback["image_prompt"]
     slug = _slugify(str(generated["slug"] or generated["title"]))
     publish = bool(payload.get("publish", True))
     with session_scope() as session:
@@ -182,19 +153,24 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
                 "image_prompt": str(generated.get("image_prompt") or "")[:2000],
             },
         )
-    try:
-        image_result = run_image_agent(
-            {
-                "content_id": int(content_id),
-                "prompt": str(
-                    generated.get("image_prompt")
-                    or f"Professional financial editorial image for {topic}"
-                ),
-            }
-        )
-    except Exception as exc:
-        logger.warning("Blog image generation skipped: {}", exc)
-        image_result = "Image generation skipped; blog content saved."
+    image_result = "Image generation skipped."
+    if bool(payload.get("include_image", False)):
+        try:
+            image_result = run_image_agent(
+                {
+                    "content_id": int(content_id),
+                    "prompt": str(
+                        generated.get("image_prompt")
+                        or f"Professional financial editorial image for {topic}"
+                    ),
+                }
+            )
+        except Exception as exc:
+            logger.warning(
+                "Blog image generation skipped after content save: {}",
+                exc.__class__.__name__,
+            )
+            image_result = "Image generation skipped; blog content saved."
     return (
         f"SEO blog #{content_id} saved as "
         f"{'published' if publish else 'draft'}. {image_result}"
@@ -470,13 +446,16 @@ def run_image_agent(payload: dict[str, Any]) -> str:
                 or ""
             )
     if not prompt:
-        raise ValueError("Image prompt or content_id is required.")
+        return "Image generation skipped: no prompt was available."
     workdir = Path("/tmp/ai-market-analytics/images")
     try:
         source = AIProvider().generate_image(prompt=prompt, output_dir=workdir)
     except Exception as exc:
-        logger.warning("Image generation skipped: {}", exc)
-        return f"Image generation skipped: {exc}"
+        logger.warning(
+            "Image provider failed; skipping optional image generation: {}",
+            exc.__class__.__name__,
+        )
+        return "Image generation skipped: provider unavailable."
     image = Image.open(source).convert("RGB")
     banner = ImageOps.fit(image, (1536, 1024), method=Image.Resampling.LANCZOS)
     draw = ImageDraw.Draw(banner)
@@ -880,3 +859,93 @@ def _unique_slug(session: Any, base_slug: str) -> str:
         suffix += 1
 
     return candidate
+
+
+def _fallback_blog_payload(topic: str) -> dict[str, Any]:
+    """Build deterministic publish-safe blog content without external AI."""
+    safe_topic = re.sub(r"\s+", " ", topic).strip()
+    if not safe_topic:
+        safe_topic = "XAUUSD market structure"
+    title = f"{safe_topic.title()}: Practical XAUUSD Market Guide"
+    focus_keyword = "XAUUSD market analysis"
+    slug = _slugify(safe_topic)
+    body = f"""# {title}
+
+XAUUSD traders often need a calm, structured view of the United States market
+session before making buy or sell decisions. This guide explains a practical
+framework for reading price action, trend context, risk levels, and target
+zones without relying on promises or emotional entries.
+
+## Market context
+
+Gold can react quickly around United States economic data, dollar strength,
+bond yields, and liquidity changes. A responsible workflow starts with the
+current trend, nearby support and resistance, and a clear invalidation level.
+When price is above an important average or previous resistance, traders may
+look for controlled bullish continuation. When price rejects resistance and
+breaks local structure, traders may prepare for a bearish move.
+
+## Buy and sell planning
+
+A buy plan should identify the entry area, stop-loss zone, first target, and
+the reason the trade is valid. A sell plan should do the same in the opposite
+direction. The goal is not to predict every candle; the goal is to trade only
+when the setup, risk, and market timing agree.
+
+## Risk control
+
+Use position sizing that fits your account and avoid adding risk after a trade
+has already moved against the plan. News periods can create spreads, slippage,
+and fast reversals, so every signal should be treated as educational market
+analysis rather than guaranteed income.
+
+## Summary
+
+For {safe_topic}, the strongest approach is to combine live price, support and
+resistance, target planning, and disciplined risk control. This keeps the
+decision process clear even when the market becomes volatile.
+
+Risk disclaimer: This content is educational only. Trading gold, forex, and
+derivatives involves risk, and losses are possible.
+"""
+    return {
+        "title": title,
+        "meta_title": title[:60],
+        "meta_description": (
+            "Learn a practical XAUUSD market framework for trend, buy/sell "
+            "planning, targets, and disciplined risk control."
+        ),
+        "focus_keyword": focus_keyword,
+        "slug": slug,
+        "excerpt": (
+            "A practical XAUUSD guide covering market context, buy/sell "
+            "planning, target zones, and risk control."
+        ),
+        "body_markdown": body,
+        "internal_links": ["/", "/?section=signals", "/?section=education"],
+        "faq": [
+            {
+                "question": "Is this XAUUSD blog financial advice?",
+                "answer": (
+                    "No. It is educational market analysis and does not "
+                    "guarantee profit."
+                ),
+            },
+            {
+                "question": "Should traders use stop-loss levels?",
+                "answer": (
+                    "Yes. Every plan should include risk control before entry."
+                ),
+            },
+        ],
+        "schema_jsonld": {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "headline": title,
+            "about": focus_keyword,
+        },
+        "image_prompt": (
+            "Professional editorial image of gold market analysis charts, "
+            "clean financial newsroom style, no text overlays."
+        ),
+    }

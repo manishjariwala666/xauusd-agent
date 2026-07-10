@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import re
 from typing import Any
 
 from sqlalchemy import text
@@ -66,15 +67,25 @@ def record_inbound_message(
         ).scalar_one_or_none()
     if inserted is None:
         return int(conversation_id), False
-    agent_key = (
-        "telegram_reply_agent"
-        if normalized_channel == "TELEGRAM"
-        else "whatsapp_reply_agent"
-    )
-    enqueue_agent_job(
-        agent_key,
-        {"conversation_id": int(conversation_id)},
-    )
+    if normalized_channel == "TELEGRAM" and _is_blog_only_command(body):
+        enqueue_agent_job(
+            "ai_blog_agent",
+            {
+                "topic": _extract_blog_topic(body),
+                "publish": True,
+                "include_image": _requests_image(body),
+            },
+        )
+    else:
+        agent_key = (
+            "telegram_reply_agent"
+            if normalized_channel == "TELEGRAM"
+            else "whatsapp_reply_agent"
+        )
+        enqueue_agent_job(
+            agent_key,
+            {"conversation_id": int(conversation_id)},
+        )
     return int(conversation_id), True
 
 
@@ -164,3 +175,72 @@ def list_conversations(limit: int = 100) -> list[dict[str, Any]]:
             .all()
         )
     return [dict(row) for row in rows]
+
+
+def _is_blog_only_command(body: str) -> bool:
+    """Detect natural-language Telegram requests that should create a blog."""
+    normalized = _normalize_command_text(body)
+    if not normalized:
+        return False
+    has_blog_intent = any(
+        phrase in normalized
+        for phrase in (
+            "blog banao",
+            "blog bana",
+            "seo blog",
+            "article banao",
+            "article bana",
+            "post banao",
+            "post bana",
+        )
+    )
+    if not has_blog_intent:
+        return False
+    signal_terms = {"signal", "buy sell", "buy/sell", "target signal"}
+    return not any(term in normalized for term in signal_terms)
+
+
+def _extract_blog_topic(body: str) -> str:
+    """Keep the user's topic while removing command filler words."""
+    topic = _normalize_command_text(body)
+    removals = (
+        "seo blog banao",
+        "seo blog bana",
+        "blog banao",
+        "blog bana",
+        "article banao",
+        "article bana",
+        "post banao",
+        "post bana",
+        "please",
+        "pls",
+        "krdo",
+        "kardo",
+        "kar do",
+        " ka ",
+        "banao",
+        "bana",
+    )
+    for phrase in removals:
+        topic = topic.replace(phrase, " ")
+    topic = re.sub(r"\s+", " ", topic).strip(" -:,")
+    return topic or "XAUUSD USA market analysis"
+
+
+def _requests_image(body: str) -> bool:
+    """Return whether the admin explicitly asked for image generation too."""
+    normalized = _normalize_command_text(body)
+    return any(
+        term in normalized
+        for term in (
+            "image",
+            "photo",
+            "thumbnail",
+            "banner",
+            "campaign",
+        )
+    )
+
+
+def _normalize_command_text(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "").lower()).strip()
