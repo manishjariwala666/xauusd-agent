@@ -148,6 +148,10 @@ class Settings:
     support_whatsapp_url: str
     telegram_bot_token: str
     telegram_chat_id: str
+    master_ai_telegram_bot_token: str
+    telegram_admin_user_id: str
+    telegram_admin_user_ids: str
+    master_ai_allow_natural_commands: bool
     google_service_account_json: str
     google_sheet_name: str
     google_worksheet_name: str
@@ -230,6 +234,16 @@ class Settings:
             support_whatsapp_url=_read_secret("SUPPORT_WHATSAPP_URL"),
             telegram_bot_token=_read_secret("TELEGRAM_BOT_TOKEN"),
             telegram_chat_id=_read_secret("TELEGRAM_CHAT_ID"),
+            master_ai_telegram_bot_token=_read_secret(
+                "MASTER_AI_TELEGRAM_BOT_TOKEN"
+            ),
+            telegram_admin_user_id=_read_secret("TELEGRAM_ADMIN_USER_ID"),
+            telegram_admin_user_ids=_read_secret("TELEGRAM_ADMIN_USER_IDS"),
+            master_ai_allow_natural_commands=_read_secret(
+                "MASTER_AI_ALLOW_NATURAL_COMMANDS",
+                "false",
+            ).lower()
+            in {"1", "true", "yes", "on"},
             google_service_account_json=google_credentials,
             google_sheet_name=_read_secret(
                 "GOOGLE_SHEET_NAME",
