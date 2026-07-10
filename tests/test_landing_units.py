@@ -60,3 +60,10 @@ def test_matches_content_identifier_uses_seo_slug_or_id():
     assert landing._matches_content_identifier(item, "usa-market-gold")
     assert landing._matches_content_identifier(item, "42")
     assert not landing._matches_content_identifier(item, "wrong")
+
+
+def test_fallback_card_html_prevents_empty_visual_cards():
+    html = landing._fallback_card_html("", "")
+
+    assert "XAUUSD Market Research" in html
+    assert "XAUUSD RESEARCH" in html

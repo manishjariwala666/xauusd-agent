@@ -18,6 +18,7 @@ from config import ConfigurationError, get_settings
 from core.database import session_scope
 from services.ai_provider import AIProvider
 from services.content_service import get_site_setting, save_content
+from services.google_sheets_service import append_message_log
 from services.google_sheets import GoogleSheetsService
 from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
@@ -603,6 +604,18 @@ def _run_reply(channel: str, payload: dict[str, Any]) -> str:
                 "external_id": external_id,
             },
         )
+    append_message_log(
+        channel=channel,
+        status="ai_reply",
+        user_id=str(conversation["external_user_id"]),
+        phone=(
+            str(conversation["external_user_id"])
+            if channel == "WHATSAPP"
+            else ""
+        ),
+        reply=reply[:1000],
+        notes=f"conversation_id={conversation_id}",
+    )
     return f"{channel.title()} AI reply delivered."
 
 

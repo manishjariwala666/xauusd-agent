@@ -11,6 +11,7 @@ from sqlalchemy import text
 from config import get_settings
 from core.database import session_scope
 from services.job_queue import enqueue_agent_job
+from services.google_sheets_service import append_message_log
 from services.telegram_service import TelegramService
 from services.whatsapp_service import WhatsAppService
 
@@ -67,6 +68,14 @@ def record_inbound_message(
         ).scalar_one_or_none()
     if inserted is None:
         return int(conversation_id), False
+    append_message_log(
+        channel=normalized_channel,
+        status="inbound",
+        user_id=external_user_id,
+        phone=external_user_id if normalized_channel == "WHATSAPP" else "",
+        message=body[:1000],
+        notes=f"conversation_id={conversation_id}",
+    )
     if normalized_channel == "TELEGRAM" and _is_blog_only_command(body):
         enqueue_agent_job(
             "ai_blog_agent",
@@ -149,6 +158,18 @@ def send_human_reply(
                 "admin_id": admin_id,
             },
         )
+    append_message_log(
+        channel=str(conversation["channel"]),
+        status="admin_reply",
+        user_id=str(conversation["external_user_id"]),
+        phone=(
+            str(conversation["external_user_id"])
+            if conversation["channel"] == "WHATSAPP"
+            else ""
+        ),
+        reply=message[:1000],
+        notes=f"conversation_id={conversation_id} admin_id={admin_id}",
+    )
     return external_id
 
 

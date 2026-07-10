@@ -238,21 +238,129 @@ def append_signal_log(
     notes: str = "",
 ) -> None:
     """Append one XAUUSD signal audit entry."""
-    append_row(
-        "xauusd_signals",
-        {
-            "source": source,
-            "status": status,
-            "direction": direction,
-            "entry": entry,
-            "target_1": target_1,
-            "target_2": target_2,
-            "target_3": target_3,
-            "stop_loss": stop_loss,
-            "risk_level": risk_level,
-            "notes": notes,
-        },
+    try:
+        append_row(
+            "xauusd_signals",
+            {
+                "source": source,
+                "status": status,
+                "direction": direction,
+                "entry": entry,
+                "target_1": target_1,
+                "target_2": target_2,
+                "target_3": target_3,
+                "stop_loss": stop_loss,
+                "risk_level": risk_level,
+                "notes": notes,
+            },
+        )
+    except Exception:
+        logger.exception("Unable to append XAUUSD signal log to Sheets")
+
+
+def append_content_queue_log(
+    *,
+    content_type: str,
+    status: str,
+    title: str,
+    slug: str,
+    topic: str = "",
+    platform: str = "website",
+    notes: str = "",
+) -> None:
+    """Best-effort content queue audit log; never raise to callers."""
+    try:
+        append_row(
+            "content_queue",
+            {
+                "content_type": content_type,
+                "status": status,
+                "title": title,
+                "slug": slug,
+                "topic": topic,
+                "platform": platform,
+                "notes": notes,
+            },
+        )
+    except Exception:
+        logger.exception("Unable to append content queue log to Sheets")
+
+
+def append_message_log(
+    *,
+    channel: str,
+    status: str,
+    user_id: str = "",
+    phone: str = "",
+    message: str = "",
+    reply: str = "",
+    notes: str = "",
+) -> None:
+    """Best-effort Telegram/WhatsApp message log; never raise to callers."""
+    normalized = str(channel or "").strip().upper()
+    tab_name = (
+        "telegram_master_logs"
+        if normalized == "TELEGRAM"
+        else "whatsapp_messages"
     )
+    try:
+        if tab_name == "telegram_master_logs":
+            append_row(
+                tab_name,
+                {
+                    "event_type": "message",
+                    "status": status,
+                    "user_id": user_id,
+                    "message": message,
+                    "reply": reply,
+                    "notes": notes,
+                },
+            )
+        else:
+            append_row(
+                tab_name,
+                {
+                    "status": status,
+                    "phone": phone or user_id,
+                    "message": message,
+                    "reply": reply,
+                    "notes": notes,
+                },
+            )
+    except Exception:
+        logger.exception("Unable to append message log to Sheets")
+
+
+def append_public_signal_log(
+    *,
+    status: str,
+    message_id: str = "",
+    direction: str = "",
+    entry: str | float = "",
+    target_1: str | float = "",
+    target_2: str | float = "",
+    target_3: str | float = "",
+    stop_loss: str | float = "",
+    notes: str = "",
+) -> None:
+    """Best-effort public Telegram signal audit log."""
+    try:
+        append_row(
+            "telegram_public_signals",
+            {
+                "status": status,
+                "message_id": message_id,
+                "direction": direction,
+                "entry": entry,
+                "target_1": target_1,
+                "target_2": target_2,
+                "target_3": target_3,
+                "stop_loss": stop_loss,
+                "notes": notes,
+            },
+        )
+    except Exception:
+        logger.exception("Unable to append public signal log to Sheets")
 
 
 def _client(service_account_json: str | None = None) -> gspread.Client:

@@ -16,6 +16,7 @@ import telebot
 
 from config import get_settings
 from core.database import session_scope
+from services.google_sheets_service import append_public_signal_log
 
 
 class TelegramConfigurationError(RuntimeError):
@@ -121,6 +122,17 @@ class TelegramService:
             signal_id,
             message.message_id,
             test,
+        )
+        append_public_signal_log(
+            status="test_sent" if test else "sent",
+            message_id=str(message.message_id),
+            direction=str(signal.get("signal_type") or ""),
+            entry=signal.get("price") or "",
+            target_1=signal.get("target_1") or signal.get("target_price") or "",
+            target_2=signal.get("target_2") or "",
+            target_3=signal.get("target_3") or "",
+            stop_loss=signal.get("stop_loss") or "",
+            notes=f"signal_id={signal_id or ''}",
         )
         return True
 

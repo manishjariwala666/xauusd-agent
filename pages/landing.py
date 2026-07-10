@@ -206,8 +206,8 @@ def _render_categories(categories: list[dict[str, Any]]) -> None:
                         <div class="category-icon">
                             {html.escape(str(category.get('icon') or '•'))}
                         </div>
-                        <h3>{html.escape(str(category['title']))}</h3>
-                        <p>{html.escape(str(category.get('description') or ''))}</p>
+                        <h3>{html.escape(str(category.get('title') or 'Market Category'))}</h3>
+                        <p>{html.escape(str(category.get('description') or 'Explore market education, signals, and updates.'))}</p>
                         <div class="card-link-text">Explore category →</div>
                     </a>
                     """,
@@ -232,7 +232,7 @@ def _render_announcements() -> None:
                        href="{html.escape(url)}" target="_self">
                         <div class="eyebrow">Announcement</div>
                         <h3>{html.escape(str(item.get('title') or 'Announcement'))}</h3>
-                        <p>{html.escape(str(item.get('excerpt') or item.get('body') or ''))}</p>
+                        <p>{html.escape(str(item.get('excerpt') or item.get('body') or 'Read the latest market update.'))}</p>
                         <div class="card-link-text">Read announcement →</div>
                     </a>
                     """,
@@ -446,6 +446,8 @@ def _render_content_detail(item: dict[str, Any]) -> None:
         st.caption(meta)
 
     excerpt = str(item.get("excerpt") or "").strip()
+    if not excerpt:
+        excerpt = "Read this public market update for practical trading context."
     if excerpt:
         st.info(excerpt)
 

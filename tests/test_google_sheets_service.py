@@ -9,6 +9,10 @@ from services.google_sheets_service import (
     GoogleSheetsServiceError,
     PrivateGoogleSheetsService,
     REQUIRED_TABS,
+    append_content_queue_log,
+    append_message_log,
+    append_public_signal_log,
+    append_signal_log,
 )
 
 
@@ -121,3 +125,20 @@ def test_unknown_tab_is_rejected() -> None:
 
     with pytest.raises(GoogleSheetsServiceError):
         service.append_row("unknown", {"status": "bad"})
+
+
+def test_best_effort_log_helpers_do_not_raise_without_credentials(monkeypatch) -> None:
+    def fail_append(*_: object, **__: object) -> None:
+        raise GoogleSheetsServiceError("missing credentials")
+
+    monkeypatch.setattr("services.google_sheets_service.append_row", fail_append)
+
+    append_content_queue_log(
+        content_type="BLOG",
+        status="published",
+        title="Gold",
+        slug="gold",
+    )
+    append_message_log(channel="WHATSAPP", status="inbound", message="hello")
+    append_public_signal_log(status="sent", direction="BUY")
+    append_signal_log(source="test", status="created", direction="BUY")

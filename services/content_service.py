@@ -14,6 +14,7 @@ from loguru import logger
 from sqlalchemy import text
 
 from core.database import session_scope
+from services.google_sheets_service import append_content_queue_log
 
 
 PAYMENT_NOT_STARTED = "NOT_STARTED"
@@ -357,6 +358,7 @@ def save_content(
         "image_prompt": (image_prompt or "").strip(),
     }
     with session_scope() as session:
+        is_create = content_id is None
         schema = _content_schema(session)
         content_columns = schema["content_item_columns"]
         if content_id is None:
@@ -435,6 +437,15 @@ def save_content(
         "Website content saved: type={} title={}",
         normalized_type,
         title.strip(),
+    )
+    append_content_queue_log(
+        content_type=normalized_type,
+        status=normalized_status,
+        title=title.strip(),
+        slug=normalized_slug,
+        topic=(subcategory or "").strip(),
+        platform="website",
+        notes=f"{'created' if is_create else 'updated'} content_id={content_id}",
     )
     return int(content_id)
 
