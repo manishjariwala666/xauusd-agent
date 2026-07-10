@@ -65,6 +65,8 @@ def render_admin_dashboard(supabase: Any) -> None:
         proof_tab,
         channels_tab,
         signals_tab,
+        users_tab,
+        logs_tab,
         automation_tab,
         ai_agents_tab,
     ) = st.tabs(
@@ -77,6 +79,8 @@ def render_admin_dashboard(supabase: Any) -> None:
             "Profit Proof",
             "Channel Links",
             "Signals",
+            "Users / Leads",
+            "Logs",
             "Pipeline",
             "AI Agents",
         ]
@@ -96,9 +100,13 @@ def render_admin_dashboard(supabase: Any) -> None:
     with channels_tab:
         _render_channel_settings()
     with signals_tab:
-        _render_signal_form()
+        _render_signal_form(supabase)
         st.divider()
         render_signal_feed(supabase, "No signal has been published.")
+    with users_tab:
+        _render_user_lead_manager()
+    with logs_tab:
+        _render_operations_logs()
     with automation_tab:
         _render_pipeline_health()
         st.divider()
@@ -597,6 +605,23 @@ def _table_exists(session: Any, table_name: str) -> bool:
     )
 
 
+def _column_exists(session: Any, table_name: str, column_name: str) -> bool:
+    return bool(
+        session.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = :table_name
+                  AND column_name = :column_name
+                """
+            ),
+            {"table_name": table_name, "column_name": column_name},
+        ).scalar_one_or_none()
+    )
+
+
 def _render_small_table(
     rows: list[dict[str, Any]],
     *,
@@ -622,6 +647,202 @@ def _render_google_sheet_sync_status() -> None:
         st.success("Google Sheet connected and required tabs are ready.")
         if rows:
             st.caption(f"Latest Sheet error row: {rows[-1]}")
+
+
+def _render_user_lead_manager() -> None:
+    st.subheader("User / Lead Manager")
+    try:
+        with session_scope() as session:
+            optional_columns = {
+                column: _column_exists(session, "users", column)
+                for column in ("name", "phone", "telegram_id", "source")
+            }
+            select_parts = [
+                "u.id",
+                (
+                    "u.name"
+                    if optional_columns["name"]
+                    else "''::text AS name"
+                ),
+                (
+                    "u.phone"
+                    if optional_columns["phone"]
+                    else "''::text AS phone"
+                ),
+                "u.email",
+                (
+                    "u.telegram_id"
+                    if optional_columns["telegram_id"]
+                    else "''::text AS telegram_id"
+                ),
+                "u.whatsapp AS whatsapp_number",
+                "u.payment_status AS subscription_status",
+                (
+                    "u.source"
+                    if optional_columns["source"]
+                    else "''::text AS source"
+                ),
+                "u.created_at",
+            ]
+            rows = [
+                dict(row)
+                for row in (
+                session.execute(
+                    text(
+                        f"""
+                        SELECT {", ".join(select_parts)}
+                        FROM public.users u
+                        ORDER BY u.created_at DESC
+                        LIMIT 200
+                        """
+                    )
+                )
+                .mappings()
+                .all()
+                )
+            ]
+    except Exception:
+        logger.exception("User lead manager loading failed")
+        st.error("User/lead manager is temporarily unavailable.")
+        return
+
+    st.dataframe(
+        rows,
+        use_container_width=True,
+        hide_index=True,
+    )
+    _render_lead_editor(rows, optional_columns)
+
+
+def _render_lead_editor(
+    rows: list[dict[str, Any]],
+    optional_columns: dict[str, bool],
+) -> None:
+    st.markdown("### Edit Lead Details")
+    if not rows:
+        st.info("No users or leads found.")
+        return
+
+    options = {
+        f"#{row['id']} · {row.get('email') or row.get('phone') or 'lead'}": row
+        for row in rows
+    }
+    selected = options[st.selectbox("Select user/lead", list(options))]
+    with st.form("lead_editor"):
+        name = st.text_input("Name", value=str(selected.get("name") or ""))
+        phone = st.text_input("Phone", value=str(selected.get("phone") or ""))
+        telegram_id = st.text_input(
+            "Telegram ID",
+            value=str(selected.get("telegram_id") or ""),
+        )
+        whatsapp = st.text_input(
+            "WhatsApp number",
+            value=str(selected.get("whatsapp_number") or ""),
+        )
+        source = st.text_input("Source", value=str(selected.get("source") or ""))
+        status = st.selectbox(
+            "Subscription status",
+            PAYMENT_STATES,
+            index=(
+                PAYMENT_STATES.index(selected["subscription_status"])
+                if selected.get("subscription_status") in PAYMENT_STATES
+                else 0
+            ),
+        )
+        submitted = st.form_submit_button(
+            "Update Lead",
+            type="primary",
+            use_container_width=True,
+        )
+    if not submitted:
+        return
+
+    updates = {
+        "whatsapp": whatsapp.strip(),
+        "payment_status": status,
+    }
+    if optional_columns.get("name"):
+        updates["name"] = name.strip()
+    if optional_columns.get("phone"):
+        updates["phone"] = phone.strip()
+    if optional_columns.get("telegram_id"):
+        updates["telegram_id"] = telegram_id.strip()
+    if optional_columns.get("source"):
+        updates["source"] = source.strip()
+
+    assignments = ", ".join(f"{column} = :{column}" for column in updates)
+    try:
+        with session_scope() as session:
+            session.execute(
+                text(
+                    f"""
+                    UPDATE public.users
+                    SET {assignments}, updated_at = NOW()
+                    WHERE id = :user_id
+                    """
+                ),
+                {**updates, "user_id": selected["id"]},
+            )
+    except Exception:
+        logger.exception("Lead update failed")
+        st.error("Lead could not be updated.")
+    else:
+        st.success("Lead updated.")
+        st.rerun()
+
+
+def _render_operations_logs() -> None:
+    st.subheader("Operations Logs")
+    db_tab, sheet_tab = st.tabs(["Database Logs", "Google Sheet Logs"])
+    with db_tab:
+        try:
+            with session_scope() as session:
+                st.markdown("### Telegram Master Logs")
+                _render_small_table(
+                    _query_latest_master_commands(session),
+                    empty_message="No Telegram Master logs found.",
+                )
+                st.markdown("### WhatsApp Message Logs")
+                _render_small_table(
+                    _query_latest_channel_messages(session, "WHATSAPP"),
+                    empty_message="No WhatsApp message logs found.",
+                )
+                st.markdown("### Error Logs")
+                _render_small_table(
+                    _query_recent_errors(session),
+                    empty_message="No recent error logs found.",
+                )
+        except Exception:
+            logger.exception("Database logs loading failed")
+            st.error("Database logs are temporarily unavailable.")
+    with sheet_tab:
+        _render_google_sheet_logs()
+
+
+def _render_google_sheet_logs() -> None:
+    log_tabs = {
+        "Telegram Master": "telegram_master_logs",
+        "Telegram Public Signals": "telegram_public_signals",
+        "WhatsApp Messages": "whatsapp_messages",
+        "Google Sheet Sync": "xauusd_signals",
+        "Errors": "errors",
+    }
+    selected_label = st.selectbox("Google Sheet log tab", list(log_tabs))
+    try:
+        rows = PrivateGoogleSheetsService().read_rows(
+            log_tabs[selected_label],
+            limit=50,
+        )
+    except GoogleSheetsServiceError as exc:
+        st.warning(f"Google Sheet logs not ready: {exc}")
+    except Exception:
+        logger.exception("Google Sheet logs loading failed")
+        st.error("Google Sheet logs could not be loaded.")
+    else:
+        _render_small_table(
+            rows,
+            empty_message=f"No {selected_label} rows found.",
+        )
 
 
 def _render_payment_reviews() -> None:
@@ -710,6 +931,17 @@ def _content_public_url(item: dict[str, Any]) -> str:
     ).rstrip("/")
 
     return f"{base_url}/?post={quote(slug)}"
+
+
+def _category_public_url(category_slug: str, subcategory_slug: str = "") -> str:
+    base_url = _admin_public_site_url()
+    if subcategory_slug:
+        return f"{base_url}/category/{quote(category_slug)}/{quote(subcategory_slug)}"
+    return f"{base_url}/category/{quote(category_slug)}"
+
+
+def _slug_fragment(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
 
 
 def _content_duplicate_key(item: dict[str, Any]) -> str:
@@ -1100,10 +1332,31 @@ def _render_category_manager() -> None:
     st.subheader("Website Categories")
     try:
         categories = list_categories(public_only=False)
+        subcategories = list_content(
+            content_type="SUBCATEGORY",
+            public_only=False,
+            limit=200,
+        )
     except Exception:
         logger.exception("Category manager loading failed")
         st.error("Categories are temporarily unavailable.")
         return
+    if categories:
+        st.markdown("### Public Category Links")
+        st.dataframe(
+            [
+                {
+                    "title": category["title"],
+                    "slug": category["slug"],
+                    "public_link": _category_public_url(str(category["slug"])),
+                    "active": category["is_active"],
+                    "public": category["is_public"],
+                }
+                for category in categories
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
     options = {"Create new": None}
     options.update(
         {f"#{item['id']} · {item['title']}": item for item in categories}
@@ -1157,6 +1410,129 @@ def _render_category_manager() -> None:
         else:
             st.success("Category saved.")
             st.rerun()
+
+    st.divider()
+    _render_subcategory_manager(categories, subcategories)
+
+
+def _render_subcategory_manager(
+    categories: list[dict[str, Any]],
+    subcategories: list[dict[str, Any]],
+) -> None:
+    st.subheader("Website Subcategories")
+    category_options = {
+        category["title"]: category
+        for category in categories
+        if category.get("is_active")
+    }
+    if not category_options:
+        st.info("Create an active category before adding subcategories.")
+        return
+
+    if subcategories:
+        st.dataframe(
+            [
+                {
+                    "id": item["id"],
+                    "title": item["title"],
+                    "slug": item.get("slug") or item.get("seo_slug") or "",
+                    "category": item.get("category_title") or "Uncategorized",
+                    "public_link": _category_public_url(
+                        str(item.get("category_slug") or ""),
+                        _slug_fragment(
+                            str(item.get("slug") or item.get("seo_slug") or item["title"])
+                        ),
+                    ) if item.get("category_slug") else "",
+                    "published": item.get("is_published"),
+                }
+                for item in subcategories
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    options = {"Create new subcategory": None}
+    options.update(
+        {
+            f"#{item['id']} · {item['title']}": item
+            for item in subcategories
+        }
+    )
+    selected = options[st.selectbox("Select subcategory", list(options))]
+    selected_category = next(
+        (
+            title for title, category in category_options.items()
+            if selected and category["id"] == selected.get("category_id")
+        ),
+        next(iter(category_options)),
+    )
+
+    with st.form("subcategory_editor"):
+        title = st.text_input(
+            "Subcategory title",
+            value=(selected.get("title") or "") if selected else "",
+        )
+        slug = st.text_input(
+            "Subcategory slug",
+            value=(
+                selected.get("slug")
+                or selected.get("seo_slug")
+                or ""
+            ) if selected else "",
+        )
+        category_name = st.selectbox(
+            "Parent category",
+            list(category_options),
+            index=list(category_options).index(selected_category),
+        )
+        excerpt = st.text_area(
+            "Description",
+            value=(selected.get("excerpt") or "") if selected else "",
+        )
+        is_public = st.checkbox(
+            "Visible publicly",
+            value=bool(selected["is_public"]) if selected else True,
+        )
+        is_published = st.checkbox(
+            "Published",
+            value=bool(selected["is_published"]) if selected else True,
+        )
+        submitted = st.form_submit_button(
+            "Save Subcategory",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if not submitted:
+        return
+    admin_id = get_current_user_id()
+    if admin_id is None:
+        st.error("Administrator session is invalid.")
+        return
+    parent_category = category_options[category_name]
+    try:
+        save_content(
+            content_id=int(selected["id"]) if selected else None,
+            content_type="SUBCATEGORY",
+            title=title,
+            slug=slug or title,
+            excerpt=excerpt,
+            body=excerpt,
+            category_id=int(parent_category["id"]),
+            subcategory=slug or title,
+            image_url="",
+            external_url="",
+            is_public=is_public,
+            is_published=is_published,
+            status="published" if is_published else "draft",
+            created_by=admin_id,
+        )
+    except Exception as exc:
+        logger.exception("Subcategory save failed")
+        st.error(str(exc) if isinstance(exc, ValueError) else "Save failed.")
+    else:
+        st.success("Subcategory saved.")
+        st.rerun()
 
 
 def _render_profit_screenshots(supabase: Any) -> None:
@@ -1287,61 +1663,130 @@ def _render_channel_settings() -> None:
             st.success("Protected links updated.")
 
 
-def _render_signal_form() -> None:
-    st.subheader("Publish XAUUSD Signal")
+def _render_signal_form(supabase: Any) -> None:
+    st.subheader("Signal Manager")
     with st.form("admin_signal_form"):
         left, right = st.columns(2)
         with left:
-            side = st.radio("Direction", ["BUY", "SELL"], horizontal=True)
-            entry = st.text_input("Entry price or zone")
+            direction = st.radio("Direction", ["BUY", "SELL"], horizontal=True)
+            entry = st.text_input("Entry")
+            target_1 = st.text_input("Target 1")
+            target_2 = st.text_input("Target 2")
+            target_3 = st.text_input("Target 3")
             stop_loss = st.text_input("Stop loss")
         with right:
-            tp1 = st.text_input("Take profit 1")
-            tp2 = st.text_input("Take profit 2")
-            confidence = st.selectbox(
-                "Confidence",
-                ["Standard", "High", "Very High"],
+            risk_level = st.selectbox(
+                "Risk level",
+                ["Low", "Medium", "High"],
             )
-        note = st.text_area("Risk note or execution instruction")
+            timeframe = st.selectbox(
+                "Timeframe",
+                ["Scalp", "Intraday", "Swing"],
+            )
+            send_telegram = st.checkbox(
+                "Send to Telegram public bot/channel",
+                value=True,
+            )
+            save_sheet = st.checkbox("Save to Google Sheet", value=True)
+        note = st.text_area("Note")
         submitted = st.form_submit_button(
-            "Publish to Verified Users",
+            "Create Signal",
             type="primary",
             use_container_width=True,
         )
     if not submitted:
         return
-    if not all((entry.strip(), stop_loss.strip(), tp1.strip())):
-        st.warning("Entry, stop loss, and take profit 1 are required.")
+
+    try:
+        entry_value = _required_decimal(entry, "Entry")
+        target_1_value = _required_decimal(target_1, "Target 1")
+        target_2_value = _optional_decimal(target_2)
+        target_3_value = _optional_decimal(target_3)
+        stop_loss_value = _required_decimal(stop_loss, "Stop loss")
+    except ValueError as exc:
+        st.warning(str(exc))
         return
+
+    whatsapp_reply = _build_whatsapp_signal_reply(
+        direction=direction,
+        entry=entry,
+        target_1=target_1,
+        target_2=target_2,
+        target_3=target_3,
+        stop_loss=stop_loss,
+        risk_level=risk_level,
+        timeframe=timeframe,
+        note=note,
+    )
     payload = {
-        "side": side,
-        "entry": entry.strip(),
-        "stop_loss": stop_loss.strip(),
-        "tp1": tp1.strip(),
-        "tp2": tp2.strip() or "—",
-        "confidence": confidence,
-        "note": note.strip()
-        or "Apply appropriate position sizing and risk controls.",
+        "signal_type": direction,
+        "price": entry_value,
+        "target_price": target_1_value,
+        "target_1": target_1_value,
+        "target_2": target_2_value,
+        "target_3": target_3_value,
+        "stop_loss": stop_loss_value,
+        "source": "ADMIN_PANEL",
+        "sheet_label": f"Manual {direction} · {timeframe}",
+        "risk_level": risk_level,
+        "timeframe": timeframe,
+        "note": note.strip(),
+        "whatsapp_reply": whatsapp_reply,
     }
     try:
         with session_scope() as session:
-            session.execute(
+            signal_id = session.execute(
                 text(
                     """
-                    INSERT INTO public.signals (message, sender)
-                    VALUES (:message, :sender)
+                    INSERT INTO public.market_signals (
+                        symbol, price, signal_type, target_price,
+                        target_1, target_2, target_3, stop_loss, source,
+                        sheet_label, risk_level, timeframe, note,
+                        whatsapp_reply, signal_time, updated_at
+                    )
+                    VALUES (
+                        'XAUUSD', :price, :signal_type, :target_price,
+                        :target_1, :target_2, :target_3, :stop_loss, :source,
+                        :sheet_label, :risk_level, :timeframe, :note,
+                        :whatsapp_reply, NOW(), NOW()
+                    )
+                    RETURNING id
                     """
                 ),
-                {
-                    "message": "XAU_SIGNAL_V1:" + json.dumps(payload),
-                    "sender": "Admin",
-                },
-            )
+                payload,
+            ).scalar_one()
     except Exception:
         logger.exception("Signal publication failed")
         st.error("Signal could not be published.")
         return
-    st.success(f"{side} signal published successfully.")
+
+    payload["id"] = signal_id
+    telegram_sent = False
+    if send_telegram:
+        try:
+            telegram_sent = TelegramService(supabase).send_signal(payload)
+        except Exception:
+            logger.exception("Manual signal Telegram delivery failed")
+
+    sheet_saved = False
+    if save_sheet:
+        sheet_saved = _log_manual_signal_to_sheets(payload)
+
+    st.success(f"{direction} signal saved successfully.")
+    if send_telegram:
+        (st.success if telegram_sent else st.warning)(
+            "Telegram public signal sent."
+            if telegram_sent
+            else "Signal saved, but Telegram delivery did not complete."
+        )
+    if save_sheet:
+        (st.success if sheet_saved else st.warning)(
+            "Signal saved to Google Sheet."
+            if sheet_saved
+            else "Signal saved, but Google Sheet logging did not complete."
+        )
+    st.markdown("#### Prepared WhatsApp Reply")
+    st.code(whatsapp_reply, language="text")
 
 
 def _render_pipeline_health() -> None:
@@ -1821,4 +2266,89 @@ def _optional_decimal(value: str) -> Decimal | None:
     try:
         return Decimal(cleaned)
     except InvalidOperation as exc:
-        raise ValueError("Target and stop loss must be numeric.") from exc
+        raise ValueError("Signal price fields must be numeric.") from exc
+
+
+def _required_decimal(value: str, label: str) -> Decimal:
+    parsed = _optional_decimal(value)
+    if parsed is None:
+        raise ValueError(f"{label} is required.")
+    return parsed
+
+
+def _build_whatsapp_signal_reply(
+    *,
+    direction: str,
+    entry: str,
+    target_1: str,
+    target_2: str,
+    target_3: str,
+    stop_loss: str,
+    risk_level: str,
+    timeframe: str,
+    note: str,
+) -> str:
+    targets = [target_1.strip()]
+    targets.extend(
+        target.strip()
+        for target in (target_2, target_3)
+        if target.strip()
+    )
+    lines = [
+        f"XAUUSD {direction.upper()} Signal",
+        f"Entry: {entry.strip()}",
+        f"Targets: {', '.join(targets)}",
+        f"Stop Loss: {stop_loss.strip()}",
+        f"Risk: {risk_level}",
+        f"Timeframe: {timeframe}",
+    ]
+    if note.strip():
+        lines.append(f"Note: {note.strip()}")
+    lines.append("Manage risk carefully. No guaranteed profit.")
+    return "\n".join(lines)
+
+
+def _log_manual_signal_to_sheets(signal: dict[str, Any]) -> bool:
+    try:
+        service = PrivateGoogleSheetsService()
+        service.append_row(
+            "xauusd_signals",
+            {
+                "source": "admin_panel",
+                "status": "created",
+                "direction": signal["signal_type"],
+                "entry": signal["price"],
+                "target_1": signal["target_1"],
+                "target_2": signal.get("target_2") or "",
+                "target_3": signal.get("target_3") or "",
+                "stop_loss": signal["stop_loss"],
+                "risk_level": signal["risk_level"],
+                "notes": signal.get("note") or "",
+            },
+        )
+        service.append_row(
+            "telegram_public_signals",
+            {
+                "status": "queued_or_sent",
+                "direction": signal["signal_type"],
+                "entry": signal["price"],
+                "target_1": signal["target_1"],
+                "target_2": signal.get("target_2") or "",
+                "target_3": signal.get("target_3") or "",
+                "stop_loss": signal["stop_loss"],
+                "notes": signal.get("note") or "",
+            },
+        )
+        service.append_row(
+            "whatsapp_messages",
+            {
+                "status": "prepared",
+                "message": signal["whatsapp_reply"],
+                "reply": signal["whatsapp_reply"],
+                "notes": f"Manual signal #{signal.get('id')}",
+            },
+        )
+    except Exception:
+        logger.exception("Manual signal Google Sheet logging failed")
+        return False
+    return True

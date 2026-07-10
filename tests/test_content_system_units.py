@@ -37,7 +37,11 @@ def test_content_slug_and_json_helpers_are_safe() -> None:
 
 def test_content_system_migration_is_automatic_and_complete() -> None:
     assert "008_content_system_extensions.sql" in _AUTOMATIC_MIGRATIONS
+    assert "010_admin_operations_extensions.sql" in _AUTOMATIC_MIGRATIONS
     sql = (ROOT / "migrations/008_content_system_extensions.sql").read_text(
+        encoding="utf-8"
+    )
+    ops_sql = (ROOT / "migrations/010_admin_operations_extensions.sql").read_text(
         encoding="utf-8"
     )
 
@@ -45,3 +49,5 @@ def test_content_system_migration_is_automatic_and_complete() -> None:
     assert "ADD COLUMN IF NOT EXISTS subcategory TEXT" in sql
     assert "ADD COLUMN IF NOT EXISTS status TEXT" in sql
     assert "'SIGNAL_POST'" in sql
+    assert "ADD COLUMN IF NOT EXISTS target_1" in ops_sql
+    assert "ADD COLUMN IF NOT EXISTS telegram_id TEXT" in ops_sql

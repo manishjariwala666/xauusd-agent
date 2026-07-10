@@ -283,20 +283,35 @@ class TelegramService:
         observed_at = TelegramService._format_time(
             signal.get("signal_time") or signal.get("updated_at")
         )
-        return "\n".join(
-            (
-                f"<b>{icon} {heading}XAUUSD {html.escape(direction)}</b>",
-                "",
-                f"<b>Price:</b> {TelegramService._value(signal.get('price'))}",
-                f"<b>Time:</b> {html.escape(observed_at)}",
-                (
-                    "<b>Target:</b> "
-                    f"{TelegramService._value(signal.get('target_price'))}"
-                ),
-                (
-                    "<b>Stop Loss:</b> "
-                    f"{TelegramService._value(signal.get('stop_loss'))}"
-                ),
+        targets = [
+            TelegramService._value(
+                signal.get(key)
+                or (signal.get("target_price") if key == "target_1" else None)
+            )
+            for key in ("target_1", "target_2", "target_3")
+            if signal.get(key)
+            or (key == "target_1" and signal.get("target_price"))
+        ]
+        lines = [
+            f"<b>{icon} {heading}XAUUSD {html.escape(direction)}</b>",
+            "",
+            f"<b>Entry:</b> {TelegramService._value(signal.get('price'))}",
+            f"<b>Time:</b> {html.escape(observed_at)}",
+            f"<b>Targets:</b> {html.escape(', '.join(targets) or '—')}",
+            f"<b>Stop Loss:</b> {TelegramService._value(signal.get('stop_loss'))}",
+        ]
+        if signal.get("risk_level"):
+            lines.append(
+                f"<b>Risk:</b> {html.escape(str(signal.get('risk_level')))}"
+            )
+        if signal.get("timeframe"):
+            lines.append(
+                f"<b>Timeframe:</b> {html.escape(str(signal.get('timeframe')))}"
+            )
+        if signal.get("note"):
+            lines.append(f"<b>Note:</b> {html.escape(str(signal.get('note')))}")
+        lines.extend(
+            [
                 (
                     "<b>Sheet Label:</b> "
                     f"{html.escape(str(signal.get('sheet_label') or '—'))}"
@@ -308,8 +323,9 @@ class TelegramService:
                 "",
                 "<i>Manage risk carefully. This is market analysis, "
                 "not guaranteed financial advice.</i>",
-            )
+            ]
         )
+        return "\n".join(lines)
 
     def _record_failure(self, signal_id: Any, error: str) -> None:
         try:
