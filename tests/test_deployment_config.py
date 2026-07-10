@@ -67,3 +67,5 @@ def test_scheduled_agent_requires_runtime_validation_gate() -> None:
     ) in workflow
     assert "JWT_SECRET must contain at least 32 characters." in workflow
     assert "TELEGRAM_BOT_TOKEN must be a BotFather token" in workflow
+    assert "GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}" in workflow
+    assert "check_secret GOOGLE_SHEET_ID" in workflow
