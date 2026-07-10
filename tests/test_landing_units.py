@@ -67,3 +67,50 @@ def test_fallback_card_html_prevents_empty_visual_cards():
 
     assert "XAUUSD Market Research" in html
     assert "XAUUSD RESEARCH" in html
+
+
+def test_blog_detail_by_slug_route_dispatches_to_content_detail(monkeypatch):
+    calls = []
+
+    def fake_render_content_route(slug, *, allowed_types=None):
+        calls.append((slug, allowed_types))
+
+    monkeypatch.setattr(landing, "_render_content_route", fake_render_content_route)
+
+    handled = landing._render_path_route(
+        ["blog", "xauusd-usa-market"],
+        supabase=None,
+        settings=object(),
+        categories=[],
+        on_sign_in=lambda: None,
+    )
+
+    assert handled
+    assert calls == [("xauusd-usa-market", landing.BLOG_CONTENT_TYPES)]
+
+
+def test_category_page_route_dispatches_with_subcategory(monkeypatch):
+    calls = []
+
+    def fake_render_category_route(
+        selected_category,
+        categories,
+        on_sign_in,
+        *,
+        subcategory_slug="",
+    ):
+        calls.append((selected_category, categories, subcategory_slug))
+
+    monkeypatch.setattr(landing, "_render_category_route", fake_render_category_route)
+    categories = [{"slug": "xauusd", "title": "XAUUSD"}]
+
+    handled = landing._render_path_route(
+        ["category", "xauusd", "usa-market"],
+        supabase=None,
+        settings=object(),
+        categories=categories,
+        on_sign_in=lambda: None,
+    )
+
+    assert handled
+    assert calls == [("xauusd", categories, "usa-market")]

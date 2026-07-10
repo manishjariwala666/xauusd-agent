@@ -122,6 +122,28 @@ def test_telegram_signal_formatter_escapes_html() -> None:
     assert "<unsafe>" not in message
 
 
+def test_signal_formatting_includes_multi_targets_and_risk_fields() -> None:
+    message = TelegramService.format_message(
+        {
+            "signal_type": "SELL",
+            "price": 4120,
+            "target_1": 4110,
+            "target_2": 4100,
+            "target_3": 4090,
+            "stop_loss": 4130,
+            "risk_level": "Medium",
+            "timeframe": "Intraday",
+            "note": "Wait for confirmation",
+            "source": "admin",
+        }
+    )
+
+    assert "Targets:" in message
+    assert "4,110.00, 4,100.00, 4,090.00" in message
+    assert "<b>Risk:</b> Medium" in message
+    assert "<b>Timeframe:</b> Intraday" in message
+
+
 def test_trend_selects_newest_fresh_valid_signal() -> None:
     now = datetime(2026, 7, 6, 12, 0, tzinfo=timezone.utc)
     selected = TelegramService.select_latest_valid_signal(

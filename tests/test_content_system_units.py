@@ -62,6 +62,18 @@ def test_content_seo_select_clause_has_safe_fallbacks() -> None:
     assert "'{}'::jsonb AS schema_jsonld" in fallback
 
 
+def test_content_listing_selects_seo_metadata_when_table_exists() -> None:
+    select_clause = _content_seo_select_clause(True)
+
+    assert "cs.slug AS seo_slug" in select_clause
+    assert "cs.meta_title" in select_clause
+    assert "cs.meta_description" in select_clause
+    assert "cs.focus_keyword" in select_clause
+    assert "cs.faq" in select_clause
+    assert "cs.schema_jsonld" in select_clause
+    assert "cs.image_prompt" in select_clause
+
+
 def test_site_setting_allowlist_contains_admin_settings() -> None:
     import inspect
 

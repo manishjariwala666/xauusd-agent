@@ -24,6 +24,17 @@ def test_admin_dashboard_has_required_operational_widgets() -> None:
     assert "Recent Errors" in source
 
 
+def test_admin_content_list_uses_full_content_service_and_filters() -> None:
+    source = inspect.getsource(dashboard._render_content_manager)
+
+    assert "list_content(public_only=False, limit=200)" in source
+    assert "Blogs" in source
+    assert "Pages" in source
+    assert "Announcements" in source
+    assert "Signals" in source
+    assert "All content" in source
+
+
 def test_admin_signal_manager_has_required_manual_fields() -> None:
     source = inspect.getsource(dashboard._render_signal_form)
 
