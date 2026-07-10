@@ -60,6 +60,13 @@ def apply_theme() -> None:
             }
             .brand-dot { color: var(--gold); }
             .nav-note { color: var(--muted); font-size: .84rem; }
+            .nav-note a {
+                color: var(--muted) !important;
+                text-decoration: none !important;
+                margin-left: .85rem;
+                font-weight: 700;
+            }
+            .nav-note a:hover { color: var(--gold) !important; }
             .hero {
                 position: relative;
                 overflow: hidden;

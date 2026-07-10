@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import html
+import re
 from typing import Any, Callable
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, unquote, urlencode, urlparse
 
 from loguru import logger
 import streamlit as st
@@ -21,6 +22,8 @@ from services.public_market_service import (
     get_xauusd_snapshot,
 )
 
+BLOG_CONTENT_TYPES = ("BLOG", "AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION")
+
 
 def render_landing_page(
     supabase: Any,
@@ -31,6 +34,17 @@ def render_landing_page(
     _render_nav(settings.brand_name, on_sign_in)
 
     categories = _safe_categories()
+    route_segments = _current_public_path_segments()
+    if _render_path_route(
+        route_segments,
+        supabase,
+        settings,
+        categories,
+        on_sign_in,
+    ):
+        _render_disclaimer()
+        return
+
     selected_post = _query_param_value("post")
     selected_announcement = _query_param_value("announcement")
     selected_category = _query_param_value("category")
@@ -79,11 +93,13 @@ def _render_nav(brand_name: str, on_sign_in: Callable[[], None]) -> None:
         st.markdown(
             f"""
             <div class="site-nav">
-                <a class="brand" href="?" target="_self">
+                <a class="brand" href="/" target="_self">
                     {html.escape(brand_name)}<span class="brand-dot">.</span>
                 </a>
                 <div class="nav-note">
-                    XAUUSD · Crypto · Research · Education
+                    <a href="/blog" target="_self">Blog</a>
+                    <a href="/signals" target="_self">Signals</a>
+                    <a href="/announcements" target="_self">Announcements</a>
                 </div>
             </div>
             """,
@@ -153,7 +169,7 @@ def _render_categories(categories: list[dict[str, Any]]) -> None:
         for column, category in zip(columns, categories[start : start + 3]):
             with column:
                 slug = str(category.get("slug") or category.get("id") or "")
-                url = _local_url(category=slug)
+                url = _path_url("category", slug)
                 st.markdown(
                     f"""
                     <a class="premium-card clickable-card" href="{html.escape(url)}" target="_self">
@@ -179,7 +195,7 @@ def _render_announcements() -> None:
         for column, item in zip(columns, items[start : start + 2]):
             with column:
                 slug = _content_slug(item)
-                url = _local_url(announcement=slug) if slug else "#"
+                url = _path_url("announcements", slug) if slug else "#"
                 st.markdown(
                     f"""
                     <a class="premium-card announcement-card clickable-card"
@@ -211,6 +227,77 @@ def _query_param_value(name: str) -> str:
             return ""
 
 
+def _current_public_path_segments() -> list[str]:
+    """Return clean public URL path segments from Streamlit's request context."""
+    try:
+        current_url = getattr(st.context, "url", "") or ""
+    except Exception:
+        current_url = ""
+    path = urlparse(current_url).path if current_url else ""
+    return _path_segments(path)
+
+
+def _path_segments(path: str) -> list[str]:
+    """Normalize a URL path into decoded route segments."""
+    return [
+        unquote(part).strip()
+        for part in str(path or "").strip("/").split("/")
+        if part.strip()
+    ]
+
+
+def _render_path_route(
+    segments: list[str],
+    supabase: Any,
+    settings: Any,
+    categories: list[dict[str, Any]],
+    on_sign_in: Callable[[], None],
+) -> bool:
+    """Render a clean public route when the browser path requests one."""
+    if not segments:
+        return False
+
+    route = segments[0].strip().lower()
+    slug = segments[1].strip() if len(segments) > 1 else ""
+
+    if route == "blog":
+        if slug:
+            _render_content_route(slug, allowed_types=BLOG_CONTENT_TYPES)
+        else:
+            _render_blog_index()
+        return True
+
+    if route == "category" and slug:
+        subcategory_slug = segments[2].strip() if len(segments) > 2 else ""
+        _render_category_route(
+            slug,
+            categories,
+            on_sign_in,
+            subcategory_slug=subcategory_slug,
+        )
+        return True
+
+    if route == "announcements":
+        if slug:
+            _render_announcement_route(slug)
+        else:
+            _render_announcements_index()
+        return True
+
+    if route == "signals":
+        if slug:
+            _render_content_route(slug, allowed_types=("SIGNAL_POST",))
+        else:
+            _render_signals_index(supabase, settings, on_sign_in)
+        return True
+
+    if route == "page" and slug:
+        _render_content_route(slug, allowed_types=("PAGE",))
+        return True
+
+    return False
+
+
 def _content_slug(item: dict[str, Any]) -> str:
     return str(
         item.get("seo_slug")
@@ -230,6 +317,37 @@ def _local_url(**params: str) -> str:
     if not clean_params:
         return "?"
     return "?" + urlencode(clean_params)
+
+
+def _path_url(*parts: str) -> str:
+    """Build an absolute public route URL from safe path segments."""
+    clean_parts = [
+        quote(str(part).strip("/"), safe="")
+        for part in parts
+        if part is not None and str(part).strip("/")
+    ]
+    return "/" + "/".join(clean_parts)
+
+
+def _content_url(item: dict[str, Any]) -> str:
+    """Return the correct public route for one content item."""
+    slug = _content_slug(item)
+    if not slug:
+        return str(item.get("external_url") or "#")
+
+    content_type = str(item.get("content_type") or "").upper()
+    if content_type == "ANNOUNCEMENT":
+        return _path_url("announcements", slug)
+    if content_type == "PAGE":
+        return _path_url("page", slug)
+    if content_type == "SIGNAL_POST":
+        return _path_url("signals", slug)
+    return _path_url("blog", slug)
+
+
+def _slug_fragment(value: str) -> str:
+    """Normalize human category/subcategory text for route matching."""
+    return re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
 
 
 def _fallback_card_html(
@@ -383,8 +501,18 @@ def _render_xauusd_signal_section(
             on_sign_in()
 
 
-def _render_content_route(selected_post: str) -> None:
+def _render_content_route(
+    selected_post: str,
+    *,
+    allowed_types: tuple[str, ...] | None = None,
+) -> None:
     items = _all_public_content()
+    if allowed_types:
+        allowed = {content_type.upper() for content_type in allowed_types}
+        items = [
+            item for item in items
+            if str(item.get("content_type") or "").upper() in allowed
+        ]
     for item in items:
         if _matches_content_identifier(item, selected_post):
             _render_content_detail(item)
@@ -403,10 +531,61 @@ def _render_announcement_route(selected_announcement: str) -> None:
     _render_back_home_button()
 
 
+def _render_blog_index() -> None:
+    st.markdown(
+        '<h1 class="section-title">Market Blog & Research</h1>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="section-subtitle">Latest XAUUSD research, education, and market commentary.</p>',
+        unsafe_allow_html=True,
+    )
+    items = _content_items_by_type(BLOG_CONTENT_TYPES, limit=60)
+    _render_content_grid(
+        items[:24],
+        empty_message="No public blog posts are available yet.",
+    )
+
+
+def _render_announcements_index() -> None:
+    st.markdown(
+        '<h1 class="section-title">Announcements</h1>',
+        unsafe_allow_html=True,
+    )
+    items = _safe_content("ANNOUNCEMENT", 60)
+    _render_content_grid(
+        items,
+        empty_message="No public announcements are available yet.",
+    )
+
+
+def _render_signals_index(
+    supabase: Any,
+    settings: Any,
+    on_sign_in: Callable[[], None],
+) -> None:
+    st.markdown(
+        '<h1 class="section-title">Public XAUUSD Signals</h1>',
+        unsafe_allow_html=True,
+    )
+    xauusd = get_xauusd_snapshot(supabase) or {}
+    _render_xauusd_signal_section(xauusd, settings, on_sign_in)
+    items = _content_items_by_type(("SIGNAL_POST",), limit=40)
+    _render_content_grid(
+        items,
+        empty_message=(
+            "No public signal posts are available yet. "
+            "Premium buy/sell targets remain inside verified member access."
+        ),
+    )
+
+
 def _render_category_route(
     selected_category: str,
     categories: list[dict[str, Any]],
     on_sign_in: Callable[[], None],
+    *,
+    subcategory_slug: str = "",
 ) -> None:
     category = _find_category(categories, selected_category)
     if not category:
@@ -431,6 +610,29 @@ def _render_category_route(
         if str(item.get("category_slug") or "") == str(category.get("slug") or "")
         or str(item.get("category_id") or "") == str(category.get("id") or "")
     ]
+    selected_subcategory = (
+        subcategory_slug or _query_param_value("subcategory")
+    ).strip()
+    available_subcategories = sorted(
+        {
+            str(item.get("subcategory") or "").strip()
+            for item in items
+            if str(item.get("subcategory") or "").strip()
+        }
+    )
+    if available_subcategories:
+        _render_subcategory_links(
+            str(category.get("slug") or ""),
+            available_subcategories,
+            selected_subcategory,
+        )
+    if selected_subcategory:
+        items = [
+            item for item in items
+            if _slug_fragment(str(item.get("subcategory") or ""))
+            == _slug_fragment(selected_subcategory)
+        ]
+
     selected_type = _query_param_value("type").strip().upper()
     available_types = sorted(
         {
@@ -439,8 +641,8 @@ def _render_category_route(
             if item.get("content_type")
         }
     )
-    if available_types:
-        _render_subcategory_links(
+    if available_types and not available_subcategories:
+        _render_content_type_links(
             str(category.get("slug") or ""),
             available_types,
             selected_type,
@@ -460,12 +662,42 @@ def _render_category_route(
 
 def _render_subcategory_links(
     category_slug: str,
+    subcategories: list[str],
+    selected_subcategory: str,
+) -> None:
+    links = [
+        f'<a class="social-link" '
+        f'href="{html.escape(_path_url("category", category_slug))}" '
+        f'target="_self">All</a>'
+    ]
+    selected_slug = _slug_fragment(selected_subcategory)
+    for subcategory in subcategories:
+        subcategory_slug = _slug_fragment(subcategory)
+        label = subcategory.replace("_", " ").title()
+        css_class = (
+            "social-link active-chip"
+            if subcategory_slug == selected_slug
+            else "social-link"
+        )
+        links.append(
+            f'<a class="{css_class}" '
+            f'href="{html.escape(_path_url("category", category_slug, subcategory_slug))}" '
+            f'target="_self">{html.escape(label)}</a>'
+        )
+    st.markdown(
+        f'<div class="social-row">{"".join(links)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _render_content_type_links(
+    category_slug: str,
     content_types: list[str],
     selected_type: str,
 ) -> None:
     links = [
         f'<a class="social-link" '
-        f'href="{html.escape(_local_url(category=category_slug))}" '
+        f'href="{html.escape(_path_url("category", category_slug))}" '
         f'target="_self">All</a>'
     ]
     for content_type in content_types:
@@ -517,6 +749,22 @@ def _all_public_content(limit: int = 80) -> list[dict[str, Any]]:
     return _dedupe_research_items(items)
 
 
+def _content_items_by_type(
+    content_types: tuple[str, ...],
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Load and merge public content rows across multiple content types."""
+    items: list[dict[str, Any]] = []
+    for content_type in content_types:
+        items.extend(_safe_content(content_type, limit))
+    items.sort(
+        key=lambda item: item.get("published_at") or item.get("created_at"),
+        reverse=True,
+    )
+    return _dedupe_research_items(items)
+
+
 def _render_back_home_button() -> None:
     if st.button("← Back to Home"):
         try:
@@ -528,16 +776,7 @@ def _render_back_home_button() -> None:
 
 
 def _render_research_content() -> None:
-    items: list[dict[str, Any]] = []
-    for content_type in ("AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION"):
-        items.extend(_safe_content(content_type, 10))
-    items.sort(
-        key=lambda item: item.get("published_at") or item.get("created_at"),
-        reverse=True,
-    )
-    items = _dedupe_research_items(items)
-
-    items = items[:6]
+    items = _content_items_by_type(BLOG_CONTENT_TYPES, limit=10)[:6]
     if not items:
         return
     st.markdown(
@@ -568,7 +807,7 @@ def _render_content_card(item: dict[str, Any]) -> None:
     content_type = str(item.get("content_type", "")).replace("_", " ").title()
     excerpt = str(item.get("excerpt") or "").strip()
     slug = _content_slug(item)
-    url = _local_url(post=slug) if slug else str(item.get("external_url") or "#")
+    url = _content_url(item) if slug else str(item.get("external_url") or "#")
     if item.get("image_url"):
         media = (
             f'<img class="content-image" src="{html.escape(str(item["image_url"]))}" '
