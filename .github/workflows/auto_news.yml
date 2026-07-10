@@ -90,6 +90,14 @@ jobs:
           if len(jwt_secret) < 32:
               issues.append("JWT_SECRET must contain at least 32 characters.")
 
+          telegram_token = "".join(
+              os.environ.get("TELEGRAM_BOT_TOKEN", "").split()
+          )
+          if ":" not in telegram_token:
+              issues.append(
+                  "TELEGRAM_BOT_TOKEN must be a BotFather token and contain a colon."
+              )
+
           if issues:
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
                   output.write("ready=false\n")

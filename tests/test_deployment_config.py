@@ -65,3 +65,4 @@ def test_scheduled_agent_requires_runtime_validation_gate() -> None:
         "steps.validate_runtime.outputs.ready == 'true'"
     ) in workflow
     assert "JWT_SECRET must contain at least 32 characters." in workflow
+    assert "TELEGRAM_BOT_TOKEN must be a BotFather token" in workflow
