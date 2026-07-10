@@ -45,6 +45,7 @@ def test_environment_template_contains_all_config_keys() -> None:
         "META_APP_SECRET",
         "GEMINI_API_KEY",
         "OPENAI_API_KEY",
+        "GOOGLE_SHEET_ID",
     }
     keys = {
         line.split("=", 1)[0]

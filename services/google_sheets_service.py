@@ -1,122 +1,200 @@
-"""Google Sheets helper for Master AI logs and XAUUSD signal automation."""
+"""Private Google Sheets logbook integration for Master AI operations.
+
+This service uses only a Google service-account JSON document and a private
+spreadsheet ID. It intentionally does not support public API keys or published
+CSV URLs because the operational log book contains private admin data.
+"""
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import os
-from datetime import datetime, timezone
 from typing import Any
 
 import gspread
+from loguru import logger
+
+from config import parse_google_service_account_json
 
 
-DEFAULT_HEADERS = [
-    "created_at",
-    "event_type",
-    "platform",
-    "source",
-    "run_id",
-    "status",
-    "chat_id",
-    "user_id",
-    "message",
-    "reply",
-    "direction",
-    "entry",
-    "target_1",
-    "target_2",
-    "target_3",
-    "stop_loss",
-    "risk_level",
-    "notes",
-]
+REQUIRED_TABS = (
+    "settings",
+    "telegram_master_logs",
+    "telegram_public_signals",
+    "whatsapp_messages",
+    "xauusd_signals",
+    "users",
+    "content_queue",
+    "errors",
+)
+
+DEFAULT_HEADERS: dict[str, list[str]] = {
+    "settings": ["created_at", "key", "value", "notes"],
+    "telegram_master_logs": [
+        "created_at",
+        "event_type",
+        "status",
+        "run_id",
+        "chat_id",
+        "user_id",
+        "message",
+        "reply",
+        "notes",
+    ],
+    "telegram_public_signals": [
+        "created_at",
+        "status",
+        "message_id",
+        "direction",
+        "entry",
+        "target_1",
+        "target_2",
+        "target_3",
+        "stop_loss",
+        "notes",
+    ],
+    "whatsapp_messages": [
+        "created_at",
+        "status",
+        "phone",
+        "message",
+        "reply",
+        "notes",
+    ],
+    "xauusd_signals": [
+        "created_at",
+        "source",
+        "status",
+        "direction",
+        "entry",
+        "target_1",
+        "target_2",
+        "target_3",
+        "stop_loss",
+        "risk_level",
+        "notes",
+    ],
+    "users": [
+        "created_at",
+        "user_id",
+        "name",
+        "telegram_id",
+        "whatsapp",
+        "status",
+        "plan",
+        "notes",
+    ],
+    "content_queue": [
+        "created_at",
+        "content_type",
+        "status",
+        "title",
+        "slug",
+        "topic",
+        "platform",
+        "notes",
+    ],
+    "errors": [
+        "created_at",
+        "source",
+        "status",
+        "error_type",
+        "message",
+        "notes",
+    ],
+}
 
 
-def _client() -> gspread.Client:
-    raw_json = (
-        os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-        or os.getenv("GOOGLE_CREDENTIALS_JSON")
-        or ""
-    ).strip()
-
-    file_path = (
-        os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
-        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        or ""
-    ).strip()
-
-    if raw_json:
-        creds = json.loads(raw_json)
-        return gspread.service_account_from_dict(creds)
-
-    if file_path:
-        return gspread.service_account(filename=file_path)
-
-    raise RuntimeError(
-        "Google Sheets credentials missing. Set GOOGLE_SERVICE_ACCOUNT_JSON "
-        "or GOOGLE_SERVICE_ACCOUNT_FILE."
-    )
+class GoogleSheetsServiceError(RuntimeError):
+    """Raised when the private Google Sheets logbook is unavailable."""
 
 
-def _sheet_id() -> str:
-    sheet_id = os.getenv("GOOGLE_SHEET_ID", "").strip()
-    if sheet_id:
-        return sheet_id
+def append_row(tab_name: str, row_dict: dict[str, Any]) -> None:
+    """Append one dictionary row to a required Google Sheet tab.
 
-    # Existing config fallback.
-    try:
-        from config import get_settings
-
-        value = getattr(get_settings(), "google_sheet_id", "") or ""
-        if str(value).strip():
-            return str(value).strip()
-    except Exception:
-        pass
-
-    raise RuntimeError("GOOGLE_SHEET_ID is missing.")
+    Missing configured columns are written as blanks. New keys are appended to
+    the header row so operational logging can evolve without migrations.
+    """
+    service = PrivateGoogleSheetsService()
+    service.append_row(tab_name, row_dict)
 
 
-def _worksheet_name(default: str = "Signals") -> str:
-    return (
-        os.getenv("GOOGLE_WORKSHEET_NAME")
-        or os.getenv("GOOGLE_WORKSHEET")
-        or default
-    ).strip()
+def read_rows(tab_name: str, limit: int = 100) -> list[dict[str, Any]]:
+    """Read recent rows from a required tab, newest rows last."""
+    service = PrivateGoogleSheetsService()
+    return service.read_rows(tab_name, limit=limit)
 
 
-def get_worksheet(name: str | None = None) -> Any:
-    spreadsheet = _client().open_by_key(_sheet_id())
-    worksheet_name = name or _worksheet_name()
+def ensure_required_tabs() -> None:
+    """Create all required tabs and headers if they do not exist."""
+    PrivateGoogleSheetsService().ensure_required_tabs()
 
-    try:
-        worksheet = spreadsheet.worksheet(worksheet_name)
-    except gspread.WorksheetNotFound:
-        worksheet = spreadsheet.add_worksheet(
-            title=worksheet_name,
-            rows=1000,
-            cols=len(DEFAULT_HEADERS) + 5,
+
+class PrivateGoogleSheetsService:
+    """Small, safe wrapper around a private service-account spreadsheet."""
+
+    def __init__(
+        self,
+        *,
+        sheet_id: str | None = None,
+        service_account_json: str | None = None,
+        client: gspread.Client | None = None,
+    ) -> None:
+        self._sheet_id = (sheet_id or _sheet_id()).strip()
+        self._client = client or _client(service_account_json)
+        self._spreadsheet: Any | None = None
+
+    def ensure_required_tabs(self) -> None:
+        for tab_name in REQUIRED_TABS:
+            self._worksheet(tab_name)
+
+    def append_row(self, tab_name: str, row_dict: dict[str, Any]) -> None:
+        normalized_tab = _normalize_tab_name(tab_name)
+        if not isinstance(row_dict, dict):
+            raise GoogleSheetsServiceError("row_dict must be a dictionary.")
+
+        worksheet = self._worksheet(normalized_tab)
+        headers = _ensure_headers(worksheet, normalized_tab, row_dict)
+        payload = {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            **row_dict,
+        }
+        values = [_stringify_cell(payload.get(header, "")) for header in headers]
+        worksheet.append_row(values, value_input_option="USER_ENTERED")
+
+    def read_rows(self, tab_name: str, limit: int = 100) -> list[dict[str, Any]]:
+        normalized_tab = _normalize_tab_name(tab_name)
+        safe_limit = max(1, min(int(limit or 100), 1000))
+        worksheet = self._worksheet(normalized_tab)
+        records = worksheet.get_all_records(
+            default_blank="",
+            numericise_ignore=["all"],
         )
+        return [dict(row) for row in records[-safe_limit:]]
 
-    values = worksheet.get_all_values()
-    if not values:
-        worksheet.append_row(DEFAULT_HEADERS, value_input_option="USER_ENTERED")
+    def _worksheet(self, tab_name: str) -> Any:
+        spreadsheet = self._open_spreadsheet()
+        try:
+            worksheet = spreadsheet.worksheet(tab_name)
+        except gspread.WorksheetNotFound:
+            worksheet = spreadsheet.add_worksheet(
+                title=tab_name,
+                rows=1000,
+                cols=max(20, len(DEFAULT_HEADERS[tab_name]) + 5),
+            )
+        _ensure_headers(worksheet, tab_name, {})
+        return worksheet
 
-    return worksheet
+    def _open_spreadsheet(self) -> Any:
+        if self._spreadsheet is None:
+            self._spreadsheet = self._client.open_by_key(self._sheet_id)
+        return self._spreadsheet
 
 
 def append_event(row: dict[str, Any], *, worksheet_name: str | None = None) -> None:
-    worksheet = get_worksheet(worksheet_name)
-
-    headers = worksheet.row_values(1)
-    if not headers:
-        headers = DEFAULT_HEADERS
-        worksheet.append_row(headers, value_input_option="USER_ENTERED")
-
-    created_at = datetime.now(timezone.utc).isoformat()
-    payload = {"created_at": created_at, **row}
-
-    values = [payload.get(header, "") for header in headers]
-    worksheet.append_row(values, value_input_option="USER_ENTERED")
+    """Backward-compatible append helper used by older Master AI code."""
+    append_row(worksheet_name or "telegram_master_logs", row)
 
 
 def append_master_log(
@@ -128,20 +206,22 @@ def append_master_log(
     user_id: int | str | None = None,
     notes: str = "",
 ) -> None:
-    append_event(
-        {
-            "event_type": "master_command",
-            "platform": "telegram",
-            "source": "master_ai",
-            "run_id": run_id or "",
-            "status": status,
-            "chat_id": chat_id or "",
-            "user_id": user_id or "",
-            "message": command,
-            "notes": notes,
-        },
-        worksheet_name=os.getenv("GOOGLE_MASTER_LOG_WORKSHEET", "MasterLogs"),
-    )
+    """Append one Master AI command audit entry."""
+    try:
+        append_row(
+            "telegram_master_logs",
+            {
+                "event_type": "master_command",
+                "status": status,
+                "run_id": run_id or "",
+                "chat_id": chat_id or "",
+                "user_id": user_id or "",
+                "message": command,
+                "notes": notes,
+            },
+        )
+    except Exception:
+        logger.exception("Unable to append Telegram Master AI log to Sheets")
 
 
 def append_signal_log(
@@ -157,10 +237,10 @@ def append_signal_log(
     risk_level: str = "",
     notes: str = "",
 ) -> None:
-    append_event(
+    """Append one XAUUSD signal audit entry."""
+    append_row(
+        "xauusd_signals",
         {
-            "event_type": "xauusd_signal",
-            "platform": "system",
             "source": source,
             "status": status,
             "direction": direction,
@@ -172,5 +252,77 @@ def append_signal_log(
             "risk_level": risk_level,
             "notes": notes,
         },
-        worksheet_name=os.getenv("GOOGLE_SIGNAL_LOG_WORKSHEET", "Signals"),
     )
+
+
+def _client(service_account_json: str | None = None) -> gspread.Client:
+    raw_json = (
+        service_account_json
+        or os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+        or ""
+    ).strip()
+    if not raw_json:
+        raise GoogleSheetsServiceError(
+            "GOOGLE_SERVICE_ACCOUNT_JSON is required for private sheet access."
+        )
+    credentials = parse_google_service_account_json(raw_json)
+    return gspread.service_account_from_dict(credentials)
+
+
+def _sheet_id() -> str:
+    sheet_id = os.getenv("GOOGLE_SHEET_ID", "").strip()
+    if sheet_id:
+        return sheet_id
+    try:
+        from config import get_settings
+
+        value = getattr(get_settings(), "google_sheet_id", "") or ""
+        if str(value).strip():
+            return str(value).strip()
+    except Exception:
+        pass
+    raise GoogleSheetsServiceError("GOOGLE_SHEET_ID is required.")
+
+
+def _normalize_tab_name(tab_name: str) -> str:
+    normalized = str(tab_name or "").strip()
+    if normalized not in REQUIRED_TABS:
+        raise GoogleSheetsServiceError(
+            "Unsupported Google Sheet tab: " + normalized
+        )
+    return normalized
+
+
+def _ensure_headers(
+    worksheet: Any,
+    tab_name: str,
+    row_dict: dict[str, Any],
+) -> list[str]:
+    configured = list(DEFAULT_HEADERS[tab_name])
+    existing = [str(value).strip() for value in worksheet.row_values(1)]
+    headers = existing or configured
+
+    changed = False
+    for header in configured:
+        if header not in headers:
+            headers.append(header)
+            changed = True
+    for key in row_dict:
+        header = str(key).strip()
+        if header and header not in headers:
+            headers.append(header)
+            changed = True
+
+    if not existing:
+        worksheet.append_row(headers, value_input_option="USER_ENTERED")
+    elif changed:
+        worksheet.update("1:1", [headers], value_input_option="USER_ENTERED")
+    return headers
+
+
+def _stringify_cell(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list, tuple)):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return str(value)

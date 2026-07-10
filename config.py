@@ -158,6 +158,7 @@ class Settings:
     telegram_admin_user_ids: str
     master_ai_allow_natural_commands: bool
     google_service_account_json: str
+    google_sheet_id: str
     google_sheet_name: str
     google_worksheet_name: str
     google_sheet_public_url: str
@@ -252,6 +253,7 @@ class Settings:
             ).lower()
             in {"1", "true", "yes", "on"},
             google_service_account_json=google_credentials,
+            google_sheet_id=_read_secret("GOOGLE_SHEET_ID"),
             google_sheet_name=_read_secret(
                 "GOOGLE_SHEET_NAME",
                 "xauusd_automation",
