@@ -16,6 +16,7 @@ _AUTOMATIC_MIGRATIONS = (
     "003_website_content_payment.sql",
     "005_ai_agents.sql",
     "006_production_agents.sql",
+    "008_content_system_extensions.sql",
 )
 
 

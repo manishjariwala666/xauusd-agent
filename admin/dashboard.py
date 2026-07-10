@@ -534,6 +534,14 @@ def _update_content_publish_state(
         is_public=is_public,
         is_published=is_published,
         created_by=admin_id,
+        slug=str(item.get("slug") or item.get("seo_slug") or item["id"]),
+        subcategory=str(item.get("subcategory") or ""),
+        status="published" if is_published else "draft",
+        meta_title=str(item.get("meta_title") or ""),
+        meta_description=str(item.get("meta_description") or ""),
+        focus_keyword=str(item.get("focus_keyword") or ""),
+        faq=item.get("faq") or [],
+        schema_jsonld=item.get("schema_jsonld") or {},
     )
 
 
@@ -668,6 +676,15 @@ def _render_content_manager() -> None:
             ),
         )
         title = st.text_input("Title", value=selected["title"] if selected else "")
+        slug = st.text_input(
+            "Slug",
+            value=(
+                selected.get("slug")
+                or selected.get("seo_slug")
+                or ""
+            ) if selected else "",
+            help="Clean URL slug, for example: xauusd-usa-market-outlook",
+        )
         excerpt = st.text_area(
             "Short excerpt",
             value=(selected.get("excerpt") or "") if selected else "",
@@ -682,6 +699,11 @@ def _render_content_manager() -> None:
             list(category_options),
             index=list(category_options).index(selected_category),
         )
+        subcategory = st.text_input(
+            "Subcategory",
+            value=(selected.get("subcategory") or "") if selected else "",
+            help="Optional public grouping such as USA Market, Gold News, Strategy.",
+        )
         image_url = st.text_input(
             "Image URL",
             value=(selected.get("image_url") or "") if selected else "",
@@ -695,10 +717,53 @@ def _render_content_manager() -> None:
             "Visible publicly",
             value=bool(selected["is_public"]) if selected else True,
         )
-        is_published = col2.checkbox(
-            "Published",
-            value=bool(selected["is_published"]) if selected else False,
+        status_options = ["draft", "published"]
+        selected_status = (
+            "published"
+            if selected and selected.get("is_published")
+            else str((selected or {}).get("status") or "draft").lower()
         )
+        status = col2.selectbox(
+            "Status",
+            status_options,
+            index=(
+                status_options.index(selected_status)
+                if selected_status in status_options
+                else 0
+            ),
+        )
+        with st.expander("SEO metadata"):
+            meta_title = st.text_input(
+                "Meta title",
+                value=(selected.get("meta_title") or "") if selected else "",
+            )
+            meta_description = st.text_area(
+                "Meta description",
+                value=(selected.get("meta_description") or "") if selected else "",
+                height=90,
+            )
+            focus_keyword = st.text_input(
+                "Focus keyword",
+                value=(selected.get("focus_keyword") or "") if selected else "",
+            )
+            faq = st.text_area(
+                "FAQ JSON",
+                value=json.dumps(
+                    selected.get("faq") or [],
+                    ensure_ascii=False,
+                    indent=2,
+                ) if selected else "[]",
+                height=120,
+            )
+            schema_jsonld = st.text_area(
+                "Schema JSON-LD",
+                value=json.dumps(
+                    selected.get("schema_jsonld") or {},
+                    ensure_ascii=False,
+                    indent=2,
+                ) if selected else "{}",
+                height=140,
+            )
         submitted = st.form_submit_button(
             "Save Content",
             type="primary",
@@ -717,10 +782,18 @@ def _render_content_manager() -> None:
                 excerpt=excerpt,
                 body=body,
                 category_id=category_options[category_name],
+                slug=slug,
+                subcategory=subcategory,
                 image_url=image_url,
                 external_url=external_url,
                 is_public=is_public,
-                is_published=is_published,
+                is_published=status == "published",
+                status=status,
+                meta_title=meta_title,
+                meta_description=meta_description,
+                focus_keyword=focus_keyword,
+                faq=faq,
+                schema_jsonld=schema_jsonld,
                 created_by=admin_id,
             )
         except Exception as exc:

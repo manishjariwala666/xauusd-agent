@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 import mimetypes
 from pathlib import Path
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -28,14 +30,23 @@ PAYMENT_STATES = (
 )
 
 CONTENT_TYPES = (
+    "BLOG",
+    "PAGE",
+    "ANNOUNCEMENT",
+    "SIGNAL_POST",
+    "CATEGORY",
+    "SUBCATEGORY",
     "SPECIAL_ZONE",
     "ADVISORY",
     "ANALYSIS",
     "EDUCATION",
     "AI_BLOG",
-    "ANNOUNCEMENT",
     "PROFIT_SCREENSHOT",
 )
+
+CONTENT_STATUS_DRAFT = "draft"
+CONTENT_STATUS_PUBLISHED = "published"
+CONTENT_STATUSES = (CONTENT_STATUS_DRAFT, CONTENT_STATUS_PUBLISHED)
 
 
 def list_categories(public_only: bool = True) -> list[dict[str, Any]]:
@@ -155,10 +166,18 @@ def list_content(
             session.execute(
                 text(
                     f"""
-                    SELECT ci.id, ci.category_id, ci.content_type, ci.title,
+                    SELECT ci.id, ci.category_id, ci.content_type,
+                           COALESCE(ci.slug, cs.slug) AS slug,
+                           ci.subcategory,
+                           CASE
+                               WHEN ci.is_published = TRUE THEN 'published'
+                               ELSE COALESCE(ci.status, 'draft')
+                           END AS status,
+                           ci.title,
                            ci.excerpt, ci.body, ci.image_url, ci.external_url,
                            ci.is_public, ci.is_published, ci.published_at,
-                           ci.created_at, cc.title AS category_title,
+                           ci.created_at, ci.updated_at,
+                           cc.title AS category_title,
                            cc.slug AS category_slug,
                            cs.slug AS seo_slug,
                            cs.meta_title,
@@ -195,12 +214,15 @@ def list_member_content(limit: int = 30) -> list[dict[str, Any]]:
             session.execute(
                 text(
                     """
-                    SELECT ci.id, ci.content_type, ci.title, ci.excerpt,
+                    SELECT ci.id, ci.content_type, COALESCE(ci.slug, cs.slug) AS slug,
+                           ci.subcategory, ci.status, ci.title, ci.excerpt,
                            ci.body, ci.image_url, ci.external_url,
                            ci.published_at, cc.title AS category_title
                     FROM public.content_items ci
                     LEFT JOIN public.content_categories cc
                       ON cc.id = ci.category_id
+                    LEFT JOIN public.content_seo cs
+                      ON cs.content_id = ci.id
                     WHERE ci.is_published = TRUE
                     ORDER BY COALESCE(ci.published_at, ci.created_at) DESC
                     LIMIT :limit
@@ -227,6 +249,14 @@ def save_content(
     is_published: bool,
     created_by: int,
     content_id: int | None = None,
+    slug: str | None = None,
+    subcategory: str | None = None,
+    status: str | None = None,
+    meta_title: str | None = None,
+    meta_description: str | None = None,
+    focus_keyword: str | None = None,
+    faq: Any | None = None,
+    schema_jsonld: Any | None = None,
 ) -> None:
     """Create or update an admin-managed content item."""
     normalized_type = content_type.strip().upper()
@@ -234,9 +264,17 @@ def save_content(
         raise ValueError("Unsupported content type.")
     if not title.strip():
         raise ValueError("Content title is required.")
+    normalized_status = _normalize_content_status(status, is_published)
+    is_published = normalized_status == CONTENT_STATUS_PUBLISHED
     published_at = datetime.now(timezone.utc) if is_published else None
+    normalized_slug = _normalize_content_slug(slug or title)
+    faq_json = _json_payload(faq, default=[])
+    schema_json = _json_payload(schema_jsonld, default={})
     parameters = {
         "content_type": normalized_type,
+        "slug": normalized_slug,
+        "subcategory": (subcategory or "").strip(),
+        "status": normalized_status,
         "title": title.strip(),
         "excerpt": excerpt.strip(),
         "body": body.strip(),
@@ -247,26 +285,34 @@ def save_content(
         "is_published": is_published,
         "published_at": published_at,
         "created_by": created_by,
+        "meta_title": (meta_title or "").strip(),
+        "meta_description": (meta_description or "").strip(),
+        "focus_keyword": (focus_keyword or "").strip(),
+        "faq": json.dumps(faq_json),
+        "schema_jsonld": json.dumps(schema_json),
     }
     with session_scope() as session:
         if content_id is None:
-            session.execute(
+            content_id = session.execute(
                 text(
                     """
                     INSERT INTO public.content_items (
-                        content_type, title, excerpt, body, category_id,
+                        content_type, slug, subcategory, status,
+                        title, excerpt, body, category_id,
                         image_url, external_url, is_public, is_published,
                         published_at, created_by
                     )
                     VALUES (
-                        :content_type, :title, :excerpt, :body, :category_id,
+                        :content_type, :slug, :subcategory, :status,
+                        :title, :excerpt, :body, :category_id,
                         :image_url, :external_url, :is_public, :is_published,
                         :published_at, :created_by
                     )
+                    RETURNING id
                     """
                 ),
                 parameters,
-            )
+            ).scalar_one()
         else:
             parameters["content_id"] = content_id
             session.execute(
@@ -274,6 +320,9 @@ def save_content(
                     """
                     UPDATE public.content_items
                     SET content_type = :content_type,
+                        slug = :slug,
+                        subcategory = :subcategory,
+                        status = :status,
                         title = :title,
                         excerpt = :excerpt,
                         body = :body,
@@ -292,11 +341,66 @@ def save_content(
                 ),
                 parameters,
             )
+        parameters["content_id"] = content_id
+        session.execute(
+            text(
+                """
+                INSERT INTO public.content_seo (
+                    content_id, slug, meta_title, meta_description,
+                    focus_keyword, faq, schema_jsonld
+                )
+                VALUES (
+                    :content_id, :slug, :meta_title, :meta_description,
+                    :focus_keyword, CAST(:faq AS JSONB),
+                    CAST(:schema_jsonld AS JSONB)
+                )
+                ON CONFLICT (content_id) DO UPDATE
+                SET slug = EXCLUDED.slug,
+                    meta_title = EXCLUDED.meta_title,
+                    meta_description = EXCLUDED.meta_description,
+                    focus_keyword = EXCLUDED.focus_keyword,
+                    faq = EXCLUDED.faq,
+                    schema_jsonld = EXCLUDED.schema_jsonld,
+                    updated_at = NOW()
+                """
+            ),
+            parameters,
+        )
     logger.info(
         "Website content saved: type={} title={}",
         normalized_type,
         title.strip(),
     )
+
+
+def _normalize_content_status(status: str | None, is_published: bool) -> str:
+    """Map UI status and legacy boolean publish state into one safe value."""
+    normalized = (status or "").strip().lower()
+    if not normalized:
+        return CONTENT_STATUS_PUBLISHED if is_published else CONTENT_STATUS_DRAFT
+    if normalized not in CONTENT_STATUSES:
+        raise ValueError("Unsupported content status.")
+    return normalized
+
+
+def _normalize_content_slug(value: str) -> str:
+    """Create a stable URL slug without using any external dependency."""
+    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+    if not slug:
+        raise ValueError("Content slug is required.")
+    return slug[:160]
+
+
+def _json_payload(value: Any, *, default: Any) -> Any:
+    """Accept dict/list payloads or JSON strings from the admin editor."""
+    if value in (None, ""):
+        return default
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError("SEO JSON fields must contain valid JSON.") from exc
+    return value
 
 
 def delete_content(content_id: int) -> None:

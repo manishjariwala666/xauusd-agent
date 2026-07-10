@@ -91,16 +91,21 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
             text(
                 """
                 INSERT INTO public.content_items (
-                    category_id, content_type, title, excerpt, body,
+                    category_id, content_type, slug, subcategory, status,
+                    title, excerpt, body,
                     is_public, is_published, published_at
                 ) VALUES (
-                    :category_id, 'AI_BLOG', :title, :excerpt, :body,
+                    :category_id, 'AI_BLOG', :slug, :subcategory,
+                    CASE WHEN :published THEN 'published' ELSE 'draft' END,
+                    :title, :excerpt, :body,
                     TRUE, :published, CASE WHEN :published THEN NOW() END
                 ) RETURNING id
                 """
             ),
             {
                 "category_id": category_id,
+                "slug": slug,
+                "subcategory": str(payload.get("subcategory") or ""),
                 "title": str(generated["title"])[:250],
                 "excerpt": str(generated["excerpt"])[:1000],
                 "body": str(generated["body_markdown"]),
