@@ -162,38 +162,65 @@ def list_content(
         )
     where_clause = "WHERE " + " AND ".join(clauses) if clauses else ""
     with session_scope() as session:
+        schema = _content_schema(session)
+        slug_expression = (
+            "COALESCE(ci.slug, cs.slug)"
+            if schema["content_item_columns"].get("slug")
+            and schema["has_content_seo"]
+            else (
+                "ci.slug"
+                if schema["content_item_columns"].get("slug")
+                else ("cs.slug" if schema["has_content_seo"] else "NULL::text")
+            )
+        )
+        subcategory_expression = (
+            "ci.subcategory"
+            if schema["content_item_columns"].get("subcategory")
+            else "NULL::text"
+        )
+        status_expression = (
+            """
+            CASE
+                WHEN ci.is_published = TRUE THEN 'published'
+                ELSE COALESCE(ci.status, 'draft')
+            END
+            """
+            if schema["content_item_columns"].get("status")
+            else """
+            CASE
+                WHEN ci.is_published = TRUE THEN 'published'
+                ELSE 'draft'
+            END
+            """
+        )
+        seo_select = _content_seo_select_clause(schema["has_content_seo"])
+        seo_join = (
+            """
+            LEFT JOIN public.content_seo cs
+              ON cs.content_id = ci.id
+            """
+            if schema["has_content_seo"]
+            else ""
+        )
         rows = (
             session.execute(
                 text(
                     f"""
                     SELECT ci.id, ci.category_id, ci.content_type,
-                           COALESCE(ci.slug, cs.slug) AS slug,
-                           ci.subcategory,
-                           CASE
-                               WHEN ci.is_published = TRUE THEN 'published'
-                               ELSE COALESCE(ci.status, 'draft')
-                           END AS status,
+                           {slug_expression} AS slug,
+                           {subcategory_expression} AS subcategory,
+                           {status_expression} AS status,
                            ci.title,
                            ci.excerpt, ci.body, ci.image_url, ci.external_url,
                            ci.is_public, ci.is_published, ci.published_at,
                            ci.created_at, ci.updated_at,
                            cc.title AS category_title,
                            cc.slug AS category_slug,
-                           cs.slug AS seo_slug,
-                           cs.meta_title,
-                           cs.meta_description,
-                           cs.focus_keyword,
-                           cs.internal_links,
-                           cs.faq,
-                           cs.schema_jsonld,
-                           cs.open_graph,
-                           cs.twitter_card,
-                           cs.image_prompt
+                           {seo_select}
                     FROM public.content_items ci
                     LEFT JOIN public.content_categories cc
                       ON cc.id = ci.category_id
-                    LEFT JOIN public.content_seo cs
-                      ON cs.content_id = ci.id
+                    {seo_join}
                     {where_clause}
                     ORDER BY COALESCE(ci.published_at, ci.created_at) DESC
                     LIMIT :limit
@@ -210,19 +237,46 @@ def list_content(
 def list_member_content(limit: int = 30) -> list[dict[str, Any]]:
     """Return published member content, including non-public paid items."""
     with session_scope() as session:
+        schema = _content_schema(session)
+        slug_expression = (
+            "COALESCE(ci.slug, cs.slug)"
+            if schema["content_item_columns"].get("slug")
+            and schema["has_content_seo"]
+            else (
+                "ci.slug"
+                if schema["content_item_columns"].get("slug")
+                else ("cs.slug" if schema["has_content_seo"] else "NULL::text")
+            )
+        )
+        subcategory_expression = (
+            "ci.subcategory"
+            if schema["content_item_columns"].get("subcategory")
+            else "NULL::text"
+        )
+        status_expression = (
+            "ci.status"
+            if schema["content_item_columns"].get("status")
+            else "CASE WHEN ci.is_published = TRUE THEN 'published' ELSE 'draft' END"
+        )
+        seo_join = (
+            "LEFT JOIN public.content_seo cs ON cs.content_id = ci.id"
+            if schema["has_content_seo"]
+            else ""
+        )
         rows = (
             session.execute(
                 text(
-                    """
-                    SELECT ci.id, ci.content_type, COALESCE(ci.slug, cs.slug) AS slug,
-                           ci.subcategory, ci.status, ci.title, ci.excerpt,
+                    f"""
+                    SELECT ci.id, ci.content_type, {slug_expression} AS slug,
+                           {subcategory_expression} AS subcategory,
+                           {status_expression} AS status,
+                           ci.title, ci.excerpt,
                            ci.body, ci.image_url, ci.external_url,
                            ci.published_at, cc.title AS category_title
                     FROM public.content_items ci
                     LEFT JOIN public.content_categories cc
                       ON cc.id = ci.category_id
-                    LEFT JOIN public.content_seo cs
-                      ON cs.content_id = ci.id
+                    {seo_join}
                     WHERE ci.is_published = TRUE
                     ORDER BY COALESCE(ci.published_at, ci.created_at) DESC
                     LIMIT :limit
@@ -247,7 +301,7 @@ def save_content(
     external_url: str,
     is_public: bool,
     is_published: bool,
-    created_by: int,
+    created_by: int | None,
     content_id: int | None = None,
     slug: str | None = None,
     subcategory: str | None = None,
@@ -257,7 +311,11 @@ def save_content(
     focus_keyword: str | None = None,
     faq: Any | None = None,
     schema_jsonld: Any | None = None,
-) -> None:
+    internal_links: Any | None = None,
+    open_graph: Any | None = None,
+    twitter_card: Any | None = None,
+    image_prompt: str | None = None,
+) -> int:
     """Create or update an admin-managed content item."""
     normalized_type = content_type.strip().upper()
     if normalized_type not in CONTENT_TYPES:
@@ -270,6 +328,9 @@ def save_content(
     normalized_slug = _normalize_content_slug(slug or title)
     faq_json = _json_payload(faq, default=[])
     schema_json = _json_payload(schema_jsonld, default={})
+    internal_links_json = _json_payload(internal_links, default=[])
+    open_graph_json = _json_payload(open_graph, default={})
+    twitter_card_json = _json_payload(twitter_card, default={})
     parameters = {
         "content_type": normalized_type,
         "slug": normalized_slug,
@@ -290,24 +351,42 @@ def save_content(
         "focus_keyword": (focus_keyword or "").strip(),
         "faq": json.dumps(faq_json),
         "schema_jsonld": json.dumps(schema_json),
+        "internal_links": json.dumps(internal_links_json),
+        "open_graph": json.dumps(open_graph_json),
+        "twitter_card": json.dumps(twitter_card_json),
+        "image_prompt": (image_prompt or "").strip(),
     }
     with session_scope() as session:
+        schema = _content_schema(session)
+        content_columns = schema["content_item_columns"]
         if content_id is None:
+            insert_columns = [
+                "content_type",
+                "title",
+                "excerpt",
+                "body",
+                "category_id",
+                "image_url",
+                "external_url",
+                "is_public",
+                "is_published",
+                "published_at",
+                "created_by",
+            ]
+            if content_columns.get("slug"):
+                insert_columns.append("slug")
+            if content_columns.get("subcategory"):
+                insert_columns.append("subcategory")
+            if content_columns.get("status"):
+                insert_columns.append("status")
+            values = ", ".join(f":{column}" for column in insert_columns)
             content_id = session.execute(
                 text(
-                    """
+                    f"""
                     INSERT INTO public.content_items (
-                        content_type, slug, subcategory, status,
-                        title, excerpt, body, category_id,
-                        image_url, external_url, is_public, is_published,
-                        published_at, created_by
+                        {", ".join(insert_columns)}
                     )
-                    VALUES (
-                        :content_type, :slug, :subcategory, :status,
-                        :title, :excerpt, :body, :category_id,
-                        :image_url, :external_url, :is_public, :is_published,
-                        :published_at, :created_by
-                    )
+                    VALUES ({values})
                     RETURNING id
                     """
                 ),
@@ -315,62 +394,49 @@ def save_content(
             ).scalar_one()
         else:
             parameters["content_id"] = content_id
+            assignments = [
+                "content_type = :content_type",
+                "title = :title",
+                "excerpt = :excerpt",
+                "body = :body",
+                "category_id = :category_id",
+                "image_url = :image_url",
+                "external_url = :external_url",
+                "is_public = :is_public",
+                "is_published = :is_published",
+                """
+                published_at = CASE
+                    WHEN :is_published = TRUE
+                    THEN COALESCE(published_at, :published_at)
+                    ELSE NULL
+                END
+                """,
+            ]
+            if content_columns.get("slug"):
+                assignments.append("slug = :slug")
+            if content_columns.get("subcategory"):
+                assignments.append("subcategory = :subcategory")
+            if content_columns.get("status"):
+                assignments.append("status = :status")
             session.execute(
                 text(
-                    """
+                    f"""
                     UPDATE public.content_items
-                    SET content_type = :content_type,
-                        slug = :slug,
-                        subcategory = :subcategory,
-                        status = :status,
-                        title = :title,
-                        excerpt = :excerpt,
-                        body = :body,
-                        category_id = :category_id,
-                        image_url = :image_url,
-                        external_url = :external_url,
-                        is_public = :is_public,
-                        is_published = :is_published,
-                        published_at = CASE
-                            WHEN :is_published = TRUE
-                            THEN COALESCE(published_at, :published_at)
-                            ELSE NULL
-                        END
+                    SET {", ".join(assignments)}
                     WHERE id = :content_id
                     """
                 ),
                 parameters,
             )
         parameters["content_id"] = content_id
-        session.execute(
-            text(
-                """
-                INSERT INTO public.content_seo (
-                    content_id, slug, meta_title, meta_description,
-                    focus_keyword, faq, schema_jsonld
-                )
-                VALUES (
-                    :content_id, :slug, :meta_title, :meta_description,
-                    :focus_keyword, CAST(:faq AS JSONB),
-                    CAST(:schema_jsonld AS JSONB)
-                )
-                ON CONFLICT (content_id) DO UPDATE
-                SET slug = EXCLUDED.slug,
-                    meta_title = EXCLUDED.meta_title,
-                    meta_description = EXCLUDED.meta_description,
-                    focus_keyword = EXCLUDED.focus_keyword,
-                    faq = EXCLUDED.faq,
-                    schema_jsonld = EXCLUDED.schema_jsonld,
-                    updated_at = NOW()
-                """
-            ),
-            parameters,
-        )
+        if schema["has_content_seo"]:
+            _upsert_content_seo(session, parameters, schema["content_seo_columns"])
     logger.info(
         "Website content saved: type={} title={}",
         normalized_type,
         title.strip(),
     )
+    return int(content_id)
 
 
 def _normalize_content_status(status: str | None, is_published: bool) -> str:
@@ -401,6 +467,124 @@ def _json_payload(value: Any, *, default: Any) -> Any:
         except json.JSONDecodeError as exc:
             raise ValueError("SEO JSON fields must contain valid JSON.") from exc
     return value
+
+
+def _content_schema(session: Any) -> dict[str, Any]:
+    """Inspect content tables so old/new database states both work."""
+    return {
+        "has_content_seo": _table_exists(session, "content_seo"),
+        "content_item_columns": _table_columns(session, "content_items"),
+        "content_seo_columns": _table_columns(session, "content_seo"),
+    }
+
+
+def _table_exists(session: Any, table_name: str) -> bool:
+    return bool(
+        session.execute(
+            text("SELECT to_regclass(:table_name)"),
+            {"table_name": f"public.{table_name}"},
+        ).scalar_one_or_none()
+    )
+
+
+def _table_columns(session: Any, table_name: str) -> dict[str, bool]:
+    rows = session.execute(
+        text(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = :table_name
+            """
+        ),
+        {"table_name": table_name},
+    ).scalars()
+    return {str(column): True for column in rows}
+
+
+def _content_seo_select_clause(has_content_seo: bool) -> str:
+    if has_content_seo:
+        return """
+               cs.slug AS seo_slug,
+               cs.meta_title,
+               cs.meta_description,
+               cs.focus_keyword,
+               cs.internal_links,
+               cs.faq,
+               cs.schema_jsonld,
+               cs.open_graph,
+               cs.twitter_card,
+               cs.image_prompt
+        """
+    return """
+           NULL::text AS seo_slug,
+           NULL::text AS meta_title,
+           NULL::text AS meta_description,
+           NULL::text AS focus_keyword,
+           '[]'::jsonb AS internal_links,
+           '[]'::jsonb AS faq,
+           '{}'::jsonb AS schema_jsonld,
+           '{}'::jsonb AS open_graph,
+           '{}'::jsonb AS twitter_card,
+           NULL::text AS image_prompt
+    """
+
+
+def _upsert_content_seo(
+    session: Any,
+    parameters: dict[str, Any],
+    seo_columns: dict[str, bool],
+) -> None:
+    columns = [
+        "content_id",
+        "slug",
+        "meta_title",
+        "meta_description",
+        "focus_keyword",
+    ]
+    values = [
+        ":content_id",
+        ":slug",
+        ":meta_title",
+        ":meta_description",
+        ":focus_keyword",
+    ]
+    updates = [
+        "slug = EXCLUDED.slug",
+        "meta_title = EXCLUDED.meta_title",
+        "meta_description = EXCLUDED.meta_description",
+        "focus_keyword = EXCLUDED.focus_keyword",
+    ]
+    json_columns = {
+        "internal_links": "internal_links",
+        "faq": "faq",
+        "schema_jsonld": "schema_jsonld",
+        "open_graph": "open_graph",
+        "twitter_card": "twitter_card",
+    }
+    for column, parameter in json_columns.items():
+        if seo_columns.get(column):
+            columns.append(column)
+            values.append(f"CAST(:{parameter} AS JSONB)")
+            updates.append(f"{column} = EXCLUDED.{column}")
+    if seo_columns.get("image_prompt"):
+        columns.append("image_prompt")
+        values.append(":image_prompt")
+        updates.append("image_prompt = EXCLUDED.image_prompt")
+    if seo_columns.get("updated_at"):
+        updates.append("updated_at = NOW()")
+
+    session.execute(
+        text(
+            f"""
+            INSERT INTO public.content_seo ({", ".join(columns)})
+            VALUES ({", ".join(values)})
+            ON CONFLICT (content_id) DO UPDATE
+            SET {", ".join(updates)}
+            """
+        ),
+        parameters,
+    )
 
 
 def delete_content(content_id: int) -> None:
@@ -611,8 +795,19 @@ def save_site_setting(
     """Upsert an admin-managed protected site setting."""
     allowed_keys = {
         "telegram_invite_url",
+        "telegram_public_chat_id",
         "whatsapp_invite_url",
+        "whatsapp_phone_number_id",
         "profit_proof_telegram_url",
+        "google_sheet_id",
+        "feature_public_blog",
+        "feature_public_signals",
+        "feature_whatsapp_reply",
+        "feature_google_sheet_sync",
+        "website_hero_title",
+        "website_hero_subtitle",
+        "website_announcement_text",
+        "master_ai_blog_default_status",
     }
     if setting_key not in allowed_keys:
         raise ValueError("Unsupported site setting.")

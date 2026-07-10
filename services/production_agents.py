@@ -17,6 +17,7 @@ from agent_bot import run_pipeline_once
 from config import ConfigurationError, get_settings
 from core.database import session_scope
 from services.ai_provider import AIProvider
+from services.content_service import get_site_setting, save_content
 from services.google_sheets import GoogleSheetsService
 from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
@@ -78,7 +79,7 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
     if not generated.get("image_prompt"):
         generated["image_prompt"] = fallback["image_prompt"]
     slug = _slugify(str(generated["slug"] or generated["title"]))
-    publish = bool(payload.get("publish", True))
+    publish = _blog_publish_default(payload)
     with session_scope() as session:
         slug = _unique_slug(session, slug)
         category_id = session.execute(
@@ -87,77 +88,38 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
                 "WHERE slug = 'ai-blog' LIMIT 1"
             )
         ).scalar_one_or_none()
-        content_id = session.execute(
-            text(
-                """
-                INSERT INTO public.content_items (
-                    category_id, content_type, slug, subcategory, status,
-                    title, excerpt, body,
-                    is_public, is_published, published_at
-                ) VALUES (
-                    :category_id, 'AI_BLOG', :slug, :subcategory,
-                    CASE WHEN :published THEN 'published' ELSE 'draft' END,
-                    :title, :excerpt, :body,
-                    TRUE, :published, CASE WHEN :published THEN NOW() END
-                ) RETURNING id
-                """
-            ),
-            {
-                "category_id": category_id,
-                "slug": slug,
-                "subcategory": str(payload.get("subcategory") or ""),
-                "title": str(generated["title"])[:250],
-                "excerpt": str(generated["excerpt"])[:1000],
-                "body": str(generated["body_markdown"]),
-                "published": publish,
-            },
-        ).scalar_one()
-        session.execute(
-            text(
-                """
-                INSERT INTO public.content_seo (
-                    content_id, slug, meta_title, meta_description,
-                    focus_keyword, internal_links, faq, schema_jsonld,
-                    open_graph, twitter_card, image_prompt
-                ) VALUES (
-                    :content_id, :slug, :meta_title, :meta_description,
-                    :focus_keyword, CAST(:internal_links AS JSONB),
-                    CAST(:faq AS JSONB), CAST(:schema AS JSONB),
-                    CAST(:open_graph AS JSONB), CAST(:twitter AS JSONB),
-                    :image_prompt
-                )
-                """
-            ),
-            {
-                "content_id": content_id,
-                "slug": slug,
-                "meta_title": str(generated["meta_title"])[:255],
-                "meta_description": str(generated["meta_description"])[:320],
-                "focus_keyword": str(generated["focus_keyword"])[:160],
-                "internal_links": json.dumps(
-                    generated.get("internal_links") or []
-                ),
-                "faq": json.dumps(generated["faq"]),
-                "schema": json.dumps(generated["schema_jsonld"]),
-                "open_graph": json.dumps(
-                    {
-                        "og:type": "article",
-                        "og:title": str(generated["meta_title"]),
-                        "og:description": str(generated["meta_description"]),
-                    }
-                ),
-                "twitter": json.dumps(
-                    {
-                        "twitter:card": "summary_large_image",
-                        "twitter:title": str(generated["meta_title"]),
-                        "twitter:description": str(
-                            generated["meta_description"]
-                        ),
-                    }
-                ),
-                "image_prompt": str(generated.get("image_prompt") or "")[:2000],
-            },
-        )
+    content_id = save_content(
+        content_type="AI_BLOG",
+        title=str(generated["title"])[:250],
+        slug=slug,
+        excerpt=str(generated["excerpt"])[:1000],
+        body=str(generated["body_markdown"]),
+        category_id=category_id,
+        subcategory=str(payload.get("subcategory") or ""),
+        image_url="",
+        external_url="",
+        is_public=True,
+        is_published=publish,
+        status="published" if publish else "draft",
+        created_by=None,
+        meta_title=str(generated["meta_title"])[:255],
+        meta_description=str(generated["meta_description"])[:320],
+        focus_keyword=str(generated["focus_keyword"])[:160],
+        internal_links=generated.get("internal_links") or [],
+        faq=generated["faq"],
+        schema_jsonld=generated["schema_jsonld"],
+        open_graph={
+            "og:type": "article",
+            "og:title": str(generated["meta_title"]),
+            "og:description": str(generated["meta_description"]),
+        },
+        twitter_card={
+            "twitter:card": "summary_large_image",
+            "twitter:title": str(generated["meta_title"]),
+            "twitter:description": str(generated["meta_description"]),
+        },
+        image_prompt=str(generated.get("image_prompt") or "")[:2000],
+    )
     image_result = "Image generation skipped."
     if bool(payload.get("include_image", False)):
         try:
@@ -190,6 +152,18 @@ def run_telegram_reply_agent(payload: dict[str, Any]) -> str:
 def run_whatsapp_reply_agent(payload: dict[str, Any]) -> str:
     """Reply to one WhatsApp user with memory and media-safe persistence."""
     return _run_reply("WHATSAPP", payload)
+
+
+def _blog_publish_default(payload: dict[str, Any]) -> bool:
+    """Resolve Master AI blog publish behavior from payload or settings."""
+    if "publish" in payload:
+        return bool(payload.get("publish"))
+    try:
+        status = get_site_setting("master_ai_blog_default_status")
+    except Exception:
+        logger.exception("Unable to load Master AI blog default status")
+        status = ""
+    return status.strip().lower() != "draft"
 
 
 def run_signal_agent(payload: dict[str, Any]) -> str:
@@ -852,6 +826,11 @@ def _unique_slug(session: Any, base_slug: str) -> str:
 
     clean = (base_slug or f"post-{int(datetime.now().timestamp())}").strip("-")
     clean = clean[:170] or f"post-{int(datetime.now().timestamp())}"
+    has_seo = session.execute(
+        text("SELECT to_regclass('public.content_seo')")
+    ).scalar_one_or_none()
+    if not has_seo:
+        return clean
 
     candidate = clean
     suffix = 2

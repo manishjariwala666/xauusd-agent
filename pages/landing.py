@@ -66,14 +66,16 @@ def render_landing_page(
 
     _render_hero(on_sign_in)
 
-    xauusd = get_xauusd_snapshot(supabase)
-    crypto_quotes = get_top_crypto_gainers(20)
-    render_market_ticker(xauusd, crypto_quotes)
-    _render_xauusd_signal_section(xauusd or {}, settings, on_sign_in)
+    if _site_feature_enabled("feature_public_signals", default=True):
+        xauusd = get_xauusd_snapshot(supabase)
+        crypto_quotes = get_top_crypto_gainers(20)
+        render_market_ticker(xauusd, crypto_quotes)
+        _render_xauusd_signal_section(xauusd or {}, settings, on_sign_in)
 
     _render_categories(categories)
     _render_announcements()
-    _render_research_content()
+    if _site_feature_enabled("feature_public_blog", default=True):
+        _render_research_content()
     try:
         profit_proof_url = get_site_setting("profit_proof_telegram_url")
     except Exception:
@@ -111,16 +113,25 @@ def _render_nav(brand_name: str, on_sign_in: Callable[[], None]) -> None:
 
 
 def _render_hero(on_sign_in: Callable[[], None]) -> None:
+    hero_title = (
+        _safe_site_setting("website_hero_title")
+        or "Clearer signals for gold and digital assets."
+    )
+    hero_subtitle = (
+        _safe_site_setting("website_hero_subtitle")
+        or (
+            "Structured XAUUSD and crypto market levels, disciplined risk "
+            "context, timely announcements, and a verified-member delivery "
+            "experience built for traders who value clarity."
+        )
+    )
+    announcement = _safe_site_setting("website_announcement_text")
     st.markdown(
-        """
+        f"""
         <section class="hero">
             <div class="eyebrow">MARKET INTELLIGENCE · RISK FIRST</div>
-            <h1>Clearer signals for gold and digital assets.</h1>
-            <p>
-                Structured XAUUSD and crypto market levels, disciplined risk
-                context, timely announcements, and a verified-member delivery
-                experience built for traders who value clarity.
-            </p>
+            <h1>{html.escape(hero_title)}</h1>
+            <p>{html.escape(hero_subtitle)}</p>
             <div class="trust-row">
                 <span class="trust-chip">Manual payment verification</span>
                 <span class="trust-chip">Protected member access</span>
@@ -144,6 +155,8 @@ def _render_hero(on_sign_in: Callable[[], None]) -> None:
             "Telegram and WhatsApp member links unlock only after payment "
             "verification."
         )
+    if announcement:
+        st.info(announcement)
 
 
 def _safe_categories() -> list[dict[str, Any]]:
@@ -152,6 +165,23 @@ def _safe_categories() -> list[dict[str, Any]]:
     except Exception:
         logger.exception("Public category loading failed")
         return []
+
+
+def _safe_site_setting(key: str) -> str:
+    try:
+        return get_site_setting(key)
+    except Exception:
+        logger.exception("Public site setting loading failed: key={}", key)
+        return ""
+
+
+def _site_feature_enabled(key: str, *, default: bool) -> bool:
+    value = _safe_site_setting(key).strip().lower()
+    if value in {"true", "1", "yes", "on"}:
+        return True
+    if value in {"false", "0", "no", "off"}:
+        return False
+    return default
 
 
 def _render_categories(categories: list[dict[str, Any]]) -> None:

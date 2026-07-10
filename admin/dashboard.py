@@ -1245,6 +1245,11 @@ def _render_content_manager() -> None:
                 ) if selected else "{}",
                 height=140,
             )
+            image_prompt = st.text_area(
+                "Image prompt",
+                value=(selected.get("image_prompt") or "") if selected else "",
+                height=90,
+            )
         submitted = st.form_submit_button(
             "Save Content",
             type="primary",
@@ -1275,6 +1280,7 @@ def _render_content_manager() -> None:
                 focus_keyword=focus_keyword,
                 faq=faq,
                 schema_jsonld=schema_jsonld,
+                image_prompt=image_prompt,
                 created_by=admin_id,
             )
         except Exception as exc:
@@ -1603,64 +1609,144 @@ def _render_profit_screenshots(supabase: Any) -> None:
 
 
 def _render_channel_settings() -> None:
-    st.subheader("Protected Invite Links")
+    st.subheader("Settings")
     st.caption(
-        "These links are loaded server-side and shown only to payment-verified "
-        "users. Leave blank to use environment-configured fallback values."
+        "Operational IDs and website settings are stored server-side. "
+        "Bot tokens, API keys, and passwords are never displayed here."
     )
     admin_id = get_current_user_id()
     if admin_id is None:
         st.error("Administrator session is invalid.")
         return
+    setting_keys = [
+        "telegram_invite_url",
+        "telegram_public_chat_id",
+        "whatsapp_invite_url",
+        "whatsapp_phone_number_id",
+        "profit_proof_telegram_url",
+        "google_sheet_id",
+        "feature_public_blog",
+        "feature_public_signals",
+        "feature_whatsapp_reply",
+        "feature_google_sheet_sync",
+        "website_hero_title",
+        "website_hero_subtitle",
+        "website_announcement_text",
+        "master_ai_blog_default_status",
+    ]
     try:
-        telegram = get_site_setting("telegram_invite_url")
-        whatsapp = get_site_setting("whatsapp_invite_url")
-        proof = get_site_setting("profit_proof_telegram_url")
+        values = {key: get_site_setting(key) for key in setting_keys}
     except Exception:
         logger.exception("Protected setting loading failed")
-        telegram = whatsapp = proof = ""
+        values = {key: "" for key in setting_keys}
     with st.form("channel_settings"):
+        st.markdown("#### Channel IDs")
         telegram_value = st.text_input(
             "Private Telegram invite URL",
-            value=telegram,
+            value=values["telegram_invite_url"],
             type="password",
+        )
+        telegram_public_chat_id = st.text_input(
+            "Telegram public channel/chat ID",
+            value=values["telegram_public_chat_id"],
         )
         whatsapp_value = st.text_input(
             "Private WhatsApp invite URL",
-            value=whatsapp,
+            value=values["whatsapp_invite_url"],
             type="password",
+        )
+        whatsapp_phone_number_id = st.text_input(
+            "WhatsApp phone number ID",
+            value=values["whatsapp_phone_number_id"],
         )
         proof_value = st.text_input(
             "Public profit-proof Telegram URL",
-            value=proof,
+            value=values["profit_proof_telegram_url"],
+        )
+        google_sheet_id = st.text_input(
+            "Google Sheet ID",
+            value=values["google_sheet_id"],
+        )
+        st.markdown("#### Feature Toggles")
+        toggle_cols = st.columns(4)
+        feature_public_blog = toggle_cols[0].checkbox(
+            "Public blog",
+            value=_setting_enabled(values["feature_public_blog"], default=True),
+        )
+        feature_public_signals = toggle_cols[1].checkbox(
+            "Public signals",
+            value=_setting_enabled(values["feature_public_signals"], default=True),
+        )
+        feature_whatsapp_reply = toggle_cols[2].checkbox(
+            "WhatsApp reply",
+            value=_setting_enabled(values["feature_whatsapp_reply"], default=True),
+        )
+        feature_google_sheet_sync = toggle_cols[3].checkbox(
+            "Google Sheet sync",
+            value=_setting_enabled(values["feature_google_sheet_sync"], default=True),
+        )
+        st.markdown("#### Website Settings")
+        website_hero_title = st.text_input(
+            "Website hero title",
+            value=values["website_hero_title"],
+        )
+        website_hero_subtitle = st.text_area(
+            "Website hero subtitle",
+            value=values["website_hero_subtitle"],
+        )
+        website_announcement_text = st.text_area(
+            "Website announcement text",
+            value=values["website_announcement_text"],
+        )
+        master_ai_blog_default_status = st.selectbox(
+            "Master AI blog default status",
+            ["published", "draft"],
+            index=(
+                1
+                if values["master_ai_blog_default_status"].strip().lower()
+                == "draft"
+                else 0
+            ),
         )
         submitted = st.form_submit_button(
-            "Save Protected Links",
+            "Save Settings",
             type="primary",
             use_container_width=True,
         )
     if submitted:
         try:
-            save_site_setting(
-                "telegram_invite_url",
-                telegram_value,
-                admin_id,
-            )
-            save_site_setting(
-                "whatsapp_invite_url",
-                whatsapp_value,
-                admin_id,
-            )
-            save_site_setting(
-                "profit_proof_telegram_url",
-                proof_value,
-                admin_id,
-            )
+            updates = {
+                "telegram_invite_url": telegram_value,
+                "telegram_public_chat_id": telegram_public_chat_id,
+                "whatsapp_invite_url": whatsapp_value,
+                "whatsapp_phone_number_id": whatsapp_phone_number_id,
+                "profit_proof_telegram_url": proof_value,
+                "google_sheet_id": google_sheet_id,
+                "feature_public_blog": str(feature_public_blog).lower(),
+                "feature_public_signals": str(feature_public_signals).lower(),
+                "feature_whatsapp_reply": str(feature_whatsapp_reply).lower(),
+                "feature_google_sheet_sync": str(feature_google_sheet_sync).lower(),
+                "website_hero_title": website_hero_title,
+                "website_hero_subtitle": website_hero_subtitle,
+                "website_announcement_text": website_announcement_text,
+                "master_ai_blog_default_status": master_ai_blog_default_status,
+            }
+            for key, value in updates.items():
+                save_site_setting(key, value, admin_id)
         except Exception:
             logger.exception("Protected channel setting save failed")
-            st.error("Links could not be saved.")
+            st.error("Settings could not be saved.")
         else:
-            st.success("Protected links updated.")
+            st.success("Settings updated.")
+
+
+def _setting_enabled(value: str, *, default: bool) -> bool:
+    cleaned = str(value or "").strip().lower()
+    if cleaned in {"true", "1", "yes", "on"}:
+        return True
+    if cleaned in {"false", "0", "no", "off"}:
+        return False
+    return default
 
 
 def _render_signal_form(supabase: Any) -> None:

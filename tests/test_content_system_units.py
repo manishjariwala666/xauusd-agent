@@ -2,6 +2,7 @@ from pathlib import Path
 
 from services.content_service import (
     CONTENT_TYPES,
+    _content_seo_select_clause,
     _json_payload,
     _normalize_content_slug,
     _normalize_content_status,
@@ -51,3 +52,28 @@ def test_content_system_migration_is_automatic_and_complete() -> None:
     assert "'SIGNAL_POST'" in sql
     assert "ADD COLUMN IF NOT EXISTS target_1" in ops_sql
     assert "ADD COLUMN IF NOT EXISTS telegram_id TEXT" in ops_sql
+
+
+def test_content_seo_select_clause_has_safe_fallbacks() -> None:
+    fallback = _content_seo_select_clause(False)
+
+    assert "NULL::text AS seo_slug" in fallback
+    assert "'[]'::jsonb AS faq" in fallback
+    assert "'{}'::jsonb AS schema_jsonld" in fallback
+
+
+def test_site_setting_allowlist_contains_admin_settings() -> None:
+    import inspect
+
+    from services import content_service
+
+    source = inspect.getsource(content_service.save_site_setting)
+    for key in (
+        "telegram_public_chat_id",
+        "whatsapp_phone_number_id",
+        "google_sheet_id",
+        "feature_public_blog",
+        "feature_public_signals",
+        "master_ai_blog_default_status",
+    ):
+        assert key in source

@@ -54,6 +54,19 @@ def test_blog_fallback_payload_is_publish_safe() -> None:
     assert isinstance(payload["schema_jsonld"], dict)
 
 
+def test_master_ai_blog_publish_default_uses_payload_override(monkeypatch) -> None:
+    from services.production_agents import _blog_publish_default
+
+    monkeypatch.setattr(
+        "services.production_agents.get_site_setting",
+        lambda _: "draft",
+    )
+
+    assert _blog_publish_default({"publish": True})
+    assert not _blog_publish_default({"publish": False})
+    assert not _blog_publish_default({})
+
+
 def test_image_agent_skips_provider_failure(monkeypatch) -> None:
     class FailingProvider:
         def generate_image(self, **_: object) -> None:
