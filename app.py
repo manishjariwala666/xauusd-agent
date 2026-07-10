@@ -104,8 +104,10 @@ def run() -> None:
     role = get_current_role()
     if role == ROLE_ADMIN:
         render_admin_dashboard(supabase)
+        return
     elif role == ROLE_USER:
         render_user_dashboard(supabase)
+        return
     else:
         LOGGER.warning("Rejected unsupported session role: %s", role)
         logout_user()

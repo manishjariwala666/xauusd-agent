@@ -11,6 +11,7 @@ from loguru import logger
 import streamlit as st
 from sqlalchemy import text
 
+from components.theme import apply_admin_light_theme
 from core.auth import ROLE_ADMIN, get_current_role, get_current_user_id
 from core.database import session_scope
 from services.ai_agent_service import (
@@ -55,7 +56,11 @@ def render_admin_dashboard(supabase: Any) -> None:
         st.error("Administrator access is required.")
         st.stop()
 
+    apply_admin_light_theme()
+    _render_admin_light_sidebar()
+    _render_admin_topbar()
     _render_admin_shell_header()
+    _render_admin_light_kpis()
     (
         command_center_tab,
         overview_tab,
@@ -128,6 +133,47 @@ def _agent_by_key(agents: list[dict[str, Any]], key: str) -> dict[str, Any] | No
     return next((agent for agent in agents if agent.get("agent_key") == key), None)
 
 
+def _render_admin_light_sidebar() -> None:
+    """Add a clean Able-Pro-style admin navigation map to the sidebar."""
+    st.sidebar.markdown(
+        """
+        <div class="admin-sidebar-brand">AI Market <small>pro</small></div>
+        <div class="admin-sidebar-section">Dashboard</div>
+        <div class="admin-sidebar-item active">🏠 Command Center</div>
+        <div class="admin-sidebar-item">📊 Analytics Overview</div>
+        <div class="admin-sidebar-section">Operations</div>
+        <div class="admin-sidebar-item">✍️ Content Manager</div>
+        <div class="admin-sidebar-item">📡 Signal Manager</div>
+        <div class="admin-sidebar-item">🤖 AI Agents</div>
+        <div class="admin-sidebar-section">Channels</div>
+        <div class="admin-sidebar-item">💬 Telegram</div>
+        <div class="admin-sidebar-item">🟢 WhatsApp</div>
+        <div class="admin-sidebar-item">📗 Google Sheet</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_admin_topbar() -> None:
+    """Render the visual top navigation expected from a SaaS admin panel."""
+    st.markdown(
+        """
+        <section class="admin-topbar">
+            <div class="admin-menu-button">☰</div>
+            <div class="admin-search-pill">🔎 <span>Ctrl + K · Search commands, blogs, signals</span></div>
+            <div></div>
+            <div class="admin-topbar-actions">
+                <div class="admin-icon-button">▣</div>
+                <div class="admin-icon-button">⚙</div>
+                <div class="admin-icon-button">🔔</div>
+                <div class="admin-avatar">AI</div>
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_admin_shell_header() -> None:
     """Render an Able-Pro-inspired admin command-room header."""
     st.markdown(
@@ -149,6 +195,90 @@ def _render_admin_shell_header() -> None:
                 </div>
             </div>
             <div class="admin-hero-orb">🚀</div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_admin_light_kpis() -> None:
+    """Show first-glance admin health cards without changing core queries."""
+    kpis = {
+        "blogs": "—",
+        "signals": "—",
+        "users": "—",
+        "errors": "—",
+    }
+    try:
+        with session_scope() as session:
+            rows = (
+                session.execute(
+                    text(
+                        """
+                        SELECT
+                            (
+                                SELECT COUNT(*)
+                                FROM public.content_items
+                                WHERE content_type IN ('BLOG', 'AI_BLOG')
+                            ) AS blogs,
+                            (
+                                SELECT COUNT(*)
+                                FROM public.market_signals
+                            ) AS signals,
+                            (
+                                SELECT COUNT(*)
+                                FROM public.users
+                            ) AS users,
+                            (
+                                SELECT COUNT(*)
+                                FROM public.master_ai_events
+                                WHERE severity IN ('ERROR', 'CRITICAL')
+                            ) AS errors
+                        """
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            kpis = {key: str(int(rows[key] or 0)) for key in kpis}
+    except Exception:
+        logger.debug("Able Pro admin KPI cards are using safe fallback values.")
+
+    st.markdown(
+        f"""
+        <section class="admin-light-kpi-grid">
+            <div class="admin-light-kpi">
+                <div>
+                    <div class="value">{kpis["blogs"]}</div>
+                    <div class="label">Total Blogs</div>
+                    <div class="trend">↗ CMS ready</div>
+                </div>
+                <div class="admin-kpi-icon">✍️</div>
+            </div>
+            <div class="admin-light-kpi">
+                <div>
+                    <div class="value">{kpis["signals"]}</div>
+                    <div class="label">XAUUSD Signals</div>
+                    <div class="trend">↗ broadcast stack</div>
+                </div>
+                <div class="admin-kpi-icon">📡</div>
+            </div>
+            <div class="admin-light-kpi">
+                <div>
+                    <div class="value">{kpis["users"]}</div>
+                    <div class="label">Users / Leads</div>
+                    <div class="trend">↗ CRM view</div>
+                </div>
+                <div class="admin-kpi-icon">👥</div>
+            </div>
+            <div class="admin-light-kpi">
+                <div>
+                    <div class="value">{kpis["errors"]}</div>
+                    <div class="label">System Errors</div>
+                    <div class="trend">↗ logs tracked</div>
+                </div>
+                <div class="admin-kpi-icon">🛡️</div>
+            </div>
         </section>
         """,
         unsafe_allow_html=True,

@@ -451,3 +451,275 @@ def apply_theme() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+def apply_admin_light_theme() -> None:
+    """Apply a scoped Able-Pro-inspired light admin skin.
+
+    The public website keeps the dark trading theme. Admin screens inject this
+    later so the protected control room can use a clean SaaS dashboard look
+    without changing business logic or exposing internal agent details.
+    """
+    st.markdown(
+        """
+        <style>
+            :root {
+                --admin-bg: #f6f8fc;
+                --admin-card: #ffffff;
+                --admin-card-soft: #f8fafc;
+                --admin-border: #e5eaf3;
+                --admin-text: #182235;
+                --admin-muted: #748196;
+                --admin-blue: #4b7cff;
+                --admin-blue-soft: #e8efff;
+                --admin-green: #22b981;
+                --admin-red: #ef4444;
+                --admin-orange: #f59e0b;
+                --admin-shadow: 0 18px 45px rgba(32, 57, 108, .08);
+            }
+            .stApp {
+                background:
+                    radial-gradient(circle at 78% -8%, rgba(75,124,255,.12), transparent 28%),
+                    var(--admin-bg) !important;
+                color: var(--admin-text) !important;
+            }
+            .block-container {
+                padding-top: 1rem;
+                padding-left: clamp(1rem, 2.4vw, 2rem);
+                padding-right: clamp(1rem, 2.4vw, 2rem);
+            }
+            .stSidebar {
+                background: #ffffff !important;
+                border-right: 1px solid var(--admin-border);
+            }
+            .stSidebar [data-testid="stMarkdownContainer"],
+            .stSidebar p,
+            .stSidebar span,
+            .stSidebar label {
+                color: var(--admin-text) !important;
+            }
+            .admin-topbar {
+                display: grid;
+                grid-template-columns: auto minmax(220px, 520px) 1fr auto;
+                align-items: center;
+                gap: .9rem;
+                margin: .2rem 0 1.2rem;
+            }
+            .admin-menu-button,
+            .admin-icon-button {
+                width: 46px;
+                height: 46px;
+                display: grid;
+                place-items: center;
+                border-radius: 12px;
+                background: #edf2f8;
+                color: var(--admin-muted);
+                font-weight: 900;
+                border: 1px solid var(--admin-border);
+            }
+            .admin-search-pill {
+                height: 46px;
+                display: flex;
+                align-items: center;
+                gap: .55rem;
+                padding: 0 .95rem;
+                border: 1px solid #d9e2ef;
+                border-radius: 13px;
+                background: #ffffff;
+                color: #9aa7ba;
+                box-shadow: 0 8px 25px rgba(27, 46, 92, .04);
+            }
+            .admin-topbar-actions {
+                display: flex;
+                justify-content: flex-end;
+                align-items: center;
+                gap: .55rem;
+            }
+            .admin-avatar {
+                width: 42px;
+                height: 42px;
+                display: grid;
+                place-items: center;
+                border-radius: 999px;
+                background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+                color: #1d4ed8;
+                font-weight: 900;
+                border: 1px solid #bfdbfe;
+            }
+            .admin-sidebar-brand {
+                display: flex;
+                align-items: baseline;
+                gap: .25rem;
+                padding: .3rem .1rem 1rem;
+                color: var(--admin-blue);
+                font-size: 1.65rem;
+                font-weight: 900;
+                letter-spacing: -.04em;
+            }
+            .admin-sidebar-brand small {
+                color: var(--admin-blue);
+                font-size: .72rem;
+                font-weight: 800;
+            }
+            .admin-sidebar-section {
+                margin: 1.05rem 0 .45rem;
+                color: #5f6f86;
+                font-size: .72rem;
+                font-weight: 900;
+                text-transform: uppercase;
+                letter-spacing: .08em;
+            }
+            .admin-sidebar-item {
+                display: flex;
+                align-items: center;
+                gap: .72rem;
+                padding: .68rem .78rem;
+                border-radius: 12px;
+                color: #69778d;
+                font-weight: 800;
+                margin: .22rem 0;
+            }
+            .admin-sidebar-item.active {
+                background: #edf3ff;
+                color: var(--admin-blue);
+            }
+            .admin-hero {
+                border: 0 !important;
+                background:
+                    radial-gradient(circle at 88% 26%, rgba(255,255,255,.34), transparent 16%),
+                    linear-gradient(135deg, #3f78ff, #81a4ff) !important;
+                box-shadow: 0 22px 55px rgba(75, 124, 255, .22) !important;
+            }
+            .admin-light-kpi-grid {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 1rem;
+                margin: 1rem 0 1.4rem;
+            }
+            .admin-light-kpi {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: .8rem;
+                align-items: center;
+                min-height: 118px;
+                padding: 1.2rem;
+                border: 1px solid var(--admin-border);
+                border-radius: 18px;
+                background: var(--admin-card);
+                box-shadow: var(--admin-shadow);
+            }
+            .admin-light-kpi .value {
+                color: var(--admin-text);
+                font-size: clamp(1.55rem, 3vw, 2.25rem);
+                font-weight: 900;
+                letter-spacing: -.04em;
+            }
+            .admin-light-kpi .label {
+                color: var(--admin-muted);
+                font-weight: 800;
+                margin-top: .15rem;
+            }
+            .admin-light-kpi .trend {
+                display: inline-flex;
+                width: fit-content;
+                margin-top: .55rem;
+                padding: .22rem .48rem;
+                border-radius: 999px;
+                background: #ecfdf5;
+                color: var(--admin-green);
+                font-size: .78rem;
+                font-weight: 900;
+            }
+            .admin-kpi-icon {
+                width: 54px;
+                height: 54px;
+                display: grid;
+                place-items: center;
+                border-radius: 16px;
+                background: var(--admin-blue-soft);
+                color: var(--admin-blue);
+                font-size: 1.55rem;
+            }
+            .admin-agent-card {
+                border: 1px solid var(--admin-border) !important;
+                background: var(--admin-card) !important;
+                box-shadow: var(--admin-shadow) !important;
+            }
+            .admin-agent-card h3,
+            .admin-agent-status {
+                color: var(--admin-text) !important;
+            }
+            .admin-agent-card p,
+            .admin-agent-meta {
+                color: var(--admin-muted) !important;
+            }
+            .admin-agent-meta {
+                border-top: 1px solid var(--admin-border) !important;
+            }
+            .admin-agent-icon {
+                background: var(--admin-blue-soft) !important;
+                border-color: #dbe7ff !important;
+            }
+            div[data-testid="stMetric"] {
+                padding: 1rem;
+                border: 1px solid var(--admin-border);
+                border-radius: 16px;
+                background: var(--admin-card);
+                box-shadow: var(--admin-shadow);
+            }
+            div[data-testid="stMetric"] label,
+            div[data-testid="stMetric"] [data-testid="stMetricLabel"] {
+                color: var(--admin-muted) !important;
+                font-weight: 800;
+            }
+            div[data-testid="stMetricValue"] {
+                color: var(--admin-text) !important;
+                font-weight: 900;
+            }
+            .stTabs [data-baseweb="tab-list"] {
+                gap: .2rem;
+                border-bottom: 1px solid var(--admin-border);
+            }
+            .stTabs [data-baseweb="tab"] {
+                color: var(--admin-muted);
+                font-weight: 800;
+                border-radius: 10px 10px 0 0;
+            }
+            .stTabs [aria-selected="true"] {
+                color: var(--admin-blue) !important;
+                background: #eef4ff;
+            }
+            h1, h2, h3, h4,
+            [data-testid="stMarkdownContainer"] h1,
+            [data-testid="stMarkdownContainer"] h2,
+            [data-testid="stMarkdownContainer"] h3 {
+                color: var(--admin-text);
+            }
+            .stDataFrame, div[data-testid="stDataFrame"] {
+                border-radius: 16px;
+                overflow: hidden;
+                box-shadow: var(--admin-shadow);
+            }
+            @media (max-width: 980px) {
+                .admin-topbar {
+                    grid-template-columns: auto 1fr auto;
+                }
+                .admin-search-pill {
+                    display: none;
+                }
+                .admin-light-kpi-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+            }
+            @media (max-width: 620px) {
+                .admin-light-kpi-grid {
+                    grid-template-columns: 1fr;
+                }
+                .admin-topbar-actions .admin-icon-button:nth-child(n+3) {
+                    display: none;
+                }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )

@@ -1,6 +1,7 @@
 import inspect
 
 from admin import dashboard
+from components import theme
 
 
 def test_latest_signal_query_uses_existing_market_signal_columns() -> None:
@@ -34,6 +35,24 @@ def test_admin_control_room_shell_and_agent_launchpad_exist() -> None:
     assert "ai_blog_agent" in launchpad_source
     assert "signal_agent" in launchpad_source
     assert "whatsapp_reply_agent" in launchpad_source
+
+
+def test_able_pro_light_admin_v2_shell_exists() -> None:
+    dashboard_source = inspect.getsource(dashboard.render_admin_dashboard)
+    topbar_source = inspect.getsource(dashboard._render_admin_topbar)
+    sidebar_source = inspect.getsource(dashboard._render_admin_light_sidebar)
+    kpi_source = inspect.getsource(dashboard._render_admin_light_kpis)
+    theme_source = inspect.getsource(theme.apply_admin_light_theme)
+
+    assert "apply_admin_light_theme()" in dashboard_source
+    assert "_render_admin_light_sidebar()" in dashboard_source
+    assert "_render_admin_topbar()" in dashboard_source
+    assert "_render_admin_light_kpis()" in dashboard_source
+    assert "Ctrl + K" in topbar_source
+    assert "Content Manager" in sidebar_source
+    assert "Signal Manager" in sidebar_source
+    assert "admin-light-kpi-grid" in kpi_source
+    assert "--admin-bg" in theme_source
 
 
 def test_admin_content_list_uses_full_content_service_and_filters() -> None:
