@@ -24,6 +24,18 @@ def test_admin_dashboard_has_required_operational_widgets() -> None:
     assert "Recent Errors" in source
 
 
+def test_admin_control_room_shell_and_agent_launchpad_exist() -> None:
+    header_source = inspect.getsource(dashboard._render_admin_shell_header)
+    launchpad_source = inspect.getsource(dashboard._render_agent_launchpad_cards)
+
+    assert "ADMIN CONTROL ROOM" in header_source
+    assert "Master AI Brain" in header_source
+    assert "Agent Launchpad" in launchpad_source
+    assert "ai_blog_agent" in launchpad_source
+    assert "signal_agent" in launchpad_source
+    assert "whatsapp_reply_agent" in launchpad_source
+
+
 def test_admin_content_list_uses_full_content_service_and_filters() -> None:
     source = inspect.getsource(dashboard._render_content_manager)
 

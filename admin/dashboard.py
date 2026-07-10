@@ -55,7 +55,7 @@ def render_admin_dashboard(supabase: Any) -> None:
         st.error("Administrator access is required.")
         st.stop()
 
-    st.markdown("## Administration Console")
+    _render_admin_shell_header()
     (
         command_center_tab,
         overview_tab,
@@ -126,6 +126,33 @@ def _admin_public_site_url() -> str:
 
 def _agent_by_key(agents: list[dict[str, Any]], key: str) -> dict[str, Any] | None:
     return next((agent for agent in agents if agent.get("agent_key") == key), None)
+
+
+def _render_admin_shell_header() -> None:
+    """Render an Able-Pro-inspired admin command-room header."""
+    st.markdown(
+        """
+        <section class="admin-hero">
+            <div>
+                <div class="eyebrow">ADMIN CONTROL ROOM · MASTER AI OPS</div>
+                <h1>AI Market Analytics Pro</h1>
+                <p>
+                    Manage content, XAUUSD signals, users, Google Sheet logs,
+                    Telegram broadcasts, WhatsApp replies, and production AI
+                    agents from one secure dashboard.
+                </p>
+                <div class="admin-chip-row">
+                    <span>Master AI Brain</span>
+                    <span>Public Signal Broadcast</span>
+                    <span>Sheet Log Book</span>
+                    <span>Website CMS</span>
+                </div>
+            </div>
+            <div class="admin-hero-orb">🚀</div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _status_badge(value: str | None) -> str:
@@ -203,6 +230,8 @@ def _render_command_center(supabase: Any) -> None:
         latest_blog_status,
         f"#{latest_blog.get('id')}" if latest_blog else "",
     )
+
+    _render_agent_launchpad_cards(agents)
 
     st.divider()
 
@@ -356,6 +385,71 @@ def _render_command_center(supabase: Any) -> None:
         st.dataframe(activity, use_container_width=True, hide_index=True)
     else:
         st.info("No recent activity found.")
+
+
+def _render_agent_launchpad_cards(agents: list[dict[str, Any]]) -> None:
+    """Show high-level agent controls without revealing prompts/secrets."""
+    agent_roles = [
+        (
+            "ai_blog_agent",
+            "Blog Agent",
+            "Creates SEO-safe market content.",
+            "✍️",
+        ),
+        (
+            "signal_agent",
+            "Signal Agent",
+            "Processes XAUUSD buy/sell workflows.",
+            "📡",
+        ),
+        (
+            "seo_agent",
+            "SEO Agent",
+            "Reviews metadata, FAQ, and schema.",
+            "🔎",
+        ),
+        (
+            "image_agent",
+            "Image Agent",
+            "Creates optional editorial visuals.",
+            "🎨",
+        ),
+        (
+            "telegram_reply_agent",
+            "Telegram Agent",
+            "Handles Telegram admin/member replies.",
+            "💬",
+        ),
+        (
+            "whatsapp_reply_agent",
+            "WhatsApp Agent",
+            "Keeps WhatsApp limited to signal replies.",
+            "📱",
+        ),
+    ]
+    st.markdown("### Agent Launchpad")
+    columns = st.columns(3)
+    for index, (agent_key, title, description, icon) in enumerate(agent_roles):
+        agent = _agent_by_key(agents, agent_key)
+        status = _status_badge(agent.get("status") if agent else "missing")
+        success_count = int(agent.get("success_count") or 0) if agent else 0
+        failure_count = int(agent.get("failure_count") or 0) if agent else 0
+        with columns[index % 3]:
+            st.markdown(
+                f"""
+                <div class="admin-agent-card">
+                    <div class="admin-agent-icon">{icon}</div>
+                    <h3>{title}</h3>
+                    <p>{description}</p>
+                    <div class="admin-agent-status">{status}</div>
+                    <div class="admin-agent-meta">
+                        <span>{success_count} success</span>
+                        <span>{failure_count} failed</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
 def _render_overview() -> None:

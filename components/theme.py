@@ -322,12 +322,127 @@ def apply_theme() -> None:
                 border-color: rgba(244, 193, 93, .7) !important;
                 color: var(--gold) !important;
             }
+            .admin-hero {
+                position: relative;
+                overflow: hidden;
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                align-items: center;
+                gap: 1rem;
+                padding: clamp(1.4rem, 4vw, 3rem);
+                margin-bottom: 1.2rem;
+                border-radius: 28px;
+                border: 1px solid rgba(103, 166, 255, .35);
+                background:
+                    radial-gradient(circle at 82% 18%, rgba(103, 166, 255, .32), transparent 26%),
+                    linear-gradient(135deg, rgba(47, 107, 255, .95), rgba(96, 139, 255, .72));
+                box-shadow: 0 24px 70px rgba(37, 99, 235, .24);
+            }
+            .admin-hero:before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background:
+                    linear-gradient(120deg, transparent 0 34%, rgba(255,255,255,.12) 34% 48%, transparent 48%),
+                    radial-gradient(circle at 10% 100%, rgba(255,255,255,.18), transparent 35%);
+                pointer-events: none;
+            }
+            .admin-hero > * { position: relative; z-index: 1; }
+            .admin-hero h1 {
+                margin: .45rem 0 .55rem;
+                font-size: clamp(2rem, 5vw, 3.6rem);
+                color: white;
+                line-height: 1.02;
+                letter-spacing: -.055em;
+            }
+            .admin-hero p {
+                max-width: 760px;
+                margin: 0;
+                color: rgba(255,255,255,.86);
+                font-size: 1.02rem;
+                line-height: 1.65;
+            }
+            .admin-chip-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: .55rem;
+                margin-top: 1rem;
+            }
+            .admin-chip-row span {
+                padding: .48rem .72rem;
+                border-radius: 999px;
+                background: rgba(255,255,255,.14);
+                border: 1px solid rgba(255,255,255,.22);
+                color: white;
+                font-size: .82rem;
+                font-weight: 800;
+            }
+            .admin-hero-orb {
+                width: clamp(72px, 10vw, 124px);
+                height: clamp(72px, 10vw, 124px);
+                display: grid;
+                place-items: center;
+                border-radius: 999px;
+                background: rgba(255,255,255,.18);
+                border: 1px solid rgba(255,255,255,.28);
+                font-size: clamp(2.2rem, 5vw, 4rem);
+                box-shadow: inset 0 0 35px rgba(255,255,255,.2);
+            }
+            .admin-agent-card {
+                height: 100%;
+                padding: 1.05rem;
+                border-radius: 20px;
+                border: 1px solid rgba(103, 166, 255, .22);
+                background:
+                    linear-gradient(145deg, rgba(18, 28, 49, .96), rgba(13, 20, 36, .94));
+                box-shadow: 0 14px 40px rgba(0,0,0,.18);
+            }
+            .admin-agent-icon {
+                width: 44px;
+                height: 44px;
+                display: grid;
+                place-items: center;
+                border-radius: 14px;
+                background: rgba(103, 166, 255, .13);
+                border: 1px solid rgba(103, 166, 255, .2);
+                font-size: 1.35rem;
+                margin-bottom: .75rem;
+            }
+            .admin-agent-card h3 {
+                margin: 0 0 .35rem;
+                color: var(--text);
+                font-size: 1.05rem;
+            }
+            .admin-agent-card p {
+                min-height: 44px;
+                margin: 0 0 .8rem;
+                color: var(--muted);
+                line-height: 1.5;
+                font-size: .9rem;
+            }
+            .admin-agent-status {
+                color: #cbd7e8;
+                font-weight: 800;
+                font-size: .88rem;
+                margin-bottom: .65rem;
+            }
+            .admin-agent-meta {
+                display: flex;
+                justify-content: space-between;
+                gap: .5rem;
+                color: var(--muted);
+                font-size: .82rem;
+                border-top: 1px solid rgba(255,255,255,.08);
+                padding-top: .65rem;
+            }
             @media (max-width: 700px) {
                 .block-container { padding: .75rem .8rem 2rem; }
                 .site-nav { align-items: flex-start; flex-direction: column; }
                 .hero { border-radius: 18px; }
                 .nav-note { display: none; }
                 .fallback-trading-card { min-height: 135px; }
+                .admin-hero { grid-template-columns: 1fr; border-radius: 20px; }
+                .admin-hero-orb { display: none; }
             }
             @media (prefers-reduced-motion: reduce) {
                 .market-track { animation: none; }
