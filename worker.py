@@ -10,7 +10,7 @@ from time import monotonic
 from loguru import logger
 from sqlalchemy import text
 
-from config import get_settings
+from config import ConfigurationError, get_settings
 from core.database import session_scope
 from services.job_queue import (
     claim_next_job,
@@ -25,9 +25,8 @@ from services.production_agents import RUNNERS
 def run_worker(stop_event: Event | None = None) -> None:
     """Claim and execute jobs while isolating every failed execution."""
     event = stop_event or Event()
-    settings = get_settings()
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
-    apply_pending_migrations()
+    _apply_startup_migrations()
     logger.info("AI worker started: {}", worker_id)
     while not event.is_set():
         try:
@@ -35,7 +34,7 @@ def run_worker(stop_event: Event | None = None) -> None:
             enqueue_due_schedules()
             job = claim_next_job(worker_id)
             if not job:
-                event.wait(settings.worker_poll_seconds)
+                event.wait(_worker_poll_seconds())
                 continue
             run_id: int | None = None
             started = monotonic()
@@ -77,7 +76,26 @@ def run_worker(stop_event: Event | None = None) -> None:
                 )
         except Exception:
             logger.exception("Worker iteration failed")
-            event.wait(settings.worker_poll_seconds)
+            event.wait(_worker_poll_seconds())
+
+
+def _apply_startup_migrations() -> None:
+    """Apply migrations best-effort so the worker process stays alive."""
+    try:
+        apply_pending_migrations()
+    except Exception:
+        logger.exception("Worker startup migrations failed; retrying in loop.")
+
+
+def _worker_poll_seconds() -> int:
+    """Read worker poll interval safely without crashing the process."""
+    try:
+        return int(get_settings().worker_poll_seconds)
+    except ConfigurationError:
+        logger.exception("Worker configuration is incomplete.")
+    except Exception:
+        logger.exception("Worker poll interval could not be loaded.")
+    return 30
 
 
 def _start_agent_run(agent_key: str, triggered_by: int | None) -> int:

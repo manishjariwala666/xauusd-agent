@@ -4,6 +4,7 @@ from pathlib import Path
 import tomllib
 
 from config import Settings
+import worker
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,21 @@ def test_railway_worker_uses_dedicated_process() -> None:
     deploy = config["deploy"]
     assert deploy["startCommand"] == "python worker.py"
     assert "healthcheckPath" not in deploy
+
+
+def test_worker_startup_helpers_are_non_fatal(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "worker.apply_pending_migrations",
+        lambda: (_ for _ in ()).throw(RuntimeError("db unavailable")),
+    )
+    monkeypatch.setattr(
+        "worker.get_settings",
+        lambda: (_ for _ in ()).throw(RuntimeError("config unavailable")),
+    )
+
+    worker._apply_startup_migrations()
+
+    assert worker._worker_poll_seconds() == 30
 
 
 def test_environment_template_contains_all_config_keys() -> None:
