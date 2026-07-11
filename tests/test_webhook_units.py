@@ -5,6 +5,7 @@ from backend import (
     ready,
     _should_route_generic_telegram_update_to_master,
     _telegram_media,
+    _configure_telegram_webhook,
     _telegram_webhook_payload,
     _telegram_webhook_secret_matches,
     _whatsapp_content,
@@ -85,3 +86,30 @@ def test_telegram_webhook_payload_uses_configured_secret() -> None:
         "allowed_updates": ["message", "edited_message"],
         "drop_pending_updates": False,
     }
+
+
+def test_telegram_webhook_registration_uses_api_domain(monkeypatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    class Settings:
+        public_api_url = "https://api.venusrealm.net"
+        backend_base_url = "https://xauusd-agent-api-production.up.railway.app"
+        telegram_webhook_secret = "secret-value"
+        telegram_bot_token = "signal-token"
+        master_ai_telegram_bot_token = "master-token"
+
+    def fake_register_single_telegram_webhook(**kwargs: object) -> None:
+        calls.append((str(kwargs["bot_name"]), str(kwargs["public_api_url"])))
+
+    monkeypatch.setattr("backend.get_settings", lambda: Settings())
+    monkeypatch.setattr(
+        "backend._register_single_telegram_webhook",
+        fake_register_single_telegram_webhook,
+    )
+
+    _configure_telegram_webhook()
+
+    assert calls == [
+        ("signal", "https://api.venusrealm.net"),
+        ("master_ai", "https://api.venusrealm.net"),
+    ]
