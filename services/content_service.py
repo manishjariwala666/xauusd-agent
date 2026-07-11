@@ -194,6 +194,16 @@ def list_content(
             END
             """
         )
+        view_count_expression = (
+            "ci.view_count"
+            if schema["content_item_columns"].get("view_count")
+            else "0::bigint"
+        )
+        last_viewed_expression = (
+            "ci.last_viewed_at"
+            if schema["content_item_columns"].get("last_viewed_at")
+            else "NULL::timestamptz"
+        )
         seo_select = _content_seo_select_clause(schema["has_content_seo"])
         seo_join = (
             """
@@ -215,6 +225,8 @@ def list_content(
                            ci.excerpt, ci.body, ci.image_url, ci.external_url,
                            ci.is_public, ci.is_published, ci.published_at,
                            ci.created_at, ci.updated_at,
+                           {view_count_expression} AS view_count,
+                           {last_viewed_expression} AS last_viewed_at,
                            cc.title AS category_title,
                            cc.slug AS category_slug,
                            {seo_select}
@@ -606,6 +618,37 @@ def delete_content(content_id: int) -> None:
             {"content_id": content_id},
         )
     logger.info("Website content deleted: id={}", content_id)
+
+
+def record_content_view(content_id: int) -> None:
+    """Increment a public post view counter when analytics columns exist."""
+    if int(content_id or 0) <= 0:
+        return
+    try:
+        with session_scope() as session:
+            columns = _table_columns(session, "content_items")
+            if not columns.get("view_count"):
+                return
+            last_viewed_update = (
+                ", last_viewed_at = NOW()"
+                if columns.get("last_viewed_at")
+                else ""
+            )
+            session.execute(
+                text(
+                    f"""
+                    UPDATE public.content_items
+                    SET view_count = COALESCE(view_count, 0) + 1
+                        {last_viewed_update}
+                    WHERE id = :content_id
+                      AND is_public = TRUE
+                      AND is_published = TRUE
+                    """
+                ),
+                {"content_id": int(content_id)},
+            )
+    except Exception:
+        logger.exception("Public content view tracking failed")
 
 
 def get_user_payment(user_id: int) -> dict[str, Any]:

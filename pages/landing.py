@@ -16,6 +16,7 @@ from services.content_service import (
     get_site_setting,
     list_categories,
     list_content,
+    record_content_view,
 )
 from services.public_market_service import (
     get_top_crypto_gainers,
@@ -76,6 +77,7 @@ def render_landing_page(
     _render_announcements()
     if _site_feature_enabled("feature_public_blog", default=True):
         _render_research_content()
+        _render_homepage_post_gallery()
     try:
         profit_proof_url = get_site_setting("profit_proof_telegram_url")
     except Exception:
@@ -425,6 +427,7 @@ def _dedupe_research_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _render_content_detail(item: dict[str, Any]) -> None:
+    record_content_view(int(item.get("id") or 0))
     title = str(item.get("title") or "Research Article")
     st.markdown(
         f'<h1 class="section-title">{html.escape(title)}</h1>',
@@ -456,6 +459,8 @@ def _render_content_detail(item: dict[str, Any]) -> None:
         st.markdown(body)
     else:
         st.warning("Article body is empty.")
+
+    _render_related_posts(item)
 
     st.markdown('<br>', unsafe_allow_html=True)
     if st.button("← Back to Research"):
@@ -573,6 +578,7 @@ def _render_blog_index() -> None:
         unsafe_allow_html=True,
     )
     items = _content_items_by_type(BLOG_CONTENT_TYPES, limit=60)
+    _render_view_segments(items)
     _render_content_grid(
         items[:24],
         empty_message="No public blog posts are available yet.",
@@ -818,6 +824,126 @@ def _render_research_content() -> None:
     _render_content_grid(items, empty_message="")
 
 
+def _render_homepage_post_gallery() -> None:
+    """Render WordPress-style homepage post galleries."""
+    items = _content_items_by_type(BLOG_CONTENT_TYPES, limit=60)
+    if not items:
+        return
+    st.markdown(
+        '<h2 class="section-title">Post Gallery</h2>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="section-subtitle">Fresh market research, popular reads, and posts that need attention.</p>',
+        unsafe_allow_html=True,
+    )
+    latest, popular, low_view = _split_post_gallery_items(items)
+    gallery_tabs = st.tabs(["Latest Posts", "High Views", "Low Views"])
+    with gallery_tabs[0]:
+        _render_content_grid(latest[:6], empty_message="No latest posts yet.")
+    with gallery_tabs[1]:
+        _render_content_grid(popular[:6], empty_message="No high-view posts yet.")
+    with gallery_tabs[2]:
+        _render_content_grid(low_view[:6], empty_message="No low-view posts yet.")
+
+
+def _split_post_gallery_items(
+    items: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    latest = list(items)
+    popular = sorted(
+        items,
+        key=lambda item: int(item.get("view_count") or 0),
+        reverse=True,
+    )
+    low_view = sorted(
+        items,
+        key=lambda item: (
+            int(item.get("view_count") or 0),
+            str(item.get("published_at") or item.get("created_at") or ""),
+        ),
+    )
+    return latest, popular, low_view
+
+
+def _render_view_segments(items: list[dict[str, Any]]) -> None:
+    popular = [
+        item for item in sorted(
+            items,
+            key=lambda row: int(row.get("view_count") or 0),
+            reverse=True,
+        )
+        if int(item.get("view_count") or 0) > 0
+    ][:4]
+    low_view = [
+        item for item in sorted(items, key=lambda row: int(row.get("view_count") or 0))
+        if int(item.get("view_count") or 0) == 0
+    ][:4]
+    if not popular and not low_view:
+        return
+    st.markdown("### Popular / Needs Boost")
+    cols = st.columns(2)
+    with cols[0]:
+        st.caption("High views")
+        _render_compact_post_list(popular, "No views recorded yet.")
+    with cols[1]:
+        st.caption("Low views")
+        _render_compact_post_list(low_view, "No low-view posts.")
+
+
+def _render_compact_post_list(items: list[dict[str, Any]], empty: str) -> None:
+    if not items:
+        st.info(empty)
+        return
+    for item in items:
+        title = html.escape(str(item.get("title") or "Untitled"))
+        url = html.escape(_content_url(item))
+        views = int(item.get("view_count") or 0)
+        st.markdown(
+            f'<a class="social-link" href="{url}" target="_self">{title} · {views} views</a>',
+            unsafe_allow_html=True,
+        )
+
+
+def _render_related_posts(item: dict[str, Any]) -> None:
+    related = _related_posts(item, _all_public_content(limit=80))
+    if not related:
+        return
+    st.markdown(
+        '<h2 class="section-title">Related Posts</h2>',
+        unsafe_allow_html=True,
+    )
+    _render_content_grid(related[:4], empty_message="")
+
+
+def _related_posts(
+    item: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    item_id = str(item.get("id") or "")
+    category_id = str(item.get("category_id") or "")
+    category_slug = str(item.get("category_slug") or "")
+    subcategory = _slug_fragment(str(item.get("subcategory") or ""))
+    related: list[dict[str, Any]] = []
+    for candidate in candidates:
+        if str(candidate.get("id") or "") == item_id:
+            continue
+        same_category = (
+            category_id
+            and str(candidate.get("category_id") or "") == category_id
+        ) or (
+            category_slug
+            and str(candidate.get("category_slug") or "") == category_slug
+        )
+        same_subcategory = (
+            subcategory
+            and _slug_fragment(str(candidate.get("subcategory") or "")) == subcategory
+        )
+        if same_category or same_subcategory:
+            related.append(candidate)
+    return related
+
+
 def _render_content_grid(
     items: list[dict[str, Any]],
     *,
@@ -840,6 +966,7 @@ def _render_content_card(item: dict[str, Any]) -> None:
     excerpt = str(item.get("excerpt") or "").strip()
     slug = _content_slug(item)
     url = _content_url(item) if slug else str(item.get("external_url") or "#")
+    views = int(item.get("view_count") or 0)
     if item.get("image_url"):
         media = (
             f'<img class="content-image" src="{html.escape(str(item["image_url"]))}" '
@@ -856,7 +983,7 @@ def _render_content_card(item: dict[str, Any]) -> None:
                 <div class="eyebrow">{html.escape(content_type or "Research")}</div>
                 <h3>{html.escape(title)}</h3>
                 <p>{html.escape(excerpt)}</p>
-                <div class="card-link-text">Read full post →</div>
+                <div class="card-link-text">{views} views · Read full post →</div>
             </div>
         </a>
         """,

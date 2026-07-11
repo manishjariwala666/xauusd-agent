@@ -22,6 +22,7 @@ _AUTOMATIC_MIGRATIONS = (
     "009_two_telegram_bots.sql",
     "010_admin_operations_extensions.sql",
     "011_command_mode_agent_policy.sql",
+    "012_content_view_analytics.sql",
 )
 
 

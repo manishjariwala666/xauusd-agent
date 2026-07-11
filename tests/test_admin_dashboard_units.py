@@ -90,6 +90,17 @@ def test_admin_has_wordpress_style_blog_seo_panel() -> None:
     assert "_seo_checklist" in score_source
 
 
+def test_admin_content_manager_has_blog_view_analytics() -> None:
+    content_source = inspect.getsource(dashboard._render_content_manager)
+    analytics_source = inspect.getsource(dashboard._render_content_view_analytics)
+
+    assert "_render_content_view_analytics(items)" in content_source
+    assert "Blog View Analytics" in analytics_source
+    assert "Total Views" in analytics_source
+    assert "Needs Boost" in analytics_source
+    assert "High views / Low views" in analytics_source
+
+
 def test_admin_signal_manager_has_required_manual_fields() -> None:
     source = inspect.getsource(dashboard._render_signal_form)
 

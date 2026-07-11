@@ -1268,6 +1268,8 @@ def _render_content_manager() -> None:
                         f"{record.get('published_at') or record.get('created_at') or ''}"
                     )
 
+    _render_content_view_analytics(items)
+
     content_scopes = {
         "Blogs": {"BLOG", "AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION"},
         "Pages": {"PAGE"},
@@ -1545,7 +1547,7 @@ def _render_content_manager() -> None:
 def _render_selected_content_metadata(selected: dict[str, Any]) -> None:
     """Show CMS/SEO fields for quick review without exposing internals."""
     st.markdown("#### Content metadata")
-    meta_cols = st.columns(4)
+    meta_cols = st.columns(5)
     meta_cols[0].metric("Type", str(selected.get("content_type") or "—"))
     meta_cols[1].metric(
         "Status",
@@ -1559,6 +1561,10 @@ def _render_selected_content_metadata(selected: dict[str, Any]) -> None:
         "Subcategory",
         str(selected.get("subcategory") or "—"),
     )
+    meta_cols[4].metric("Views", int(selected.get("view_count") or 0))
+    last_viewed = str(selected.get("last_viewed_at") or "").strip()
+    if last_viewed:
+        st.caption(f"Last viewed: {last_viewed}")
 
     with st.expander("View SEO metadata / FAQ / schema"):
         st.write(
@@ -1574,6 +1580,65 @@ def _render_selected_content_metadata(selected: dict[str, Any]) -> None:
         st.json(selected.get("faq") or [])
         st.markdown("**Schema JSON-LD**")
         st.json(selected.get("schema_jsonld") or {})
+
+
+def _render_content_view_analytics(items: list[dict[str, Any]]) -> None:
+    """Surface public post performance without relying on third-party analytics."""
+    public_posts = [
+        item for item in items
+        if item.get("is_public")
+        and item.get("is_published")
+        and str(item.get("content_type") or "").upper()
+        in {"BLOG", "AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION"}
+    ]
+    if not public_posts:
+        return
+
+    total_views = sum(int(item.get("view_count") or 0) for item in public_posts)
+    high_view_posts = sorted(
+        public_posts,
+        key=lambda item: int(item.get("view_count") or 0),
+        reverse=True,
+    )[:5]
+    low_view_posts = sorted(
+        public_posts,
+        key=lambda item: (
+            int(item.get("view_count") or 0),
+            str(item.get("published_at") or item.get("created_at") or ""),
+        ),
+    )[:5]
+
+    st.markdown("#### Blog View Analytics")
+    metric_cols = st.columns(3)
+    metric_cols[0].metric("Public Posts", len(public_posts))
+    metric_cols[1].metric("Total Views", total_views)
+    metric_cols[2].metric(
+        "Needs Boost",
+        sum(1 for item in public_posts if int(item.get("view_count") or 0) == 0),
+    )
+
+    with st.expander("High views / Low views", expanded=False):
+        left, right = st.columns(2)
+        with left:
+            st.caption("High views")
+            _render_admin_post_analytics_list(high_view_posts)
+        with right:
+            st.caption("Low views")
+            _render_admin_post_analytics_list(low_view_posts)
+
+
+def _render_admin_post_analytics_list(items: list[dict[str, Any]]) -> None:
+    if not items:
+        st.info("No posts available.")
+        return
+    for item in items:
+        title = str(item.get("title") or "Untitled post")
+        views = int(item.get("view_count") or 0)
+        public_url = _content_public_url(item)
+        if public_url:
+            st.markdown(f"- [{title}]({public_url}) · {views} views")
+        else:
+            st.markdown(f"- {title} · {views} views")
 
 
 def _render_wordpress_style_blog_panel(selected: dict[str, Any]) -> None:

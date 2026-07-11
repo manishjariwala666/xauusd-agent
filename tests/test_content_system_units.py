@@ -39,12 +39,16 @@ def test_content_slug_and_json_helpers_are_safe() -> None:
 def test_content_system_migration_is_automatic_and_complete() -> None:
     assert "008_content_system_extensions.sql" in _AUTOMATIC_MIGRATIONS
     assert "010_admin_operations_extensions.sql" in _AUTOMATIC_MIGRATIONS
+    assert "012_content_view_analytics.sql" in _AUTOMATIC_MIGRATIONS
     sql = (ROOT / "migrations/008_content_system_extensions.sql").read_text(
         encoding="utf-8"
     )
     ops_sql = (ROOT / "migrations/010_admin_operations_extensions.sql").read_text(
         encoding="utf-8"
     )
+    analytics_sql = (
+        ROOT / "migrations/012_content_view_analytics.sql"
+    ).read_text(encoding="utf-8")
 
     assert "ADD COLUMN IF NOT EXISTS slug TEXT" in sql
     assert "ADD COLUMN IF NOT EXISTS subcategory TEXT" in sql
@@ -52,6 +56,8 @@ def test_content_system_migration_is_automatic_and_complete() -> None:
     assert "'SIGNAL_POST'" in sql
     assert "ADD COLUMN IF NOT EXISTS target_1" in ops_sql
     assert "ADD COLUMN IF NOT EXISTS telegram_id TEXT" in ops_sql
+    assert "ADD COLUMN IF NOT EXISTS view_count" in analytics_sql
+    assert "ADD COLUMN IF NOT EXISTS last_viewed_at" in analytics_sql
 
 
 def test_content_seo_select_clause_has_safe_fallbacks() -> None:
@@ -72,6 +78,23 @@ def test_content_listing_selects_seo_metadata_when_table_exists() -> None:
     assert "cs.faq" in select_clause
     assert "cs.schema_jsonld" in select_clause
     assert "cs.image_prompt" in select_clause
+
+
+def test_content_service_supports_view_analytics_safely() -> None:
+    import inspect
+
+    from services import content_service
+
+    list_source = inspect.getsource(content_service.list_content)
+    record_source = inspect.getsource(content_service.record_content_view)
+
+    assert "view_count_expression" in list_source
+    assert "last_viewed_expression" in list_source
+    assert "0::bigint" in list_source
+    assert "NULL::timestamptz" in list_source
+    assert "view_count = COALESCE(view_count, 0) + 1" in record_source
+    assert "is_public = TRUE" in record_source
+    assert "is_published = TRUE" in record_source
 
 
 def test_site_setting_allowlist_contains_admin_settings() -> None:

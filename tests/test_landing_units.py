@@ -69,6 +69,51 @@ def test_fallback_card_html_prevents_empty_visual_cards():
     assert "XAUUSD RESEARCH" in html
 
 
+def test_post_gallery_split_orders_by_view_count():
+    items = [
+        {"id": 1, "title": "Fresh", "view_count": 2, "created_at": "2026-07-11"},
+        {"id": 2, "title": "Popular", "view_count": 90, "created_at": "2026-07-10"},
+        {"id": 3, "title": "Needs Boost", "view_count": 0, "created_at": "2026-07-09"},
+    ]
+
+    latest, popular, low_view = landing._split_post_gallery_items(items)
+
+    assert [item["title"] for item in latest] == [
+        "Fresh",
+        "Popular",
+        "Needs Boost",
+    ]
+    assert popular[0]["title"] == "Popular"
+    assert low_view[0]["title"] == "Needs Boost"
+
+
+def test_related_posts_match_category_or_subcategory_and_exclude_current():
+    current = {
+        "id": 10,
+        "category_id": 5,
+        "category_slug": "xauusd",
+        "subcategory": "USA Market",
+    }
+    candidates = [
+        {"id": 10, "title": "Self", "category_id": 5},
+        {"id": 11, "title": "Same Category", "category_id": 5},
+        {
+            "id": 12,
+            "title": "Same Subcategory",
+            "category_id": 7,
+            "subcategory": "USA Market",
+        },
+        {"id": 13, "title": "Other", "category_id": 8, "subcategory": "Crypto"},
+    ]
+
+    related = landing._related_posts(current, candidates)
+
+    assert [item["title"] for item in related] == [
+        "Same Category",
+        "Same Subcategory",
+    ]
+
+
 def test_blog_detail_by_slug_route_dispatches_to_content_detail(monkeypatch):
     calls = []
 
