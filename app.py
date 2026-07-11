@@ -97,7 +97,7 @@ def run() -> None:
         st.error("The application is temporarily unavailable.")
         st.stop()
 
-    if settings.block_search_indexing:
+    if getattr(settings, "block_search_indexing", False):
         _render_noindex_marker()
 
     if not is_authenticated():
