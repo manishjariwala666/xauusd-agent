@@ -42,6 +42,8 @@ from services.google_sheets import GoogleSheetsService
 from services.google_sheets_service import (
     PrivateGoogleSheetsService,
     GoogleSheetsServiceError,
+    google_sheets_disabled_reason,
+    is_google_sheets_configured,
 )
 from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
@@ -858,6 +860,9 @@ def _render_small_table(
 
 
 def _render_google_sheet_sync_status() -> None:
+    if not is_google_sheets_configured():
+        st.warning(f"Google Sheet safe-disabled: {google_sheets_disabled_reason()}")
+        return
     try:
         service = PrivateGoogleSheetsService()
         service.ensure_required_tabs()
@@ -1052,6 +1057,9 @@ def _render_google_sheet_logs() -> None:
         "Errors": "errors",
     }
     selected_label = st.selectbox("Google Sheet log tab", list(log_tabs))
+    if not is_google_sheets_configured():
+        st.warning(f"Google Sheet logs safe-disabled: {google_sheets_disabled_reason()}")
+        return
     try:
         rows = PrivateGoogleSheetsService().read_rows(
             log_tabs[selected_label],
