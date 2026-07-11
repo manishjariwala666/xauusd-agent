@@ -19,10 +19,9 @@ from config import get_settings
 from core.database import session_scope
 from services.conversation_service import record_inbound_message
 from services.migration_service import apply_pending_migrations
-from services.telegram_master_ai_control import try_handle_telegram_update
+from services.telegram_master_ai_control import is_master_command
 from services.telegram_master_ai_webhook import (
     handle_master_telegram_webhook,
-    handle_signal_telegram_master_command_guard,
 )
 from services.telegram_service import TelegramService
 
@@ -124,18 +123,8 @@ async def telegram_webhook(
         raise HTTPException(403, "Invalid webhook signature.")
     payload = await request.json()
 
-    ignored_master_command = handle_signal_telegram_master_command_guard(payload)
-    if ignored_master_command is not None:
-        return {"accepted": True}
-
-    master_result = try_handle_telegram_update(
-        payload,
-        sender=lambda chat_id, text: TelegramService().send_text(
-            str(chat_id),
-            text,
-        ),
-    )
-    if master_result.handled:
+    if _should_route_generic_telegram_update_to_master(payload):
+        handle_master_telegram_webhook(payload)
         return {"accepted": True}
 
     message = payload.get("message") or payload.get("edited_message")
@@ -170,6 +159,32 @@ async def telegram_webhook(
         media=media,
     )
     return {"accepted": True}
+
+
+def _should_route_generic_telegram_update_to_master(
+    payload: dict[str, Any],
+) -> bool:
+    """Route Master AI commands even if Telegram points at the generic webhook."""
+    message = payload.get("message") or payload.get("edited_message")
+    if not isinstance(message, dict):
+        return False
+    text_body = str(message.get("text") or message.get("caption") or "").strip()
+    if not text_body:
+        return False
+    if is_master_command(text_body):
+        return True
+    lowered = text_body.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "seo blog",
+            "blog banao",
+            "blog banaiye",
+            "article banao",
+            "post banao",
+            "website par blog",
+        )
+    )
 
 
 def _is_telegram_command(text_body: str, command: str) -> bool:

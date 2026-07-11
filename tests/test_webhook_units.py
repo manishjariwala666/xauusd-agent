@@ -3,6 +3,7 @@
 from backend import (
     health,
     ready,
+    _should_route_generic_telegram_update_to_master,
     _telegram_media,
     _telegram_webhook_payload,
     _telegram_webhook_secret_matches,
@@ -38,6 +39,18 @@ def test_ready_checks_database(monkeypatch) -> None:
 
     assert ready() == {"status": "ready", "database": "ok"}
     assert calls
+
+
+def test_generic_telegram_webhook_routes_master_ai_fallbacks() -> None:
+    assert _should_route_generic_telegram_update_to_master(
+        {"message": {"text": "/master run blog"}}
+    )
+    assert _should_route_generic_telegram_update_to_master(
+        {"message": {"text": "xauusd buy or sell today par SEO blog banao"}}
+    )
+    assert not _should_route_generic_telegram_update_to_master(
+        {"message": {"text": "hello support"}}
+    )
 
 
 def test_whatsapp_text_content() -> None:
