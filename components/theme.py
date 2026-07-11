@@ -488,15 +488,37 @@ def apply_admin_light_theme() -> None:
                 padding-left: clamp(1rem, 2.4vw, 2rem);
                 padding-right: clamp(1rem, 2.4vw, 2rem);
             }
-            .stSidebar {
+            .stSidebar,
+            [data-testid="stSidebar"] {
                 background: #ffffff !important;
                 border-right: 1px solid var(--admin-border);
             }
             .stSidebar [data-testid="stMarkdownContainer"],
             .stSidebar p,
             .stSidebar span,
-            .stSidebar label {
+            .stSidebar label,
+            [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
+            [data-testid="stSidebar"] p,
+            [data-testid="stSidebar"] span,
+            [data-testid="stSidebar"] label {
                 color: var(--admin-text) !important;
+            }
+            [data-testid="stSidebar"] div[role="radiogroup"] label {
+                margin: .22rem 0;
+                padding: .65rem .75rem;
+                border-radius: 12px;
+                border: 1px solid transparent;
+                background: transparent;
+                font-weight: 800;
+            }
+            [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+                background: #f3f6fb;
+                border-color: var(--admin-border);
+            }
+            [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+                background: #edf3ff;
+                border-color: #dbe7ff;
+                color: var(--admin-blue) !important;
             }
             .admin-topbar {
                 display: grid;
