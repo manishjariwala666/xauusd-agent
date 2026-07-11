@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import os
 import re
 from typing import Any
 
@@ -76,7 +77,11 @@ def record_inbound_message(
         message=body[:1000],
         notes=f"conversation_id={conversation_id}",
     )
-    if normalized_channel == "TELEGRAM" and _is_blog_only_command(body):
+    if (
+        normalized_channel == "TELEGRAM"
+        and _public_blog_commands_enabled()
+        and _is_blog_only_command(body)
+    ):
         enqueue_agent_job(
             "ai_blog_agent",
             {
@@ -85,7 +90,7 @@ def record_inbound_message(
                 "include_image": _requests_image(body),
             },
         )
-    else:
+    elif _auto_reply_agents_enabled():
         agent_key = (
             "telegram_reply_agent"
             if normalized_channel == "TELEGRAM"
@@ -96,6 +101,18 @@ def record_inbound_message(
             {"conversation_id": int(conversation_id)},
         )
     return int(conversation_id), True
+
+
+def _auto_reply_agents_enabled() -> bool:
+    """Keep public reply agents command-controlled unless explicitly enabled."""
+    value = os.getenv("ENABLE_AUTO_REPLY_AGENTS", "false")
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _public_blog_commands_enabled() -> bool:
+    """Keep public Telegram natural blog commands off by default."""
+    value = os.getenv("ENABLE_PUBLIC_BLOG_COMMANDS", "false")
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def send_human_reply(

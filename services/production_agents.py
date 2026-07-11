@@ -493,6 +493,11 @@ def _master_optional_agent(agent_key: str, handler):
         ).lower()
 
         if agent_key == "signal_agent":
+            scheduled_signal = bool(
+                payload.get("scheduled_signal")
+                or payload.get("allow_signal")
+                or payload.get("daily_signal")
+            )
             explicit_signal = any(
                 word in request_text
                 for word in (
@@ -505,7 +510,7 @@ def _master_optional_agent(agent_key: str, handler):
                     "telegram channel",
                 )
             )
-            if not explicit_signal:
+            if not scheduled_signal and not explicit_signal:
                 return "signal_agent skipped for blog-only request."
 
         try:

@@ -12,6 +12,7 @@ warnings.filterwarnings(
 from services.google_sheets import GoogleSheetsService
 from services.production_agents import (
     _fallback_blog_payload,
+    _master_optional_agent,
     _seo_issues,
     _slugify,
     run_image_agent,
@@ -19,8 +20,10 @@ from services.production_agents import (
 from services.telegram_service import TelegramService
 from backend import _is_telegram_command
 from services.conversation_service import (
+    _auto_reply_agents_enabled,
     _extract_blog_topic,
     _is_blog_only_command,
+    _public_blog_commands_enabled,
     _requests_image,
 )
 
@@ -93,6 +96,33 @@ def test_natural_blog_command_routes_as_blog_only() -> None:
 def test_blog_command_with_signal_is_not_blog_only() -> None:
     assert not _is_blog_only_command("xauusd buy sell target signal blog banao")
     assert _requests_image("xauusd seo blog banao with image")
+
+
+def test_scheduled_signal_payload_is_not_skipped() -> None:
+    calls: list[dict] = []
+
+    def handler(payload: dict) -> str:
+        calls.append(payload)
+        return "signal ok"
+
+    wrapped = _master_optional_agent("signal_agent", handler)
+
+    assert wrapped({"scheduled_signal": True}) == "signal ok"
+    assert calls == [{"scheduled_signal": True}]
+
+
+def test_public_auto_reply_and_blog_commands_are_off_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("ENABLE_AUTO_REPLY_AGENTS", raising=False)
+    monkeypatch.delenv("ENABLE_PUBLIC_BLOG_COMMANDS", raising=False)
+
+    assert not _auto_reply_agents_enabled()
+    assert not _public_blog_commands_enabled()
+
+    monkeypatch.setenv("ENABLE_AUTO_REPLY_AGENTS", "true")
+    monkeypatch.setenv("ENABLE_PUBLIC_BLOG_COMMANDS", "true")
+
+    assert _auto_reply_agents_enabled()
+    assert _public_blog_commands_enabled()
 
 
 def test_seo_issue_detection() -> None:

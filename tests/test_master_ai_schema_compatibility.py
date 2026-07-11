@@ -101,3 +101,16 @@ def test_master_ai_migrations_are_in_automatic_startup_order() -> None:
     assert _AUTOMATIC_MIGRATIONS.index(
         "008_content_system_extensions.sql"
     ) < _AUTOMATIC_MIGRATIONS.index("010_admin_operations_extensions.sql")
+    assert "011_command_mode_agent_policy.sql" in _AUTOMATIC_MIGRATIONS
+
+
+def test_command_mode_policy_keeps_only_daily_signal_schedule() -> None:
+    sql = (
+        ROOT / "migrations" / "011_command_mode_agent_policy.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "TIME '03:30'" in sql
+    assert "Asia/Kolkata" in sql
+    assert "scheduled_signal" in sql
+    assert "a.agent_key <> 'signal_agent'" in sql
+    assert "Cancelled by command-mode policy" in sql
