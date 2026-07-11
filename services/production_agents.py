@@ -816,7 +816,13 @@ def _write_seo_files() -> None:
             ("SEO_SITEMAP_XML", sitemap),
             (
                 "SEO_ROBOTS_TXT",
-                f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n",
+                (
+                    "User-agent: *\n"
+                    "Disallow: /\n"
+                    "X-Robots-Tag: noindex, nofollow, noarchive\n"
+                )
+                if settings.block_search_indexing
+                else f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n",
             ),
         ):
             session.execute(

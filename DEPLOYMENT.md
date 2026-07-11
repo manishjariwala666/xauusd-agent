@@ -21,6 +21,7 @@ These four values are validated by every process at startup:
 |---|---|---|
 | `APP_BASE_URL` | Verification/reset links and public SEO URLs | Public Streamlit website URL. |
 | `BACKEND_BASE_URL` | Telegram webhook registration | Railway-generated HTTPS domain for the FastAPI service. |
+| `BLOCK_SEARCH_INDEXING` | Temporary launch/migration crawl lock | Set `true` while moving to `https://venusrealm.net`; set `false` only after the public site is ready for Google. |
 | `JWT_ISSUER` | JWT validation | Optional; defaults to `ai-market-analytics-pro`. |
 | `JWT_TTL_MINUTES` | JWT lifetime | Optional; defaults to `60`. |
 | `SMTP_HOST` | Email verification and password reset | Transactional email provider. |
@@ -33,6 +34,11 @@ These four values are validated by every process at startup:
 `APP_BASE_URL`, `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and
 `EMAIL_FROM` are operationally mandatory for user registration, verification,
 and forgot-password flows even though the process can start without them.
+
+For the `venusrealm.net` migration, keep `BLOCK_SEARCH_INDEXING=true` on the
+Streamlit website and Railway API until the public website, admin panel, blog
+URLs, and sitemap are ready. Then switch it to `false` and regenerate/publish
+SEO files.
 
 ## Telegram
 
@@ -114,6 +120,8 @@ database migrations before processing work.
   same Supabase project.
 - Configure all startup-required values on Streamlit and both Railway services.
 - Configure SMTP and set `APP_BASE_URL` to the Streamlit URL.
+- During domain migration, set `APP_BASE_URL=https://venusrealm.net` and keep
+  `BLOCK_SEARCH_INDEXING=true` until final QA is complete.
 - Generate the Railway API domain and set `BACKEND_BASE_URL`.
 - Configure Telegram, add the bot to the target channel, and redeploy API.
 - Configure Meta webhook URL as `/webhooks/whatsapp` on the Railway API domain.

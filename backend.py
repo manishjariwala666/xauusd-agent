@@ -48,6 +48,36 @@ app = FastAPI(
 )
 
 
+def _search_indexing_blocked() -> bool:
+    """Return crawl-block flag without making health checks depend on settings."""
+    raw = os.getenv("BLOCK_SEARCH_INDEXING", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    try:
+        return bool(get_settings().block_search_indexing)
+    except Exception:
+        return False
+
+
+def _blocked_robots_txt() -> str:
+    """Return conservative crawler rules for pre-launch/private migration mode."""
+    return (
+        "User-agent: *\n"
+        "Disallow: /\n"
+        "X-Robots-Tag: noindex, nofollow, noarchive\n"
+    )
+
+
+@app.middleware("http")
+async def add_search_indexing_headers(request: Request, call_next: Any) -> Response:
+    """Prevent accidental indexing when the deployment is in private mode."""
+    response = await call_next(request)
+    if _search_indexing_blocked():
+        response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    return response
+
 
 @app.get("/health")
 def health() -> dict[str, str]:
@@ -66,12 +96,20 @@ def ready() -> dict[str, str]:
 @app.get("/sitemap.xml")
 def sitemap() -> Response:
     """Serve the latest SEO-agent generated sitemap."""
+    if _search_indexing_blocked():
+        empty_sitemap = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" />'
+        )
+        return Response(empty_sitemap, media_type="application/xml")
     return Response(_public_setting("SEO_SITEMAP_XML"), media_type="application/xml")
 
 
 @app.get("/robots.txt")
 def robots() -> Response:
     """Serve the latest SEO-agent generated crawler rules."""
+    if _search_indexing_blocked():
+        return Response(_blocked_robots_txt(), media_type="text/plain")
     return Response(_public_setting("SEO_ROBOTS_TXT"), media_type="text/plain")
 
 

@@ -71,10 +71,22 @@ def render_sidebar() -> None:
         st.rerun()
 
 
+def _render_noindex_marker() -> None:
+    """Ask crawlers not to index pre-launch/private migration deployments."""
+    st.markdown(
+        """
+        <meta name="robots" content="noindex,nofollow,noarchive">
+        <meta name="googlebot" content="noindex,nofollow,noarchive">
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def run() -> None:
     """Initialize dependencies and route public, user, and admin experiences."""
     try:
         supabase = get_supabase()
+        settings = get_settings()
         initialize_session()
     except ConfigurationError as exc:
         LOGGER.error("Application configuration is incomplete: %s", exc)
@@ -84,6 +96,9 @@ def run() -> None:
         LOGGER.exception("Application initialization failed.")
         st.error("The application is temporarily unavailable.")
         st.stop()
+
+    if settings.block_search_indexing:
+        _render_noindex_marker()
 
     if not is_authenticated():
         action = str(st.query_params.get("action", ""))

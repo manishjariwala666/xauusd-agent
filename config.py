@@ -58,6 +58,12 @@ def _read_secret(name: str, default: str = "") -> str:
     return str(default).strip()
 
 
+def _read_bool_secret(name: str, default: bool = False) -> bool:
+    """Read one feature flag from environment/secrets using common truthy values."""
+    fallback = "true" if default else "false"
+    return _read_secret(name, fallback).lower() in {"1", "true", "yes", "on"}
+
+
 def _compact_secret_token(value: str) -> str:
     """Remove accidental pasted whitespace from opaque API/bot tokens."""
     return "".join(str(value or "").split())
@@ -186,6 +192,7 @@ class Settings:
     meta_app_secret: str
     human_takeover_minutes: int
     worker_poll_seconds: int
+    block_search_indexing: bool
 
     @classmethod
     def load(cls) -> "Settings":
@@ -323,6 +330,10 @@ class Settings:
             worker_poll_seconds=max(
                 1,
                 int(_read_secret("WORKER_POLL_SECONDS", "5")),
+            ),
+            block_search_indexing=_read_bool_secret(
+                "BLOCK_SEARCH_INDEXING",
+                False,
             ),
         )
 
