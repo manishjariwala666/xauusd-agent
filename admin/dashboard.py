@@ -1240,6 +1240,10 @@ def _update_content_publish_state(
 
 def _render_content_manager() -> None:
     st.subheader("Posts, Announcements, Advisory & Analysis")
+    st.caption(
+        "WordPress-style blog controls: select a blog post to review SEO, "
+        "slug, meta description, FAQ, schema, image prompt, and public URL."
+    )
     try:
         categories = list_categories(public_only=False)
         items = list_content(public_only=False, limit=200)
@@ -1292,12 +1296,14 @@ def _render_content_manager() -> None:
         )
     ]
 
-    options = {"Create new": None}
-    options.update(
-        {
-            f"#{item['id']} · {item['title']}": item
-            for item in visible_items
-        }
+    content_options = {
+        f"#{item['id']} · {item['title']}": item
+        for item in visible_items
+    }
+    options = (
+        {**content_options, "Create new": None}
+        if scope_name == "Blogs" and content_options
+        else {"Create new": None, **content_options}
     )
     selection = st.selectbox("Select content", list(options))
     selected = options[selection]

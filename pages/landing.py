@@ -389,14 +389,14 @@ def _fallback_card_html(
     """Return a professional fallback banner when a content image is absent."""
     safe_title = html.escape(title or "XAUUSD Market Research")
     safe_label = html.escape(label or "XAUUSD RESEARCH")
-    return f"""
-    <div class="fallback-trading-card">
-        <div>
-            <div class="fallback-label">{safe_label}</div>
-            <div class="fallback-title">{safe_title}</div>
-        </div>
-    </div>
-    """
+    return (
+        '<div class="fallback-trading-card">'
+        "<div>"
+        f'<div class="fallback-label">{safe_label}</div>'
+        f'<div class="fallback-title">{safe_title}</div>'
+        "</div>"
+        "</div>"
+    )
 
 
 def _fallback_blog_banner(title: str = "XAUUSD Market Research") -> None:
@@ -975,20 +975,19 @@ def _render_content_card(item: dict[str, Any]) -> None:
     else:
         media = _fallback_card_html(title, content_type or "Market Research")
 
-    st.markdown(
-        f"""
-        <a class="content-card clickable-card" href="{html.escape(url)}" target="_self">
-            {media}
-            <div class="content-card-body">
-                <div class="eyebrow">{html.escape(content_type or "Research")}</div>
-                <h3>{html.escape(title)}</h3>
-                <p>{html.escape(excerpt)}</p>
-                <div class="card-link-text">{views} views · Read full post →</div>
-            </div>
-        </a>
-        """,
-        unsafe_allow_html=True,
+    card_html = (
+        f'<a class="content-card clickable-card" href="{html.escape(url)}" '
+        'target="_self">'
+        f"{media}"
+        '<div class="content-card-body">'
+        f'<div class="eyebrow">{html.escape(content_type or "Research")}</div>'
+        f"<h3>{html.escape(title)}</h3>"
+        f"<p>{html.escape(excerpt)}</p>"
+        f'<div class="card-link-text">{views} views · Read full post →</div>'
+        "</div>"
+        "</a>"
     )
+    st.markdown(card_html, unsafe_allow_html=True)
 
 
 def _render_profit_proof(public_telegram_url: str) -> None:

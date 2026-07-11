@@ -69,11 +69,13 @@ def test_admin_content_list_uses_full_content_service_and_filters() -> None:
     source = inspect.getsource(dashboard._render_content_manager)
 
     assert "list_content(public_only=False, limit=200)" in source
+    assert "WordPress-style blog controls" in source
     assert "Blogs" in source
     assert "Pages" in source
     assert "Announcements" in source
     assert "Signals" in source
     assert "All content" in source
+    assert 'if scope_name == "Blogs" and content_options' in source
 
 
 def test_admin_has_wordpress_style_blog_seo_panel() -> None:

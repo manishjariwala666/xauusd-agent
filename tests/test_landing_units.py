@@ -67,6 +67,17 @@ def test_fallback_card_html_prevents_empty_visual_cards():
 
     assert "XAUUSD Market Research" in html
     assert "XAUUSD RESEARCH" in html
+    assert not html.startswith("\n")
+
+
+def test_content_card_uses_single_html_block_to_avoid_literal_markup() -> None:
+    import inspect
+
+    source = inspect.getsource(landing._render_content_card)
+
+    assert "card_html =" in source
+    assert "st.markdown(card_html, unsafe_allow_html=True)" in source
+    assert '"""' not in source
 
 
 def test_post_gallery_split_orders_by_view_count():
