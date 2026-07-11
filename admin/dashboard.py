@@ -1364,6 +1364,14 @@ def _render_content_manager() -> None:
                 "This AI blog has no image_url. Public page will show the fallback "
                 "XAUUSD research banner."
             )
+        if str(selected.get("content_type") or "").upper() in {
+            "BLOG",
+            "AI_BLOG",
+            "ADVISORY",
+            "ANALYSIS",
+            "EDUCATION",
+        }:
+            _render_wordpress_style_blog_panel(selected)
         _render_selected_content_metadata(selected)
     category_options = {"Uncategorized": None}
     category_options.update(
@@ -1566,6 +1574,146 @@ def _render_selected_content_metadata(selected: dict[str, Any]) -> None:
         st.json(selected.get("faq") or [])
         st.markdown("**Schema JSON-LD**")
         st.json(selected.get("schema_jsonld") or {})
+
+
+def _render_wordpress_style_blog_panel(selected: dict[str, Any]) -> None:
+    """Show a WordPress-style blog post and SEO review panel."""
+    st.markdown("### Blog Post SEO Editor")
+    public_url = _content_public_url(selected)
+    slug = str(selected.get("slug") or selected.get("seo_slug") or "").strip()
+    title = str(selected.get("title") or "")
+    meta_title = str(selected.get("meta_title") or "")
+    meta_description = str(selected.get("meta_description") or "")
+    focus_keyword = str(selected.get("focus_keyword") or "")
+    excerpt = str(selected.get("excerpt") or "")
+    body = str(selected.get("body") or "")
+
+    score = _seo_readiness_score(
+        title=title,
+        slug=slug,
+        meta_title=meta_title,
+        meta_description=meta_description,
+        focus_keyword=focus_keyword,
+        excerpt=excerpt,
+        body=body,
+    )
+    status_label = "Published" if selected.get("is_published") else "Draft"
+    kpi_cols = st.columns(4)
+    kpi_cols[0].metric("SEO Score", f"{score}%")
+    kpi_cols[1].metric("Post Status", status_label)
+    kpi_cols[2].metric("Focus Keyword", focus_keyword or "Missing")
+    kpi_cols[3].metric("Slug", slug or "Missing")
+
+    preview_tab, seo_tab, schema_tab = st.tabs(
+        ["Post Preview", "SEO Settings", "FAQ / Schema"]
+    )
+    with preview_tab:
+        st.caption("WordPress-style public snippet preview")
+        st.markdown(f"#### {meta_title or title or 'Untitled post'}")
+        st.caption(public_url or "Public URL will appear after slug is saved.")
+        st.write(meta_description or excerpt or "Meta description is missing.")
+        if public_url:
+            st.link_button(
+                "Open Blog Post",
+                public_url,
+                use_container_width=True,
+            )
+        st.markdown("**Article body preview**")
+        st.markdown(body[:2200] or "_No article body yet._")
+
+    with seo_tab:
+        checklist = _seo_checklist(
+            title=title,
+            slug=slug,
+            meta_title=meta_title,
+            meta_description=meta_description,
+            focus_keyword=focus_keyword,
+            excerpt=excerpt,
+            body=body,
+        )
+        for item in checklist:
+            icon = "✅" if item["ok"] else "⚠️"
+            st.write(f"{icon} {item['label']}")
+        st.info(
+            "Edit Title, Slug, Meta title, Meta description, Focus keyword, "
+            "and Body in the Save Content form below. This panel is for quick "
+            "WordPress-style review."
+        )
+
+    with schema_tab:
+        st.markdown("**FAQ JSON**")
+        st.json(selected.get("faq") or [])
+        st.markdown("**Schema JSON-LD**")
+        st.json(selected.get("schema_jsonld") or {})
+        st.markdown("**Image Prompt**")
+        st.code(str(selected.get("image_prompt") or "No image prompt saved."))
+
+
+def _seo_readiness_score(
+    *,
+    title: str,
+    slug: str,
+    meta_title: str,
+    meta_description: str,
+    focus_keyword: str,
+    excerpt: str,
+    body: str,
+) -> int:
+    checks = _seo_checklist(
+        title=title,
+        slug=slug,
+        meta_title=meta_title,
+        meta_description=meta_description,
+        focus_keyword=focus_keyword,
+        excerpt=excerpt,
+        body=body,
+    )
+    passed = sum(1 for item in checks if item["ok"])
+    return int((passed / max(len(checks), 1)) * 100)
+
+
+def _seo_checklist(
+    *,
+    title: str,
+    slug: str,
+    meta_title: str,
+    meta_description: str,
+    focus_keyword: str,
+    excerpt: str,
+    body: str,
+) -> list[dict[str, Any]]:
+    keyword = focus_keyword.strip().lower()
+    combined = " ".join([title, slug, meta_title, meta_description, body]).lower()
+    return [
+        {
+            "label": "Title is present and readable",
+            "ok": 20 <= len(title.strip()) <= 90,
+        },
+        {
+            "label": "SEO slug is present",
+            "ok": bool(slug.strip()),
+        },
+        {
+            "label": "Meta title is 30-70 characters",
+            "ok": 30 <= len(meta_title.strip()) <= 70,
+        },
+        {
+            "label": "Meta description is 120-165 characters",
+            "ok": 120 <= len(meta_description.strip()) <= 165,
+        },
+        {
+            "label": "Focus keyword is present in SEO fields",
+            "ok": bool(keyword and keyword in combined),
+        },
+        {
+            "label": "Excerpt is present",
+            "ok": bool(excerpt.strip()),
+        },
+        {
+            "label": "Article body has useful length",
+            "ok": len(body.split()) >= 250,
+        },
+    ]
 
 
 def _render_category_manager() -> None:

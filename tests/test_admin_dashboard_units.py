@@ -76,6 +76,20 @@ def test_admin_content_list_uses_full_content_service_and_filters() -> None:
     assert "All content" in source
 
 
+def test_admin_has_wordpress_style_blog_seo_panel() -> None:
+    content_source = inspect.getsource(dashboard._render_content_manager)
+    panel_source = inspect.getsource(dashboard._render_wordpress_style_blog_panel)
+    score_source = inspect.getsource(dashboard._seo_readiness_score)
+
+    assert "_render_wordpress_style_blog_panel(selected)" in content_source
+    assert "Blog Post SEO Editor" in panel_source
+    assert "Post Preview" in panel_source
+    assert "SEO Settings" in panel_source
+    assert "FAQ / Schema" in panel_source
+    assert "Open Blog Post" in panel_source
+    assert "_seo_checklist" in score_source
+
+
 def test_admin_signal_manager_has_required_manual_fields() -> None:
     source = inspect.getsource(dashboard._render_signal_form)
 
