@@ -14,6 +14,16 @@ from services.production_agents import RUNNERS
 
 _MAX_ERROR_LENGTH = 2_000
 
+AI_AGENT_CONTROL_NUMBERS: tuple[tuple[int, str, str], ...] = (
+    (1, "ai_blog_agent", "AI Blog Agent"),
+    (2, "signal_agent", "Signal Agent"),
+    (3, "telegram_reply_agent", "Telegram Reply Agent"),
+    (4, "whatsapp_reply_agent", "WhatsApp Reply Agent"),
+    (5, "announcement_agent", "Announcement Agent"),
+    (6, "seo_agent", "SEO Agent"),
+    (7, "image_agent", "Image Agent"),
+)
+
 
 def list_ai_agents() -> list[dict[str, Any]]:
     """Return agent status records in their configured display order."""
@@ -68,6 +78,49 @@ def set_ai_agent_enabled(agent_key: str, enabled: bool) -> None:
         )
         if result.rowcount != 1:
             raise ValueError(f"Unknown AI agent: {agent_key}")
+
+
+def resolve_agent_key_from_number(number: int | str) -> str:
+    """Resolve the stable owner-facing AI number to an internal agent key."""
+    try:
+        selected = int(str(number).strip())
+    except (TypeError, ValueError) as exc:
+        raise ValueError("AI number must be numeric.") from exc
+
+    for agent_number, agent_key, _ in AI_AGENT_CONTROL_NUMBERS:
+        if selected == agent_number:
+            return agent_key
+    raise ValueError(f"Unknown AI number: {selected}")
+
+
+def set_ai_agent_enabled_by_number(
+    number: int | str,
+    enabled: bool,
+) -> dict[str, Any]:
+    """Enable/disable one AI agent by stable number and return safe metadata."""
+    agent_key = resolve_agent_key_from_number(number)
+    set_ai_agent_enabled(agent_key, enabled)
+    return {
+        "number": int(str(number).strip()),
+        "agent_key": agent_key,
+        "display_name": _agent_display_name(agent_key),
+        "enabled": bool(enabled),
+    }
+
+
+def agent_control_help_text() -> str:
+    """Return safe numbered AI controls for Telegram/admin display."""
+    lines = ["AI ON/OFF controls:"]
+    for number, _, display_name in AI_AGENT_CONTROL_NUMBERS:
+        lines.append(f"{number}. {display_name}")
+    return "\n".join(lines)
+
+
+def _agent_display_name(agent_key: str) -> str:
+    for _, mapped_key, display_name in AI_AGENT_CONTROL_NUMBERS:
+        if mapped_key == agent_key:
+            return display_name
+    return agent_key.replace("_", " ").title()
 
 
 def run_ai_agent(

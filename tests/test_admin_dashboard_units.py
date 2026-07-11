@@ -55,6 +55,16 @@ def test_able_pro_light_admin_v2_shell_exists() -> None:
     assert "--admin-bg" in theme_source
 
 
+def test_admin_ai_agents_has_numbered_on_off_controls() -> None:
+    source = inspect.getsource(dashboard._render_numbered_ai_controls)
+    render_source = inspect.getsource(dashboard._render_ai_agents)
+
+    assert "AI_AGENT_CONTROL_NUMBERS" in source
+    assert "/master on ai 1" in source
+    assert "set_ai_agent_enabled_by_number" in source
+    assert "_render_numbered_ai_controls(agents)" in render_source
+
+
 def test_admin_content_list_uses_full_content_service_and_filters() -> None:
     source = inspect.getsource(dashboard._render_content_manager)
 

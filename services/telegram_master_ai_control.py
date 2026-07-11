@@ -12,6 +12,10 @@ Two-bot architecture:
 from __future__ import annotations
 
 from services.google_sheets_service import append_master_log
+from services.ai_agent_service import (
+    agent_control_help_text,
+    set_ai_agent_enabled_by_number,
+)
 
 from dataclasses import dataclass
 from os import getenv
@@ -327,6 +331,20 @@ def handle_master_command_text(
                 chat_id=chat_id,
                 status="OK",
             )
+        if command in {"on", "off", "list_ai"}:
+            response = _handle_ai_toggle_command(command, target)
+            _log_master_command_to_sheet(
+                command=f"/master {command} {target or ''}".strip(),
+                status="OK",
+                chat_id=chat_id,
+                telegram_user_id=telegram_user_id,
+            )
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=response,
+                chat_id=chat_id,
+                status="OK",
+            )
         if command == "run":
             if target not in RUN_TARGETS:
                 return MasterTelegramCommandResult(
@@ -425,6 +443,14 @@ def parse_master_command(text: str) -> tuple[str, str | None]:
         return "help", None
     if command in {"status", "st", "health"}:
         return "status", None
+    if command in {"list", "show"} and tail.lower() in {"ai", "ais", "agents"}:
+        return "list_ai", None
+    if command in {"on", "off", "enable", "disable"}:
+        ai_number = _extract_ai_control_number(tail)
+        if ai_number is None:
+            return "list_ai", None
+        normalized_command = "on" if command in {"on", "enable"} else "off"
+        return normalized_command, ai_number
     if command in {"run", "start", "create", "make", "generate", "post", "publish", "do", "execute"}:
         target = _normalize_run_target(tail)
         return ("run", target) if target else ("help", None)
@@ -434,6 +460,43 @@ def parse_master_command(text: str) -> tuple[str, str | None]:
         return "run", target
 
     return command, tail or None
+
+
+def _extract_ai_control_number(value: str | None) -> str | None:
+    """Extract the owner-facing AI number from commands like 'ai 1'."""
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return None
+    tokens = [
+        token.strip("#.,:;()[]")
+        for token in raw.replace("/", " ").replace("-", " ").split()
+    ]
+    if tokens and tokens[0] in {"ai", "agent", "agents", "bot"}:
+        tokens = tokens[1:]
+    for token in tokens:
+        if token.isdigit():
+            return token
+    return None
+
+
+def _handle_ai_toggle_command(command: str, target: str | None) -> str:
+    """Execute a safe AI on/off command without exposing internals."""
+    if command == "list_ai":
+        return "🤖 " + agent_control_help_text()
+    if not target:
+        return "🤖 Send `/master list ai` to see AI numbers."
+    try:
+        result = set_ai_agent_enabled_by_number(
+            target,
+            enabled=(command == "on"),
+        )
+    except ValueError:
+        return "🤖 Unknown AI number.\n" + agent_control_help_text()
+    state = "ON" if result["enabled"] else "OFF"
+    return (
+        f"🤖 AI {result['number']} {state}\n"
+        f"{result['display_name']} is now {state}."
+    )
 
 
 def _normalize_master_command_text(text: str | None) -> str:
@@ -578,6 +641,9 @@ def help_text() -> str:
     return (
         "🤖 Master AI admin commands:\n"
         "/master status\n"
+        "/master list ai\n"
+        "/master on ai 1\n"
+        "/master off ai 1\n"
         "/master run daily_content\n"
         "/master run signal\n"
         "/master run blog\n"
