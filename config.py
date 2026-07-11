@@ -151,6 +151,8 @@ class Settings:
     jwt_ttl_minutes: int
     app_base_url: str
     backend_base_url: str
+    public_api_url: str
+    public_website_url: str
     smtp_host: str
     smtp_port: int
     smtp_username: str
@@ -234,6 +236,16 @@ class Settings:
                     "or is not valid service-account JSON."
                 )
 
+        app_base_url = _read_secret("APP_BASE_URL")
+        backend_base_url = _read_secret("BACKEND_BASE_URL")
+        public_api_url = _read_secret("PUBLIC_API_URL") or backend_base_url
+        public_website_url = (
+            _read_secret("PUBLIC_WEBSITE_URL")
+            or _read_secret("PUBLIC_SITE_URL")
+            or _read_secret("STREAMLIT_PUBLIC_URL")
+            or app_base_url
+        )
+
         return cls(
             database_url=database_url,
             supabase_url=supabase_url,
@@ -241,8 +253,10 @@ class Settings:
             jwt_secret=jwt_secret,
             jwt_issuer=_read_secret("JWT_ISSUER", "ai-market-analytics-pro"),
             jwt_ttl_minutes=int(_read_secret("JWT_TTL_MINUTES", "60")),
-            app_base_url=_read_secret("APP_BASE_URL"),
-            backend_base_url=_read_secret("BACKEND_BASE_URL"),
+            app_base_url=app_base_url,
+            backend_base_url=backend_base_url,
+            public_api_url=public_api_url,
+            public_website_url=public_website_url,
             smtp_host=_read_secret("SMTP_HOST"),
             smtp_port=int(_read_secret("SMTP_PORT", "587")),
             smtp_username=_read_secret("SMTP_USERNAME"),

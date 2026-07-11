@@ -24,6 +24,7 @@ from services.telegram_master_ai_webhook import (
     handle_master_telegram_webhook,
 )
 from services.telegram_service import TelegramService
+from services.url_service import public_api_base_url
 
 
 @asynccontextmanager
@@ -321,11 +322,7 @@ def _configure_telegram_webhook() -> None:
     """Register Telegram webhooks for Signal Bot and Master AI Bot without logging secrets."""
     settings = get_settings()
 
-    public_api_url = str(
-        getattr(settings, "public_api_url", "")
-        or getattr(settings, "backend_base_url", "")
-        or os.getenv("PUBLIC_API_URL", "")
-    ).strip()
+    public_api_url = public_api_base_url(settings)
 
     webhook_secret = str(
         getattr(settings, "telegram_webhook_secret", "")

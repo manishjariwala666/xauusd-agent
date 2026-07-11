@@ -54,6 +54,8 @@ def test_environment_template_contains_all_config_keys() -> None:
         "JWT_SECRET",
         "APP_BASE_URL",
         "BACKEND_BASE_URL",
+        "PUBLIC_WEBSITE_URL",
+        "PUBLIC_API_URL",
         "BLOCK_SEARCH_INDEXING",
         "TELEGRAM_WEBHOOK_SECRET",
         "MASTER_AI_TELEGRAM_BOT_TOKEN",
@@ -121,3 +123,11 @@ def test_domain_migration_crawl_lock_is_documented() -> None:
     assert "noindex,nofollow,noarchive" in app_source
     assert "settings.block_search_indexing" in agent_source
     assert "Disallow: /" in agent_source
+
+
+def test_sitemap_uses_public_website_url_and_blog_routes() -> None:
+    source = (ROOT / "services/production_agents.py").read_text(encoding="utf-8")
+
+    assert "public_website_base_url(settings)" in source
+    assert "/blog/" in source
+    assert "?post=" not in source

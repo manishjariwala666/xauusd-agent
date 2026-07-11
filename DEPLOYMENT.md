@@ -21,6 +21,8 @@ These four values are validated by every process at startup:
 |---|---|---|
 | `APP_BASE_URL` | Verification/reset links and public SEO URLs | Public Streamlit website URL. |
 | `BACKEND_BASE_URL` | Telegram webhook registration | Railway-generated HTTPS domain for the FastAPI service. |
+| `PUBLIC_WEBSITE_URL` | Canonical website/blog links | Optional override when the public website domain differs from API. For a safe subdomain launch, use `https://app.venusrealm.net` only on the service that serves the website. |
+| `PUBLIC_API_URL` | Telegram webhook URL base | Optional override for API custom domain; keep the Railway fallback URL working. |
 | `BLOCK_SEARCH_INDEXING` | Temporary launch/migration crawl lock | Set `true` while moving to `https://venusrealm.net`; set `false` only after the public site is ready for Google. |
 | `JWT_ISSUER` | JWT validation | Optional; defaults to `ai-market-analytics-pro`. |
 | `JWT_TTL_MINUTES` | JWT lifetime | Optional; defaults to `60`. |
@@ -35,10 +37,11 @@ These four values are validated by every process at startup:
 `EMAIL_FROM` are operationally mandatory for user registration, verification,
 and forgot-password flows even though the process can start without them.
 
-For the `venusrealm.net` migration, keep `BLOCK_SEARCH_INDEXING=true` on the
-Streamlit website and Railway API until the public website, admin panel, blog
-URLs, and sitemap are ready. Then switch it to `false` and regenerate/publish
-SEO files.
+For the `venusrealm.net` migration, do not change the root domain or `www`
+records while the existing GoDaddy website is still live. Use a new subdomain
+such as `app.venusrealm.net`. Keep `BLOCK_SEARCH_INDEXING=true` on the
+website/API until the public website, admin panel, blog URLs, and sitemap are
+ready. Then switch it to `false` and regenerate/publish SEO files.
 
 ## Telegram
 
@@ -120,8 +123,11 @@ database migrations before processing work.
   same Supabase project.
 - Configure all startup-required values on Streamlit and both Railway services.
 - Configure SMTP and set `APP_BASE_URL` to the Streamlit URL.
-- During domain migration, set `APP_BASE_URL=https://venusrealm.net` and keep
-  `BLOCK_SEARCH_INDEXING=true` until final QA is complete.
+- During domain migration, set the website service URL to
+  `PUBLIC_WEBSITE_URL=https://app.venusrealm.net` and keep
+  `BLOCK_SEARCH_INDEXING=true` until final QA is complete. Do not point
+  `venusrealm.net` or `www.venusrealm.net` at Railway unless the existing
+  GoDaddy website is intentionally being replaced.
 - Generate the Railway API domain and set `BACKEND_BASE_URL`.
 - Configure Telegram, add the bot to the target channel, and redeploy API.
 - Configure Meta webhook URL as `/webhooks/whatsapp` on the Railway API domain.

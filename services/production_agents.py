@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 from typing import Any
+from urllib.parse import quote
 
 from loguru import logger
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -22,6 +23,7 @@ from services.google_sheets_service import append_message_log
 from services.google_sheets import GoogleSheetsService
 from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
+from services.url_service import public_website_base_url
 from services.whatsapp_service import WhatsAppService
 
 
@@ -787,9 +789,9 @@ def _seo_issues(row: dict[str, Any]) -> list[str]:
 
 def _write_seo_files() -> None:
     settings = get_settings()
-    base = settings.app_base_url.rstrip("/")
+    base = public_website_base_url(settings)
     if not base:
-        raise ConfigurationError("APP_BASE_URL is required for SEO files.")
+        raise ConfigurationError("PUBLIC_WEBSITE_URL or APP_BASE_URL is required for SEO files.")
     with session_scope() as session:
         slugs = session.execute(
             text(
@@ -800,7 +802,7 @@ def _write_seo_files() -> None:
                 """
             )
         ).scalars()
-        urls = [f"{base}/?post={slug}" for slug in slugs]
+        urls = [f"{base}/blog/{quote(str(slug))}" for slug in slugs]
     now = datetime.now(timezone.utc).date().isoformat()
     sitemap = (
         '<?xml version="1.0" encoding="UTF-8"?>'

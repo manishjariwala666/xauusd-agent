@@ -49,8 +49,8 @@ from services.google_sheets_service import (
 )
 from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
+from services.url_service import public_content_url, public_website_base_url
 from user.dashboard import render_signal_feed
-import os
 from urllib.parse import quote
 
 
@@ -126,11 +126,7 @@ def render_admin_dashboard(supabase: Any) -> None:
 
 
 def _admin_public_site_url() -> str:
-    return (
-        os.getenv("PUBLIC_SITE_URL")
-        or os.getenv("STREAMLIT_PUBLIC_URL")
-        or "https://xauusd-buy-sell-signal.streamlit.app"
-    ).rstrip("/")
+    return public_website_base_url()
 
 
 def _agent_by_key(agents: list[dict[str, Any]], key: str) -> dict[str, Any] | None:
@@ -1149,22 +1145,7 @@ def _render_payment_reviews() -> None:
 
 def _content_public_url(item: dict[str, Any]) -> str:
     """Build public Streamlit article URL for a content row."""
-    slug = str(
-        item.get("seo_slug")
-        or item.get("slug")
-        or item.get("id")
-        or ""
-    ).strip()
-    if not slug:
-        return ""
-
-    base_url = (
-        os.getenv("PUBLIC_SITE_URL")
-        or os.getenv("STREAMLIT_PUBLIC_URL")
-        or "https://xauusd-buy-sell-signal.streamlit.app"
-    ).rstrip("/")
-
-    return f"{base_url}/?post={quote(slug)}"
+    return public_content_url(item)
 
 
 def _category_public_url(category_slug: str, subcategory_slug: str = "") -> str:
