@@ -10,6 +10,8 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
+from services.migration_service import _AUTOMATIC_MIGRATIONS
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "migrations" / "007_master_ai_orchestrator.sql"
@@ -88,3 +90,14 @@ def test_phase_p6_service_skeletons_import_without_side_effects() -> None:
     ]
     for module_name in modules:
         importlib.import_module(module_name)
+
+
+def test_master_ai_migrations_are_in_automatic_startup_order() -> None:
+    assert "007_master_ai_orchestrator.sql" in _AUTOMATIC_MIGRATIONS
+    assert "008_master_ai_telegram_control.sql" in _AUTOMATIC_MIGRATIONS
+    assert _AUTOMATIC_MIGRATIONS.index(
+        "007_master_ai_orchestrator.sql"
+    ) < _AUTOMATIC_MIGRATIONS.index("008_master_ai_telegram_control.sql")
+    assert _AUTOMATIC_MIGRATIONS.index(
+        "008_content_system_extensions.sql"
+    ) < _AUTOMATIC_MIGRATIONS.index("010_admin_operations_extensions.sql")

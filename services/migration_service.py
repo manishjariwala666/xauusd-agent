@@ -16,7 +16,9 @@ _AUTOMATIC_MIGRATIONS = (
     "003_website_content_payment.sql",
     "005_ai_agents.sql",
     "006_production_agents.sql",
+    "007_master_ai_orchestrator.sql",
     "008_content_system_extensions.sql",
+    "008_master_ai_telegram_control.sql",
     "009_two_telegram_bots.sql",
     "010_admin_operations_extensions.sql",
 )
