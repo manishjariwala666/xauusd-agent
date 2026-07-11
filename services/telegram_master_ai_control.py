@@ -20,7 +20,6 @@ from services.ai_agent_service import (
 from dataclasses import dataclass
 from os import getenv
 from typing import Any, Callable, Iterable, Literal
-from urllib.parse import quote
 
 from services.master_orchestrator import (
     OrchestrationProgress,
@@ -28,6 +27,7 @@ from services.master_orchestrator import (
     list_orchestration_runs,
 )
 from services.orchestration_redaction import redact_value
+from services.url_service import public_content_url, public_website_base_url
 
 SAFE_TELEGRAM_ERROR = "⚠️ Service temporarily unavailable. Please try again later."
 MASTER_COMMAND = "/master"
@@ -689,11 +689,7 @@ def _unknown_master_text_response() -> str:
 
 
 def _public_site_url() -> str:
-    return (
-        getenv("PUBLIC_SITE_URL")
-        or getenv("STREAMLIT_PUBLIC_URL")
-        or "https://xauusd-buy-sell-signal.streamlit.app"
-    ).rstrip("/")
+    return public_website_base_url()
 
 
 def _latest_blog_public_url() -> str:
@@ -711,7 +707,14 @@ def _latest_blog_public_url() -> str:
             or rows[0].get("id")
             or ""
         ).strip()
-        return f"{_public_site_url()}/blog/{quote(slug)}" if slug else ""
+        if not slug:
+            return ""
+        return public_content_url(
+            {
+                "content_type": rows[0].get("content_type") or "BLOG",
+                "slug": slug,
+            }
+        )
     except Exception:
         return ""
 

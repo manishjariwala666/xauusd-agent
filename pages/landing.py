@@ -87,7 +87,7 @@ def render_landing_page(
     )
     _render_subscription(settings, on_sign_in)
     _render_locked_contact(on_sign_in)
-    _render_social_share(settings.app_base_url)
+    _render_social_share(settings.public_website_url or settings.app_base_url)
     _render_disclaimer()
 
 

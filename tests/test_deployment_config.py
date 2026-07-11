@@ -23,6 +23,18 @@ def test_railway_api_uses_injected_port_and_healthcheck() -> None:
     assert deploy["restartPolicyType"] == "ON_FAILURE"
 
 
+def test_railway_web_uses_streamlit_and_real_healthcheck() -> None:
+    config = _load("railway.web.toml")
+    deploy = config["deploy"]
+    assert deploy["startCommand"] == (
+        "streamlit run app.py --server.address 0.0.0.0 "
+        "--server.port $PORT --server.headless true"
+    )
+    assert deploy["healthcheckPath"] == "/_stcore/health"
+    assert deploy["healthcheckPath"] != "/health"
+    assert deploy["restartPolicyType"] == "ON_FAILURE"
+
+
 def test_railway_worker_uses_dedicated_process() -> None:
     config = _load("railway.worker.toml")
     deploy = config["deploy"]
@@ -54,6 +66,8 @@ def test_environment_template_contains_all_config_keys() -> None:
         "JWT_SECRET",
         "APP_BASE_URL",
         "BACKEND_BASE_URL",
+        "PUBLIC_WEBSITE_URL",
+        "PUBLIC_API_URL",
         "BLOCK_SEARCH_INDEXING",
         "TELEGRAM_WEBHOOK_SECRET",
         "MASTER_AI_TELEGRAM_BOT_TOKEN",
@@ -118,6 +132,21 @@ def test_domain_migration_crawl_lock_is_documented() -> None:
 
     assert "BLOCK_SEARCH_INDEXING" in deployment
     assert "https://venusrealm.net" in deployment
+    assert "https://api.venusrealm.net" in deployment
+    assert "xauusd-agent-web" in deployment
+    assert "xauusd-agent-api" in deployment
+    assert "app.venusrealm.net" not in deployment
+    assert "permanent redirect to the root domain" in deployment
+    assert "Do not attach `venusrealm.net` or `www.venusrealm.net` to" in deployment
     assert "noindex,nofollow,noarchive" in app_source
     assert "settings.block_search_indexing" in agent_source
     assert "Disallow: /" in agent_source
+
+
+def test_sitemap_uses_public_website_url_and_blog_routes() -> None:
+    source = (ROOT / "services/production_agents.py").read_text(encoding="utf-8")
+
+    assert "public_website_base_url(settings)" in source
+    assert "/blog/" in source
+    assert "Sitemap: {base}/sitemap.xml" in source
+    assert "?post=" not in source
