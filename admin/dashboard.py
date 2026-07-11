@@ -15,9 +15,11 @@ from components.theme import apply_admin_light_theme
 from core.auth import ROLE_ADMIN, get_current_role, get_current_user_id
 from core.database import session_scope
 from services.ai_agent_service import (
+    AI_AGENT_CONTROL_NUMBERS,
     list_ai_agents,
     list_agent_runs,
     run_ai_agent,
+    set_ai_agent_enabled_by_number,
     set_ai_agent_enabled,
 )
 from services.conversation_service import (
@@ -42,6 +44,8 @@ from services.google_sheets import GoogleSheetsService
 from services.google_sheets_service import (
     PrivateGoogleSheetsService,
     GoogleSheetsServiceError,
+    google_sheets_disabled_reason,
+    is_google_sheets_configured,
 )
 from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
@@ -858,6 +862,9 @@ def _render_small_table(
 
 
 def _render_google_sheet_sync_status() -> None:
+    if not is_google_sheets_configured():
+        st.warning(f"Google Sheet safe-disabled: {google_sheets_disabled_reason()}")
+        return
     try:
         service = PrivateGoogleSheetsService()
         service.ensure_required_tabs()
@@ -1052,6 +1059,9 @@ def _render_google_sheet_logs() -> None:
         "Errors": "errors",
     }
     selected_label = st.selectbox("Google Sheet log tab", list(log_tabs))
+    if not is_google_sheets_configured():
+        st.warning(f"Google Sheet logs safe-disabled: {google_sheets_disabled_reason()}")
+        return
     try:
         rows = PrivateGoogleSheetsService().read_rows(
             log_tabs[selected_label],
@@ -2162,6 +2172,8 @@ def _render_ai_agents(supabase: Any) -> None:
         st.error("Administrator session is invalid.")
         return
 
+    _render_numbered_ai_controls(agents)
+
     failed_agents = [
         agent for agent in agents if agent.get("last_error")
     ]
@@ -2309,6 +2321,52 @@ def _render_ai_agents(supabase: Any) -> None:
                         "Reply delivered. AI is paused for this conversation."
                     )
                     st.rerun()
+
+
+def _render_numbered_ai_controls(agents: list[dict[str, Any]]) -> None:
+    """Render owner-friendly numbered AI ON/OFF controls."""
+    st.markdown("### Numbered AI ON/OFF Control")
+    st.caption(
+        "Same numbers work in Master AI Telegram, for example: "
+        "`/master on ai 1` or `/master off ai 3`."
+    )
+    by_key = {str(agent["agent_key"]): agent for agent in agents}
+    columns = st.columns(2)
+    for index, (number, agent_key, display_name) in enumerate(
+        AI_AGENT_CONTROL_NUMBERS
+    ):
+        agent = by_key.get(agent_key)
+        enabled = bool(agent.get("is_enabled")) if agent else False
+        status = str(agent.get("status") or "MISSING") if agent else "MISSING"
+        with columns[index % 2]:
+            with st.container(border=True):
+                st.markdown(f"**AI {number}: {display_name}**")
+                st.caption(f"Key: `{agent_key}` · Status: {status}")
+                label = "Turn OFF" if enabled else "Turn ON"
+                button_type = "secondary" if enabled else "primary"
+                if st.button(
+                    label,
+                    key=f"numbered_ai_toggle_{number}",
+                    type=button_type,
+                    use_container_width=True,
+                    disabled=agent is None,
+                ):
+                    try:
+                        set_ai_agent_enabled_by_number(number, not enabled)
+                    except Exception:
+                        logger.exception(
+                            "Numbered AI toggle failed: {}",
+                            agent_key,
+                        )
+                        st.error("AI setting could not be updated.")
+                    else:
+                        st.rerun()
+
+    st.info(
+        "Safe production default: AI agents can be enabled for explicit Master "
+        "AI commands. Background auto schedules stay controlled separately; "
+        "only the daily XAUUSD signal schedule is automatic."
+    )
 
 
 def _validate_manual_payload(

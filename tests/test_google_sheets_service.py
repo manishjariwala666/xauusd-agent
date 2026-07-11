@@ -9,10 +9,15 @@ from services.google_sheets_service import (
     GoogleSheetsServiceError,
     PrivateGoogleSheetsService,
     REQUIRED_TABS,
+    append_row,
     append_content_queue_log,
     append_message_log,
     append_public_signal_log,
     append_signal_log,
+    ensure_required_tabs,
+    google_sheets_disabled_reason,
+    is_google_sheets_configured,
+    read_rows,
 )
 
 
@@ -142,3 +147,31 @@ def test_best_effort_log_helpers_do_not_raise_without_credentials(monkeypatch) -
     append_message_log(channel="WHATSAPP", status="inbound", message="hello")
     append_public_signal_log(status="sent", direction="BUY")
     append_signal_log(source="test", status="created", direction="BUY")
+
+
+def test_top_level_sheet_functions_safe_disable_when_credentials_missing(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("GOOGLE_SHEET_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
+
+    assert is_google_sheets_configured() is False
+    assert "GOOGLE_SHEET_ID" in google_sheets_disabled_reason()
+
+    ensure_required_tabs()
+    append_row("errors", {"source": "test", "message": "safe"})
+
+    assert read_rows("errors", limit=5) == []
+
+
+def test_malformed_service_account_json_safe_disables_private_sheets(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("GOOGLE_SHEET_ID", "sheet-id")
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "{not-json")
+
+    assert is_google_sheets_configured() is False
+    assert "not valid service-account JSON" in google_sheets_disabled_reason()
+
+    append_row("errors", {"source": "test", "message": "safe"})
+    assert read_rows("errors") == []

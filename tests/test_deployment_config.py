@@ -3,6 +3,8 @@
 from pathlib import Path
 import tomllib
 
+from config import Settings
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,6 +55,25 @@ def test_environment_template_contains_all_config_keys() -> None:
         if line and not line.startswith("#") and "=" in line
     }
     assert required <= keys
+
+
+def test_malformed_google_json_does_not_block_runtime_settings(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql://user:password@localhost:5432/xauusd",
+    )
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "test-supabase-key")
+    monkeypatch.setenv("JWT_SECRET", "x" * 32)
+    monkeypatch.setenv("GOOGLE_SHEET_ID", "sheet-id")
+    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "{not-json")
+
+    settings = Settings.load()
+
+    assert settings.google_sheet_id == "sheet-id"
+    assert settings.google_service_account_json == ""
 
 
 def test_scheduled_agent_requires_runtime_validation_gate() -> None:

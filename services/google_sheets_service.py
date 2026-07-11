@@ -15,7 +15,7 @@ from typing import Any
 import gspread
 from loguru import logger
 
-from config import parse_google_service_account_json
+from config import ConfigurationError, parse_google_service_account_json
 
 
 REQUIRED_TABS = (
@@ -116,19 +116,56 @@ def append_row(tab_name: str, row_dict: dict[str, Any]) -> None:
     Missing configured columns are written as blanks. New keys are appended to
     the header row so operational logging can evolve without migrations.
     """
+    if not is_google_sheets_configured():
+        logger.warning(
+            "Google Sheets append skipped: {}",
+            google_sheets_disabled_reason(),
+        )
+        return
     service = PrivateGoogleSheetsService()
     service.append_row(tab_name, row_dict)
 
 
 def read_rows(tab_name: str, limit: int = 100) -> list[dict[str, Any]]:
     """Read recent rows from a required tab, newest rows last."""
+    if not is_google_sheets_configured():
+        logger.warning(
+            "Google Sheets read skipped: {}",
+            google_sheets_disabled_reason(),
+        )
+        return []
     service = PrivateGoogleSheetsService()
     return service.read_rows(tab_name, limit=limit)
 
 
 def ensure_required_tabs() -> None:
     """Create all required tabs and headers if they do not exist."""
+    if not is_google_sheets_configured():
+        logger.warning(
+            "Google Sheets tab setup skipped: {}",
+            google_sheets_disabled_reason(),
+        )
+        return
     PrivateGoogleSheetsService().ensure_required_tabs()
+
+
+def is_google_sheets_configured() -> bool:
+    """Return True only when private Sheet ID and service JSON are usable."""
+    return google_sheets_disabled_reason() == ""
+
+
+def google_sheets_disabled_reason() -> str:
+    """Return a safe user-facing reason when Sheets should be disabled."""
+    if not _raw_sheet_id():
+        return "GOOGLE_SHEET_ID is not configured."
+    raw_json = _raw_service_account_json()
+    if not raw_json:
+        return "GOOGLE_SERVICE_ACCOUNT_JSON is not configured."
+    try:
+        parse_google_service_account_json(raw_json)
+    except ConfigurationError:
+        return "GOOGLE_SERVICE_ACCOUNT_JSON is not valid service-account JSON."
+    return ""
 
 
 class PrivateGoogleSheetsService:
@@ -364,20 +401,32 @@ def append_public_signal_log(
 
 
 def _client(service_account_json: str | None = None) -> gspread.Client:
-    raw_json = (
-        service_account_json
-        or os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-        or ""
-    ).strip()
+    raw_json = (service_account_json or _raw_service_account_json()).strip()
     if not raw_json:
         raise GoogleSheetsServiceError(
             "GOOGLE_SERVICE_ACCOUNT_JSON is required for private sheet access."
         )
-    credentials = parse_google_service_account_json(raw_json)
-    return gspread.service_account_from_dict(credentials)
+    try:
+        credentials = parse_google_service_account_json(raw_json)
+        return gspread.service_account_from_dict(credentials)
+    except ConfigurationError as exc:
+        raise GoogleSheetsServiceError(
+            "GOOGLE_SERVICE_ACCOUNT_JSON is not valid service-account JSON."
+        ) from exc
+    except Exception as exc:
+        raise GoogleSheetsServiceError(
+            "Google Sheets service account could not be initialized."
+        ) from exc
 
 
 def _sheet_id() -> str:
+    sheet_id = _raw_sheet_id()
+    if sheet_id:
+        return sheet_id
+    raise GoogleSheetsServiceError("GOOGLE_SHEET_ID is required.")
+
+
+def _raw_sheet_id() -> str:
     sheet_id = os.getenv("GOOGLE_SHEET_ID", "").strip()
     if sheet_id:
         return sheet_id
@@ -389,7 +438,22 @@ def _sheet_id() -> str:
             return str(value).strip()
     except Exception:
         pass
-    raise GoogleSheetsServiceError("GOOGLE_SHEET_ID is required.")
+    return ""
+
+
+def _raw_service_account_json() -> str:
+    raw_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+    if raw_json:
+        return raw_json
+    try:
+        from config import get_settings
+
+        value = getattr(get_settings(), "google_service_account_json", "") or ""
+        if str(value).strip():
+            return str(value).strip()
+    except Exception:
+        pass
+    return ""
 
 
 def _normalize_tab_name(tab_name: str) -> str:

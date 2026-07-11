@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ import streamlit as st
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
 load_dotenv(_PROJECT_ROOT / ".env", override=False)
+LOGGER = logging.getLogger(__name__)
 
 
 class ConfigurationError(RuntimeError):
@@ -211,14 +213,19 @@ class Settings:
                 "JWT_SECRET must contain at least 32 characters."
             )
 
-        raw_google_credentials = _read_secret(
-            "GOOGLE_SERVICE_ACCOUNT_JSON"
-        )
-        google_credentials = (
-            normalize_google_service_account_json(raw_google_credentials)
-            if raw_google_credentials
-            else ""
-        )
+        raw_google_credentials = _read_secret("GOOGLE_SERVICE_ACCOUNT_JSON")
+        google_credentials = ""
+        if raw_google_credentials:
+            try:
+                google_credentials = normalize_google_service_account_json(
+                    raw_google_credentials
+                )
+            except ConfigurationError:
+                LOGGER.warning(
+                    "Google Sheets integration disabled: "
+                    "GOOGLE_SERVICE_ACCOUNT_JSON is missing required fields "
+                    "or is not valid service-account JSON."
+                )
 
         return cls(
             database_url=database_url,

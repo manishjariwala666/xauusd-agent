@@ -1,6 +1,8 @@
 """Offline webhook parsing tests."""
 
 from backend import (
+    health,
+    ready,
     _telegram_media,
     _telegram_webhook_payload,
     _telegram_webhook_secret_matches,
@@ -12,6 +14,30 @@ def test_telegram_photo_metadata() -> None:
     assert _telegram_media(
         {"photo": [{"file_id": "small"}, {"file_id": "large"}]}
     ) == {"type": "photo", "file_id": "large"}
+
+
+def test_health_is_lightweight_liveness() -> None:
+    assert health() == {"status": "healthy"}
+
+
+def test_ready_checks_database(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class FakeSession:
+        def execute(self, statement: object) -> None:
+            calls.append(str(statement))
+
+    class FakeScope:
+        def __enter__(self) -> FakeSession:
+            return FakeSession()
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+    monkeypatch.setattr("backend.session_scope", lambda: FakeScope())
+
+    assert ready() == {"status": "ready", "database": "ok"}
+    assert calls
 
 
 def test_whatsapp_text_content() -> None:

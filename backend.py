@@ -29,9 +29,15 @@ from services.telegram_service import TelegramService
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Apply migrations once, then serve until Render shuts down."""
-    apply_pending_migrations()
-    _configure_telegram_webhook()
+    """Start the API even when optional startup tasks are temporarily degraded."""
+    try:
+        apply_pending_migrations()
+    except Exception:
+        logger.exception("Startup migrations failed; API will remain online.")
+    try:
+        _configure_telegram_webhook()
+    except Exception:
+        logger.exception("Telegram webhook startup configuration failed")
     yield
 
 
@@ -46,10 +52,16 @@ app = FastAPI(
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    """Return service and database health without exposing configuration."""
+    """Return lightweight liveness for Railway network health checks."""
+    return {"status": "healthy"}
+
+
+@app.get("/ready")
+def ready() -> dict[str, str]:
+    """Return database readiness without exposing configuration details."""
     with session_scope() as session:
         session.execute(text("SELECT 1"))
-    return {"status": "healthy"}
+    return {"status": "ready", "database": "ok"}
 
 
 @app.get("/sitemap.xml")
