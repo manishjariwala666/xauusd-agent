@@ -61,71 +61,43 @@ def render_admin_dashboard(supabase: Any) -> None:
         st.stop()
 
     apply_admin_light_theme()
-    _render_admin_light_sidebar()
+    selected_page = _render_admin_light_sidebar()
     _render_admin_topbar()
     _render_admin_shell_header()
     _render_admin_light_kpis()
-    (
-        command_center_tab,
-        blog_studio_tab,
-        overview_tab,
-        payments_tab,
-        content_tab,
-        categories_tab,
-        proof_tab,
-        channels_tab,
-        signals_tab,
-        users_tab,
-        logs_tab,
-        automation_tab,
-        ai_agents_tab,
-    ) = st.tabs(
-        [
-            "Command Center",
-            "Blog Studio",
-            "Overview",
-            "Payments",
-            "Content",
-            "Categories",
-            "Profit Proof",
-            "Channel Links",
-            "Signals",
-            "Users / Leads",
-            "Logs",
-            "Pipeline",
-            "AI Agents",
-        ]
-    )
-    with command_center_tab:
+
+    if selected_page == "Command Center":
         _render_command_center(supabase)
-    with blog_studio_tab:
+    elif selected_page == "Blog Studio":
         _render_blog_studio()
-    with overview_tab:
+    elif selected_page == "Overview":
         _render_overview()
-    with payments_tab:
+    elif selected_page == "Payments":
         _render_payment_reviews()
-    with content_tab:
+    elif selected_page == "Content":
         _render_content_manager()
-    with categories_tab:
+    elif selected_page == "Categories":
         _render_category_manager()
-    with proof_tab:
+    elif selected_page == "Profit Proof":
         _render_profit_screenshots(supabase)
-    with channels_tab:
+    elif selected_page == "Channel Links":
         _render_channel_settings()
-    with signals_tab:
+    elif selected_page == "Signals":
         _render_signal_form(supabase)
         st.divider()
         render_signal_feed(supabase, "No signal has been published.")
-    with users_tab:
+    elif selected_page == "Users / Leads":
         _render_user_lead_manager()
-    with logs_tab:
+    elif selected_page == "Logs":
         _render_operations_logs()
-    with automation_tab:
+    elif selected_page == "Pipeline":
         _render_pipeline_health()
         st.divider()
         _render_telegram_test(supabase)
-    with ai_agents_tab:
+    elif selected_page == "AI Agents":
         _render_ai_agents(supabase)
+    else:
+        _render_command_center(supabase)
 
 
 
@@ -137,25 +109,55 @@ def _agent_by_key(agents: list[dict[str, Any]], key: str) -> dict[str, Any] | No
     return next((agent for agent in agents if agent.get("agent_key") == key), None)
 
 
-def _render_admin_light_sidebar() -> None:
-    """Add a clean Able-Pro-style admin navigation map to the sidebar."""
-    st.sidebar.markdown(
-        """
-        <div class="admin-sidebar-brand">AI Market <small>pro</small></div>
-        <div class="admin-sidebar-section">Dashboard</div>
-        <div class="admin-sidebar-item active">🏠 Command Center</div>
-        <div class="admin-sidebar-item">📊 Analytics Overview</div>
-        <div class="admin-sidebar-section">Operations</div>
-        <div class="admin-sidebar-item">✍️ Content Manager</div>
-        <div class="admin-sidebar-item">📡 Signal Manager</div>
-        <div class="admin-sidebar-item">🤖 AI Agents</div>
-        <div class="admin-sidebar-section">Channels</div>
-        <div class="admin-sidebar-item">💬 Telegram</div>
-        <div class="admin-sidebar-item">🟢 WhatsApp</div>
-        <div class="admin-sidebar-item">📗 Google Sheet</div>
-        """,
-        unsafe_allow_html=True,
-    )
+def _render_admin_light_sidebar() -> str:
+    """Render a real readable sidebar menu instead of faint top tabs."""
+    menu_items = [
+        "Command Center",
+        "Blog Studio",
+        "Overview",
+        "Payments",
+        "Content",
+        "Categories",
+        "Profit Proof",
+        "Channel Links",
+        "Signals",
+        "Users / Leads",
+        "Logs",
+        "Pipeline",
+        "AI Agents",
+    ]
+    labels = {
+        "Command Center": "🏠 Command Center",
+        "Blog Studio": "✍️ Blog Studio",
+        "Overview": "📊 Overview",
+        "Payments": "💳 Payments",
+        "Content": "🗂️ Content Manager",
+        "Categories": "🏷️ Categories",
+        "Profit Proof": "🏆 Profit Proof",
+        "Channel Links": "🔗 Channel Links",
+        "Signals": "📡 Signal Manager",
+        "Users / Leads": "👥 Users / Leads",
+        "Logs": "📜 Logs",
+        "Pipeline": "🧪 Pipeline",
+        "AI Agents": "🤖 AI Agents",
+    }
+    with st.sidebar:
+        st.markdown(
+            '<div class="admin-sidebar-brand">AI Market <small>pro</small></div>',
+            unsafe_allow_html=True,
+        )
+        st.caption("Admin Control Room")
+        selected_label = st.radio(
+            "Menu",
+            [labels[item] for item in menu_items],
+            index=0,
+            label_visibility="collapsed",
+            key="admin_sidebar_menu",
+        )
+        st.divider()
+        st.caption("Website · Blogs · Signals · Users · Agents")
+    reverse_labels = {value: key for key, value in labels.items()}
+    return reverse_labels.get(selected_label, "Command Center")
 
 
 def _render_admin_topbar() -> None:

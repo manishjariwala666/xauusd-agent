@@ -45,12 +45,13 @@ def test_able_pro_light_admin_v2_shell_exists() -> None:
     theme_source = inspect.getsource(theme.apply_admin_light_theme)
 
     assert "apply_admin_light_theme()" in dashboard_source
-    assert "_render_admin_light_sidebar()" in dashboard_source
+    assert "selected_page = _render_admin_light_sidebar()" in dashboard_source
     assert "_render_admin_topbar()" in dashboard_source
     assert "_render_admin_light_kpis()" in dashboard_source
     assert "Blog Studio" in dashboard_source
     assert "_render_blog_studio()" in dashboard_source
     assert "Ctrl + K" in topbar_source
+    assert "st.radio" in sidebar_source
     assert "Content Manager" in sidebar_source
     assert "Signal Manager" in sidebar_source
     assert "admin-light-kpi-grid" in kpi_source
