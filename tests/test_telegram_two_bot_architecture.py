@@ -106,9 +106,9 @@ def test_master_bot_does_not_process_public_buy_sell_signals(monkeypatch) -> Non
     )
     assert result.handled is True
     assert result.status == "IGNORED_NON_MASTER_COMMAND"
-    assert result.response_text is None
+    assert "Master AI ready" in (result.response_text or "")
     assert runner.calls == []
-    assert sent == []
+    assert sent and "Master AI ready" in sent[0][1]
 
 
 def test_master_commands_use_telegram_admin_user_id_only(monkeypatch) -> None:

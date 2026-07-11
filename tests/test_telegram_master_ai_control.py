@@ -104,6 +104,39 @@ def test_run_blog_routes_to_master_orchestrator_on_master_bot(monkeypatch) -> No
     assert "token" not in str(result.response_text).lower()
 
 
+def test_master_bot_accepts_natural_blog_text_without_env_flag(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    monkeypatch.delenv("MASTER_AI_ALLOW_NATURAL_COMMANDS", raising=False)
+    runner = FakeRunner()
+    result = try_handle_telegram_update(
+        update("xauusd buy or sell today par SEO blog banao", user_id=1001, chat_id=55),
+        bot_role=MASTER_AI_BOT,
+        runner=runner,
+    )
+
+    assert result.handled is True
+    assert result.task_type == "BLOG"
+    assert runner.calls[0].input_payload["telegram_target"] == "blog"
+    assert "Latest blog URL" in (result.response_text or "") or "Blog page" in (
+        result.response_text or ""
+    )
+
+
+def test_master_bot_replies_helpfully_to_unknown_admin_text(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    runner = FakeRunner()
+    result = try_handle_telegram_update(
+        update("hello bhai", user_id=1001, chat_id=55),
+        bot_role=MASTER_AI_BOT,
+        runner=runner,
+    )
+
+    assert result.handled is True
+    assert result.status == "IGNORED_NON_MASTER_COMMAND"
+    assert "Master AI ready" in (result.response_text or "")
+    assert runner.calls == []
+
+
 def test_status_command_returns_safe_summary(monkeypatch) -> None:
     monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
     result = handle_master_command_text(

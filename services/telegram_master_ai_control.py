@@ -20,6 +20,7 @@ from services.ai_agent_service import (
 from dataclasses import dataclass
 from os import getenv
 from typing import Any, Callable, Iterable, Literal
+from urllib.parse import quote
 
 from services.master_orchestrator import (
     OrchestrationProgress,
@@ -198,17 +199,8 @@ def try_handle_telegram_update(
             bot_role=SIGNAL_BOT,
         )
 
-    # Master AI bot endpoint: do not allow public signal/reply behavior here.
-    # Natural admin text is accepted only when it looks like a real Master AI task.
-    if not is_master_command(text) and not _looks_like_master_natural_command(text):
-        return MasterTelegramCommandResult(
-            handled=True,
-            response_text=None,
-            chat_id=parsed.get("chat_id"),
-            status="IGNORED_NON_MASTER_COMMAND",
-            bot_role=MASTER_AI_BOT,
-        )
-
+    # Master AI bot endpoint: every message is handled here so normal admin
+    # text can receive a clear reply instead of silently falling through.
     result = handle_master_command_text(
         text=text,
         telegram_user_id=parsed.get("telegram_user_id"),
@@ -241,17 +233,6 @@ def try_handle_telegram_update(
                 bot_role=MASTER_AI_BOT,
             )
     return result
-
-
-def _master_natural_commands_enabled() -> bool:
-    """Natural-language Master AI commands are disabled unless explicitly enabled."""
-    try:
-        from os import getenv
-        value = getenv("MASTER_AI_ALLOW_NATURAL_COMMANDS", "false")
-    except Exception:
-        value = "false"
-    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
-
 
 
 def _log_master_command_to_sheet(
@@ -289,17 +270,6 @@ def handle_master_command_text(
     """Parse and execute one Telegram Master AI admin command."""
     original_text = str(text or "").strip()
     text = _normalize_master_command_text(original_text)
-    if not is_master_command(text):
-        if not _master_natural_commands_enabled():
-            return MasterTelegramCommandResult(handled=False, chat_id=chat_id)
-
-        inferred_target = _infer_run_target(text)
-        if inferred_target:
-            text = f"{MASTER_COMMAND} run {inferred_target}"
-        elif _looks_like_master_natural_command(text):
-            text = f"{MASTER_COMMAND} {text}"
-        else:
-            return MasterTelegramCommandResult(handled=False, chat_id=chat_id)
 
     if not _is_authorized_admin(telegram_user_id):
         return MasterTelegramCommandResult(
@@ -308,6 +278,18 @@ def handle_master_command_text(
             chat_id=chat_id,
             status="UNAUTHORIZED",
         )
+
+    if not is_master_command(text):
+        inferred_target = _infer_run_target(text)
+        if inferred_target and _looks_like_master_natural_command(text):
+            text = f"{MASTER_COMMAND} run {inferred_target}"
+        else:
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=_unknown_master_text_response(),
+                chat_id=chat_id,
+                status="IGNORED_NON_MASTER_COMMAND",
+            )
 
     try:
         command, target = parse_master_command(text)
@@ -524,6 +506,8 @@ def _normalize_run_target(value: str | None) -> str | None:
 
     if "daily" in clean and "content" in clean:
         return "daily_content"
+    if any(word in clean for word in ("blog", "seo", "article", "post")):
+        return "blog"
     if any(word in clean for word in ("signal", "buy sell", "buy/sell", "entry", "target", "sl", "tp")):
         return "signal"
     if any(word in clean for word in ("image", "photo", "thumbnail", "creative", "poster")) and not any(
@@ -676,13 +660,60 @@ def _status_text(rows: Iterable[dict[str, Any]]) -> str:
 
 
 def _run_started_text(target: str, progress: OrchestrationProgress) -> str:
-    return (
+    text = (
         "🤖 Master AI orchestration accepted.\n"
         f"Task: {target}\n"
         f"Run: #{progress.run_id}\n"
         f"Status: {_safe_word(progress.status)}\n"
         f"Progress: {progress.completed_steps}/{progress.total_steps}"
     )
+    if target == "blog":
+        url = _latest_blog_public_url()
+        if url:
+            text += f"\nLatest blog URL: {url}"
+        else:
+            text += f"\nBlog page: {_public_site_url()}/blog"
+    return text
+
+
+def _unknown_master_text_response() -> str:
+    return (
+        "🤖 Master AI ready hai.\n"
+        "Normal blog command example:\n"
+        "xauusd buy or sell today par SEO blog banao\n\n"
+        "Direct commands:\n"
+        "/master status\n"
+        "/master run blog\n"
+        "/master list ai"
+    )
+
+
+def _public_site_url() -> str:
+    return (
+        getenv("PUBLIC_SITE_URL")
+        or getenv("STREAMLIT_PUBLIC_URL")
+        or "https://xauusd-buy-sell-signal.streamlit.app"
+    ).rstrip("/")
+
+
+def _latest_blog_public_url() -> str:
+    try:
+        from services.content_service import list_content
+
+        rows = list_content(content_type="AI_BLOG", public_only=True, limit=1)
+        if not rows:
+            rows = list_content(content_type="BLOG", public_only=True, limit=1)
+        if not rows:
+            return ""
+        slug = str(
+            rows[0].get("seo_slug")
+            or rows[0].get("slug")
+            or rows[0].get("id")
+            or ""
+        ).strip()
+        return f"{_public_site_url()}/blog/{quote(slug)}" if slug else ""
+    except Exception:
+        return ""
 
 
 def _extract_message(update: dict[str, Any]) -> dict[str, Any] | None:
