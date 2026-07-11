@@ -67,6 +67,7 @@ def render_admin_dashboard(supabase: Any) -> None:
     _render_admin_light_kpis()
     (
         command_center_tab,
+        blog_studio_tab,
         overview_tab,
         payments_tab,
         content_tab,
@@ -81,6 +82,7 @@ def render_admin_dashboard(supabase: Any) -> None:
     ) = st.tabs(
         [
             "Command Center",
+            "Blog Studio",
             "Overview",
             "Payments",
             "Content",
@@ -96,6 +98,8 @@ def render_admin_dashboard(supabase: Any) -> None:
     )
     with command_center_tab:
         _render_command_center(supabase)
+    with blog_studio_tab:
+        _render_blog_studio()
     with overview_tab:
         _render_overview()
     with payments_tab:
@@ -1529,6 +1533,138 @@ def _render_content_manager() -> None:
         else:
             st.success("Content deleted.")
             st.rerun()
+
+
+def _render_blog_studio() -> None:
+    """Render a dedicated WordPress-style blog workspace for admins."""
+    st.subheader("Blog Studio")
+    st.caption(
+        "Direct blog control room: latest posts, SEO status, public URLs, "
+        "published/draft state, and view analytics."
+    )
+    try:
+        items = [
+            item for item in list_content(public_only=False, limit=250)
+            if str(item.get("content_type") or "").upper()
+            in {"BLOG", "AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION"}
+        ]
+    except Exception:
+        logger.exception("Blog Studio loading failed")
+        st.error("Blog Studio is temporarily unavailable.")
+        return
+
+    if not items:
+        st.warning(
+            "No blog records found yet. Run Blog Agent or create a BLOG/AI_BLOG "
+            "post from Content Manager."
+        )
+        return
+
+    total = len(items)
+    published = sum(1 for item in items if item.get("is_published"))
+    drafts = total - published
+    public_count = sum(1 for item in items if item.get("is_public"))
+    total_views = sum(int(item.get("view_count") or 0) for item in items)
+
+    metric_cols = st.columns(5)
+    metric_cols[0].metric("Total Blogs", total)
+    metric_cols[1].metric("Published", published)
+    metric_cols[2].metric("Draft", drafts)
+    metric_cols[3].metric("Public", public_count)
+    metric_cols[4].metric("Total Views", total_views)
+
+    table_rows = [_blog_studio_row(item) for item in items]
+    st.dataframe(
+        table_rows,
+        use_container_width=True,
+        hide_index=True,
+        column_order=[
+            "id",
+            "title",
+            "status",
+            "views",
+            "seo_score",
+            "slug",
+            "updated",
+        ],
+    )
+
+    options = {
+        f"#{item['id']} · {item.get('title') or 'Untitled'}": item
+        for item in items
+    }
+    selected_label = st.selectbox("Open blog post", list(options))
+    selected = options[selected_label]
+    action_cols = st.columns(3)
+    public_url = _content_public_url(selected)
+    if public_url:
+        action_cols[0].link_button(
+            "Open Public Blog",
+            public_url,
+            use_container_width=True,
+        )
+    if action_cols[1].button(
+        "Publish Now",
+        key=f"blog_studio_publish_{selected['id']}",
+        use_container_width=True,
+        disabled=bool(selected.get("is_published") and selected.get("is_public")),
+    ):
+        try:
+            _update_content_publish_state(
+                selected,
+                is_public=True,
+                is_published=True,
+            )
+        except Exception:
+            logger.exception("Blog Studio publish failed")
+            st.error("Could not publish blog.")
+        else:
+            st.success("Blog published.")
+            st.rerun()
+    if action_cols[2].button(
+        "Unpublish",
+        key=f"blog_studio_unpublish_{selected['id']}",
+        use_container_width=True,
+        disabled=not bool(selected.get("is_published")),
+    ):
+        try:
+            _update_content_publish_state(
+                selected,
+                is_public=bool(selected.get("is_public")),
+                is_published=False,
+            )
+        except Exception:
+            logger.exception("Blog Studio unpublish failed")
+            st.error("Could not unpublish blog.")
+        else:
+            st.success("Blog unpublished.")
+            st.rerun()
+
+    _render_wordpress_style_blog_panel(selected)
+    _render_selected_content_metadata(selected)
+
+
+def _blog_studio_row(item: dict[str, Any]) -> dict[str, Any]:
+    title = str(item.get("title") or "Untitled")
+    slug = str(item.get("slug") or item.get("seo_slug") or "")
+    score = _seo_readiness_score(
+        title=title,
+        slug=slug,
+        meta_title=str(item.get("meta_title") or ""),
+        meta_description=str(item.get("meta_description") or ""),
+        focus_keyword=str(item.get("focus_keyword") or ""),
+        excerpt=str(item.get("excerpt") or ""),
+        body=str(item.get("body") or ""),
+    )
+    return {
+        "id": int(item.get("id") or 0),
+        "title": title,
+        "status": "Published" if item.get("is_published") else "Draft",
+        "views": int(item.get("view_count") or 0),
+        "seo_score": f"{score}%",
+        "slug": slug or "Missing",
+        "updated": str(item.get("updated_at") or item.get("created_at") or ""),
+    }
 
 
 def _render_selected_content_metadata(selected: dict[str, Any]) -> None:

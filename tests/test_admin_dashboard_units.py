@@ -48,6 +48,8 @@ def test_able_pro_light_admin_v2_shell_exists() -> None:
     assert "_render_admin_light_sidebar()" in dashboard_source
     assert "_render_admin_topbar()" in dashboard_source
     assert "_render_admin_light_kpis()" in dashboard_source
+    assert "Blog Studio" in dashboard_source
+    assert "_render_blog_studio()" in dashboard_source
     assert "Ctrl + K" in topbar_source
     assert "Content Manager" in sidebar_source
     assert "Signal Manager" in sidebar_source
@@ -80,10 +82,15 @@ def test_admin_content_list_uses_full_content_service_and_filters() -> None:
 
 def test_admin_has_wordpress_style_blog_seo_panel() -> None:
     content_source = inspect.getsource(dashboard._render_content_manager)
+    studio_source = inspect.getsource(dashboard._render_blog_studio)
     panel_source = inspect.getsource(dashboard._render_wordpress_style_blog_panel)
     score_source = inspect.getsource(dashboard._seo_readiness_score)
 
     assert "_render_wordpress_style_blog_panel(selected)" in content_source
+    assert "_render_wordpress_style_blog_panel(selected)" in studio_source
+    assert "Direct blog control room" in studio_source
+    assert "Open Public Blog" in studio_source
+    assert "Publish Now" in studio_source
     assert "Blog Post SEO Editor" in panel_source
     assert "Post Preview" in panel_source
     assert "SEO Settings" in panel_source
@@ -101,6 +108,33 @@ def test_admin_content_manager_has_blog_view_analytics() -> None:
     assert "Total Views" in analytics_source
     assert "Needs Boost" in analytics_source
     assert "High views / Low views" in analytics_source
+
+
+def test_blog_studio_row_contains_wordpress_style_columns() -> None:
+    row = dashboard._blog_studio_row(
+        {
+            "id": 12,
+            "title": "XAUUSD Market Outlook",
+            "slug": "xauusd-market-outlook",
+            "meta_title": "XAUUSD Market Outlook and Risk Control",
+            "meta_description": (
+                "A practical XAUUSD market outlook with risk controls, "
+                "support, resistance, and disciplined trading context."
+            ),
+            "focus_keyword": "xauusd market outlook",
+            "excerpt": "Daily gold market context.",
+            "body": "XAUUSD market outlook focuses on support and resistance.",
+            "is_published": True,
+            "view_count": 7,
+            "updated_at": "2026-07-12",
+        }
+    )
+
+    assert row["id"] == 12
+    assert row["status"] == "Published"
+    assert row["views"] == 7
+    assert row["slug"] == "xauusd-market-outlook"
+    assert row["seo_score"].endswith("%")
 
 
 def test_admin_signal_manager_has_required_manual_fields() -> None:
