@@ -1240,7 +1240,7 @@ def _render_site_footer() -> None:
     settings = get_settings()
     links = [
         ("Home", "/"),
-        ("About", "/page/about"),
+        ("About", "/about"),
         ("Blog", "/blog"),
         ("Signals", "/signals"),
         ("XAUUSD", "/signals/xauusd"),
@@ -1248,10 +1248,10 @@ def _render_site_footer() -> None:
         ("Nifty & Options", "/market-analysis/nifty"),
         ("Crypto Volatility", "/market-analysis/crypto"),
         ("SEO & Automation", "/blog/seo-tools"),
-        ("Contact", "/page/contact"),
-        ("Privacy Policy", "/page/privacy-policy"),
-        ("Terms", "/page/terms-and-conditions"),
-        ("Risk Disclaimer", "/page/risk-disclaimer"),
+        ("Contact", "/contact"),
+        ("Privacy Policy", "/privacy-policy"),
+        ("Terms", "/terms"),
+        ("Risk Disclaimer", "/risk-disclaimer"),
     ]
     link_html = "".join(
         f'<a href="{html.escape(url)}" target="_self">{html.escape(label)}</a>'
