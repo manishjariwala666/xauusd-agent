@@ -28,7 +28,18 @@ _crypto_cache: tuple[float, list[CryptoQuote]] = (0.0, [])
 
 
 def get_xauusd_snapshot(supabase: Any) -> dict[str, Any] | None:
-    """Return a public-safe XAUUSD snapshot from the existing price service."""
+    """Return a public-safe XAUUSD snapshot without blocking page render.
+
+    The public website should be lightweight. Reading the latest persisted
+    signal is fast and avoids waiting on live market-provider APIs during page
+    load. Worker/API jobs still use ``MarketDataService`` for fresh provider
+    fetches before writing new signals.
+    """
+    snapshot = _latest_persisted_xauusd_snapshot()
+    if snapshot is not None:
+        return snapshot
+
+    # Backward-compatible fallback for empty databases or local development.
     price = MarketDataService(supabase).fetch_current_price()
     if price is None:
         return None
@@ -37,6 +48,42 @@ def get_xauusd_snapshot(supabase: Any) -> dict[str, Any] | None:
         "price": float(price.price),
         "observed_at": price.observed_at,
         "source": price.source,
+    }
+
+
+def _latest_persisted_xauusd_snapshot() -> dict[str, Any] | None:
+    """Read the latest stored XAUUSD price from ``market_signals``."""
+    try:
+        with session_scope() as session:
+            row = (
+                session.execute(
+                    text(
+                        """
+                        SELECT symbol, price, signal_time, updated_at, source
+                        FROM public.market_signals
+                        WHERE symbol IN ('XAUUSD', 'GC=F', 'XAU/USD')
+                          AND price IS NOT NULL
+                        ORDER BY signal_time DESC NULLS LAST,
+                                 updated_at DESC NULLS LAST,
+                                 id DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+                .mappings()
+                .first()
+            )
+    except Exception:
+        logger.exception("Persisted XAUUSD snapshot loading failed")
+        return None
+
+    if not row:
+        return None
+    return {
+        "symbol": row.get("symbol") or "XAUUSD",
+        "price": float(row["price"]),
+        "observed_at": row.get("signal_time") or row.get("updated_at"),
+        "source": row.get("source") or "DATABASE:market_signals",
     }
 
 

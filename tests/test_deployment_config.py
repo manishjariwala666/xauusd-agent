@@ -41,6 +41,13 @@ def test_streamlit_public_site_hides_auto_page_navigation() -> None:
     assert config["client"]["showSidebarNavigation"] is False
 
 
+def test_streamlit_admin_direct_route_exists() -> None:
+    source = (ROOT / "pages" / "admin.py").read_text(encoding="utf-8")
+
+    assert "from app import run" in source
+    assert "run()" in source
+
+
 def test_streamlit_app_applies_safe_startup_migrations() -> None:
     source = (ROOT / "app.py").read_text(encoding="utf-8")
 
