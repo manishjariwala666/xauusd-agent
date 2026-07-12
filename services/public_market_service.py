@@ -60,7 +60,7 @@ def get_top_crypto_gainers(limit: int = 20) -> list[CryptoQuote]:
                 "sparkline": "false",
                 "price_change_percentage": "24h",
             },
-            timeout=12,
+            timeout=2,
         )
         response.raise_for_status()
         payload = response.json()

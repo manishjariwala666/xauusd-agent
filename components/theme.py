@@ -277,6 +277,39 @@ def apply_theme() -> None:
                 font-size: .84rem;
                 margin-top: .8rem;
             }
+            .admin-route-link {
+                display: block;
+                color: #64748b !important;
+                text-decoration: none !important;
+                font-size: .84rem;
+                font-weight: 800;
+                padding: .38rem .15rem;
+            }
+            .admin-route-link:hover { color: #2563eb !important; }
+            .admin-sub-links {
+                display: flex;
+                flex-wrap: wrap;
+                gap: .55rem;
+                margin: .65rem 0 1rem;
+                padding-bottom: .65rem;
+                border-bottom: 1px solid #e5e7eb;
+            }
+            .admin-sub-link {
+                color: #64748b !important;
+                text-decoration: none !important;
+                font-size: .82rem;
+                font-weight: 900;
+                padding: .45rem .75rem;
+                border-radius: 999px;
+                background: #f8fafc;
+                border: 1px solid #e5e7eb;
+            }
+            .admin-sub-link.active,
+            .admin-sub-link:hover {
+                color: #2563eb !important;
+                background: #eff6ff;
+                border-color: #bfdbfe;
+            }
             .social-row {
                 display: flex;
                 flex-wrap: wrap;

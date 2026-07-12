@@ -65,7 +65,7 @@ class MarketDataService:
                     "x-access-token": self._goldapi_key,
                     "Content-Type": "application/json",
                 },
-                timeout=15,
+                timeout=2,
             )
             response.raise_for_status()
             payload = response.json()

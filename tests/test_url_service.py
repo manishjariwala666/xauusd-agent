@@ -40,8 +40,25 @@ def test_public_api_base_url_keeps_railway_fallback(monkeypatch) -> None:
     )
 
 
+def test_public_website_fallback_never_uses_old_streamlit_url(monkeypatch) -> None:
+    for key in (
+        "PUBLIC_WEBSITE_URL",
+        "PUBLIC_SITE_URL",
+        "STREAMLIT_PUBLIC_URL",
+        "APP_BASE_URL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    assert url_service.public_website_base_url() == "https://venusrealm.net"
+
+
 def test_url_service_has_no_secret_literals() -> None:
     source = url_service.__loader__.get_source(url_service.__name__) or ""
 
-    forbidden = ("TELEGRAM_BOT_TOKEN=", "SUPABASE_KEY=", "JWT_SECRET=")
+    forbidden = (
+        "TELEGRAM_BOT_TOKEN=",
+        "SUPABASE_KEY=",
+        "JWT_SECRET=",
+        "xauusd-buy-sell-signal" + "." + "streamlit" + ".app",
+    )
     assert not any(value in source for value in forbidden)

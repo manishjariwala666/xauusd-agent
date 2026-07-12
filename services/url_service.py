@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 
 RAILWAY_API_FALLBACK_URL = "https://xauusd-agent-api-production.up.railway.app"
-LEGACY_STREAMLIT_FALLBACK_URL = "https://xauusd-buy-sell-signal.streamlit.app"
+DEFAULT_PUBLIC_WEBSITE_URL = "https://venusrealm.net"
 
 
 def normalize_base_url(value: str | None) -> str:
@@ -36,7 +36,7 @@ def public_website_base_url(settings: Any | None = None) -> str:
         or getattr(settings, "public_website_url", "")
         or getattr(settings, "app_base_url", "")
         or os.getenv("APP_BASE_URL")
-        or LEGACY_STREAMLIT_FALLBACK_URL
+        or DEFAULT_PUBLIC_WEBSITE_URL
     )
 
 

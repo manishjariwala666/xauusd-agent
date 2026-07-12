@@ -80,6 +80,18 @@ def test_content_card_uses_single_html_block_to_avoid_literal_markup() -> None:
     assert '"""' not in source
 
 
+def test_public_footer_contains_professional_legal_links() -> None:
+    import inspect
+
+    source = inspect.getsource(landing._render_site_footer)
+
+    assert "AI Market Analytics Pro" in source
+    assert "Privacy Policy" in source
+    assert "Terms" in source
+    assert "Legal / Risk" in source
+    assert "Contact" in source
+
+
 def test_post_gallery_split_orders_by_view_count():
     items = [
         {"id": 1, "title": "Fresh", "view_count": 2, "created_at": "2026-07-11"},

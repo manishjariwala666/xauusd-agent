@@ -54,6 +54,43 @@ from user.dashboard import render_signal_feed
 from urllib.parse import quote
 
 
+ADMIN_ROUTE_MAP = {
+    "admin": "Command Center",
+    "command-center": "Command Center",
+    "blog-studio": "Blog Studio",
+    "overview": "Overview",
+    "payments": "Payments",
+    "content-manager": "Content",
+    "content": "Content",
+    "categories": "Categories",
+    "profit-proof": "Profit Proof",
+    "channel-links": "Channel Links",
+    "signals": "Signals",
+    "users": "Users / Leads",
+    "leads": "Users / Leads",
+    "logs": "Logs",
+    "pipeline": "Pipeline",
+    "agents": "AI Agents",
+    "ai-agents": "AI Agents",
+}
+
+ADMIN_PAGE_PATHS = {
+    "Command Center": "/admin/command-center",
+    "Blog Studio": "/admin/blog-studio",
+    "Overview": "/admin/overview",
+    "Payments": "/admin/payments",
+    "Content": "/admin/content-manager",
+    "Categories": "/admin/categories",
+    "Profit Proof": "/admin/profit-proof",
+    "Channel Links": "/admin/channel-links",
+    "Signals": "/admin/signals",
+    "Users / Leads": "/admin/users",
+    "Logs": "/admin/logs",
+    "Pipeline": "/admin/pipeline",
+    "AI Agents": "/admin/agents",
+}
+
+
 def render_admin_dashboard(supabase: Any) -> None:
     """Render admin-only controls without exposing them to user sessions."""
     if get_current_role() != ROLE_ADMIN:
@@ -61,8 +98,9 @@ def render_admin_dashboard(supabase: Any) -> None:
         st.stop()
 
     apply_admin_light_theme()
-    selected_page = _render_admin_light_sidebar()
+    selected_page = _render_admin_light_sidebar(_admin_page_from_url())
     _render_admin_topbar()
+    _render_admin_deep_links(selected_page)
     _render_admin_shell_header()
     _render_admin_light_kpis()
 
@@ -101,6 +139,20 @@ def render_admin_dashboard(supabase: Any) -> None:
 
 
 
+def _admin_page_from_url() -> str:
+    """Resolve a direct `/admin/...` browser path to an admin section."""
+    try:
+        current_url = getattr(st.context, "url", "") or ""
+    except Exception:
+        current_url = ""
+    path = current_url.split("?", 1)[0].strip("/")
+    parts = [part for part in path.split("/") if part]
+    if not parts or parts[0] != "admin":
+        return "Command Center"
+    key = parts[1] if len(parts) > 1 else "admin"
+    return ADMIN_ROUTE_MAP.get(key, "Command Center")
+
+
 def _admin_public_site_url() -> str:
     return public_website_base_url()
 
@@ -109,7 +161,7 @@ def _agent_by_key(agents: list[dict[str, Any]], key: str) -> dict[str, Any] | No
     return next((agent for agent in agents if agent.get("agent_key") == key), None)
 
 
-def _render_admin_light_sidebar() -> str:
+def _render_admin_light_sidebar(default_page: str = "Command Center") -> str:
     """Render a real readable sidebar menu instead of faint top tabs."""
     menu_items = [
         "Command Center",
@@ -141,6 +193,7 @@ def _render_admin_light_sidebar() -> str:
         "Pipeline": "🧪 Pipeline",
         "AI Agents": "🤖 AI Agents",
     }
+    default_index = menu_items.index(default_page) if default_page in menu_items else 0
     with st.sidebar:
         st.markdown(
             '<div class="admin-sidebar-brand">AI Market <small>pro</small></div>',
@@ -150,14 +203,46 @@ def _render_admin_light_sidebar() -> str:
         selected_label = st.radio(
             "Menu",
             [labels[item] for item in menu_items],
-            index=0,
+            index=default_index,
             label_visibility="collapsed",
             key="admin_sidebar_menu",
         )
+        st.markdown("#### Direct Links")
+        for item in menu_items:
+            st.markdown(
+                f'<a class="admin-route-link" href="{ADMIN_PAGE_PATHS[item]}" '
+                f'target="_self">{labels[item]}</a>',
+                unsafe_allow_html=True,
+            )
         st.divider()
         st.caption("Website · Blogs · Signals · Users · Agents")
     reverse_labels = {value: key for key, value in labels.items()}
     return reverse_labels.get(selected_label, "Command Center")
+
+
+def _render_admin_deep_links(selected_page: str) -> None:
+    """Expose stable browser URLs for key admin sections."""
+    links = [
+        ("Command Center", "/admin/command-center"),
+        ("Blog Studio", "/admin/blog-studio"),
+        ("Overview", "/admin/overview"),
+        ("Payments", "/admin/payments"),
+        ("Content Manager", "/admin/content-manager"),
+        ("Categories", "/admin/categories"),
+        ("Signals", "/admin/signals"),
+        ("Users", "/admin/users"),
+        ("Logs", "/admin/logs"),
+        ("Agents", "/admin/agents"),
+    ]
+    html_links = "".join(
+        f'<a class="admin-sub-link {"active" if ADMIN_ROUTE_MAP.get(url.rsplit("/", 1)[-1]) == selected_page else ""}" '
+        f'href="{url}" target="_self">{label}</a>'
+        for label, url in links
+    )
+    st.markdown(
+        f'<nav class="admin-sub-links">{html_links}</nav>',
+        unsafe_allow_html=True,
+    )
 
 
 def _render_admin_topbar() -> None:

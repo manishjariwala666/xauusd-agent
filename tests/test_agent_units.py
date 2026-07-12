@@ -15,6 +15,7 @@ from services.production_agents import (
     _master_optional_agent,
     _seo_issues,
     _slugify,
+    run_blog_agent,
     run_image_agent,
 )
 from services.telegram_service import TelegramService
@@ -68,6 +69,60 @@ def test_master_ai_blog_publish_default_uses_payload_override(monkeypatch) -> No
     assert _blog_publish_default({"publish": True})
     assert not _blog_publish_default({"publish": False})
     assert not _blog_publish_default({})
+
+
+def test_worker_blog_agent_returns_final_venusrealm_public_url(monkeypatch) -> None:
+    class FakeResult:
+        def __init__(self, value: object) -> None:
+            self.value = value
+
+        def scalar_one_or_none(self) -> object:
+            return self.value
+
+        def scalar(self) -> object:
+            return None
+
+    class FakeSession:
+        def execute(self, statement: object, params: dict | None = None) -> FakeResult:
+            sql = str(statement)
+            if "to_regclass" in sql:
+                return FakeResult("public.content_seo")
+            if "content_categories" in sql:
+                return FakeResult(11)
+            return FakeResult(None)
+
+    class FakeScope:
+        def __enter__(self) -> FakeSession:
+            return FakeSession()
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+    monkeypatch.setenv("PUBLIC_WEBSITE_URL", "https://venusrealm.net")
+    monkeypatch.setattr(
+        "services.production_agents.AIProvider",
+        lambda: type(
+            "FailingProvider",
+            (),
+            {"generate_json": lambda self, **_: (_ for _ in ()).throw(RuntimeError("offline"))},
+        )(),
+    )
+    monkeypatch.setattr("services.production_agents.session_scope", lambda: FakeScope())
+    monkeypatch.setattr(
+        "services.production_agents.save_content",
+        lambda **_: 321,
+    )
+    monkeypatch.setattr(
+        "services.production_agents._blog_publish_default",
+        lambda _: True,
+    )
+
+    result = run_blog_agent({"topic": "xauusd usa market"})
+
+    assert "Public URL: https://venusrealm.net/blog/xauusd-usa-market" in result
+    assert "xauusd-buy-sell-signal.streamlit.app" not in result
+    assert "streamlit.app" not in result
+    assert "xauusd-agent-web-production.up.railway.app" not in result
 
 
 def test_image_agent_skips_provider_failure(monkeypatch) -> None:

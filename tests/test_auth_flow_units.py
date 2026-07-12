@@ -36,9 +36,11 @@ def test_login_ui_has_gmail_resend_and_forgot_password_controls() -> None:
 
     assert "Continue with Gmail" in google_source
     assert "google_oauth_login_url" in google_source
+    assert "disabled=True" not in google_source
     assert "Resend Verification" in page_source
     assert "Forgot Password" in page_source
     assert "resend_verification_email" in resend_source
+    assert "_render_site_footer()" in page_source
 
 
 def test_email_links_can_use_public_website_url_fallback() -> None:
