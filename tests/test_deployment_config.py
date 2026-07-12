@@ -41,6 +41,17 @@ def test_streamlit_public_site_hides_auto_page_navigation() -> None:
     assert config["client"]["showSidebarNavigation"] is False
 
 
+def test_global_theme_allows_vertical_scroll_and_custom_footer() -> None:
+    source = (ROOT / "components" / "theme.py").read_text(encoding="utf-8")
+
+    assert "overflow-y: auto !important" in source
+    assert "overflow-x: hidden !important" in source
+    assert "footer," not in source
+    assert ".site-footer" in source
+    assert "[data-testid=\"stSidebar\"]" in source
+    assert "overflow-y: auto !important;" in source
+
+
 def test_streamlit_admin_direct_route_exists() -> None:
     source = (ROOT / "pages" / "admin.py").read_text(encoding="utf-8")
 

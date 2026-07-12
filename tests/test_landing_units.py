@@ -86,10 +86,33 @@ def test_public_footer_contains_professional_legal_links() -> None:
     source = inspect.getsource(landing._render_site_footer)
 
     assert "AI Market Analytics Pro" in source
+    assert "About" in source
+    assert "Blog" in source
+    assert "Signals" in source
+    assert "Contact" in source
     assert "Privacy Policy" in source
     assert "Terms" in source
-    assert "Legal / Risk" in source
-    assert "Contact" in source
+    assert "Risk Disclaimer" in source
+    assert "Telegram" in source
+    assert "© {current_year}" in source
+    assert 'role="contentinfo"' in source
+
+
+def test_public_footer_stack_renders_disclaimer_then_footer() -> None:
+    import inspect
+
+    source = inspect.getsource(landing._render_public_page_footer)
+
+    assert source.index("_render_disclaimer()") < source.index("_render_site_footer()")
+
+
+def test_public_routes_call_footer_stack_after_every_early_return() -> None:
+    import inspect
+
+    source = inspect.getsource(landing.render_landing_page)
+
+    assert source.count("_render_public_page_footer()") >= 5
+    assert "_render_disclaimer()" not in source
 
 
 def test_post_gallery_split_orders_by_view_count():

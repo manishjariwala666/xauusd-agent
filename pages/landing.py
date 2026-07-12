@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from datetime import datetime
 from typing import Any, Callable
 from urllib.parse import quote, unquote, urlencode, urlparse
 
@@ -50,7 +51,7 @@ def render_landing_page(
         categories,
         on_sign_in,
     ):
-        _render_disclaimer()
+        _render_public_page_footer()
         return
 
     selected_post = _query_param_value("post")
@@ -59,17 +60,17 @@ def render_landing_page(
 
     if selected_post:
         _render_content_route(selected_post)
-        _render_disclaimer()
+        _render_public_page_footer()
         return
 
     if selected_announcement:
         _render_announcement_route(selected_announcement)
-        _render_disclaimer()
+        _render_public_page_footer()
         return
 
     if selected_category:
         _render_category_route(selected_category, categories, on_sign_in)
-        _render_disclaimer()
+        _render_public_page_footer()
         return
 
     _render_hero(on_sign_in)
@@ -95,7 +96,7 @@ def render_landing_page(
     _render_subscription(settings, on_sign_in)
     _render_locked_contact(on_sign_in)
     _render_social_share(settings.public_website_url or settings.app_base_url)
-    _render_disclaimer()
+    _render_public_page_footer()
 
 
 def _render_nav(brand_name: str, on_sign_in: Callable[[], None]) -> None:
@@ -1212,7 +1213,6 @@ def _render_social_share(app_url: str) -> None:
 
 
 def _render_disclaimer() -> None:
-    _render_site_footer()
     st.markdown(
         """
         <div class="risk-box">
@@ -1228,10 +1228,18 @@ def _render_disclaimer() -> None:
     )
 
 
+def _render_public_page_footer() -> None:
+    """Render the final public page footer stack after all page content."""
+    _render_disclaimer()
+    _render_site_footer()
+
+
 def _render_site_footer() -> None:
     """Render public website footer navigation and legal links."""
+    settings = get_settings()
     links = [
         ("Home", "/"),
+        ("About", "/page/about"),
         ("Blog", "/blog"),
         ("Signals", "/signals"),
         ("XAUUSD", "/signals/xauusd"),
@@ -1239,24 +1247,48 @@ def _render_site_footer() -> None:
         ("Nifty & Options", "/market-analysis/nifty"),
         ("Crypto Volatility", "/market-analysis/crypto"),
         ("SEO & Automation", "/blog/seo-tools"),
+        ("Contact", "/page/contact"),
         ("Privacy Policy", "/page/privacy-policy"),
         ("Terms", "/page/terms-and-conditions"),
-        ("Legal / Risk", "/page/risk-disclaimer"),
-        ("Contact", "/page/contact"),
+        ("Risk Disclaimer", "/page/risk-disclaimer"),
     ]
     link_html = "".join(
         f'<a href="{html.escape(url)}" target="_self">{html.escape(label)}</a>'
         for label, url in links
     )
+    social_links = []
+    for label, url in (
+        ("Telegram", _safe_site_setting("telegram_invite_url") or settings.telegram_invite_url),
+        ("Profit Proof", _safe_site_setting("profit_proof_telegram_url") or settings.profit_proof_telegram_url),
+        ("WhatsApp", settings.support_whatsapp_url),
+    ):
+        if url:
+            social_links.append((label, url))
+    social_html = "".join(
+        '<a target="_blank" rel="noopener noreferrer" '
+        f'href="{html.escape(url)}">{html.escape(label)}</a>'
+        for label, url in social_links
+    )
+    current_year = datetime.now().year
     st.markdown(
         f"""
-        <footer class="site-footer">
-            <div class="footer-brand">AI Market Analytics Pro</div>
-            <div class="footer-links">{link_html}</div>
-            <div class="footer-note">
-                Research, education, XAUUSD signal context, and member support.
+        <div class="site-footer" role="contentinfo" aria-label="Website footer">
+            <div class="footer-grid">
+                <div>
+                    <div class="footer-brand">AI Market Analytics Pro</div>
+                    <div class="footer-note">
+                        Research, education, XAUUSD signal context, and member support.
+                    </div>
+                    <div class="footer-note">
+                        © {current_year} AI Market Analytics Pro. All rights reserved.
+                    </div>
+                </div>
+                <div>
+                    <div class="footer-links">{link_html}</div>
+                    <div class="footer-social">{social_html}</div>
+                </div>
             </div>
-        </footer>
+        </div>
         """,
         unsafe_allow_html=True,
     )

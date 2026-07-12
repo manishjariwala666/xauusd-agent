@@ -22,8 +22,16 @@ def apply_theme() -> None:
                 --red: #ff6b72;
                 --blue: #67a6ff;
             }
+            html,
+            body,
+            .stApp,
+            [data-testid="stAppViewContainer"],
+            [data-testid="stMain"] {
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                min-height: 100%;
+            }
             #MainMenu,
-            footer,
             [data-testid="stToolbar"],
             [data-testid="stDecoration"],
             [data-testid="stStatusWidget"],
@@ -248,17 +256,28 @@ def apply_theme() -> None:
                 line-height: 1.6;
             }
             .site-footer {
-                margin: 2rem 0 1rem;
-                padding: 1.4rem;
+                display: block !important;
+                visibility: visible !important;
+                height: auto !important;
+                margin: 2.4rem 0 1rem;
+                padding: clamp(1.25rem, 3vw, 2rem);
                 border: 1px solid var(--border);
-                border-radius: 18px;
-                background: rgba(13, 20, 36, .78);
+                border-radius: 22px;
+                background:
+                    radial-gradient(circle at 88% 0%, rgba(244, 193, 93, .12), transparent 28%),
+                    rgba(13, 20, 36, .9);
             }
             .footer-brand {
                 color: var(--text);
-                font-size: 1.05rem;
+                font-size: 1.18rem;
                 font-weight: 900;
                 margin-bottom: .75rem;
+            }
+            .footer-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr);
+                gap: 1rem;
+                align-items: start;
             }
             .footer-links {
                 display: flex;
@@ -276,6 +295,22 @@ def apply_theme() -> None:
                 color: var(--muted);
                 font-size: .84rem;
                 margin-top: .8rem;
+            }
+            .footer-social {
+                display: flex;
+                flex-wrap: wrap;
+                gap: .55rem;
+                margin-top: .8rem;
+            }
+            .footer-social a {
+                color: #cbd7e8 !important;
+                text-decoration: none !important;
+                border: 1px solid var(--border);
+                border-radius: 999px;
+                padding: .45rem .7rem;
+                font-size: .82rem;
+                font-weight: 800;
+                background: rgba(8, 13, 26, .55);
             }
             .admin-route-link {
                 display: block;
@@ -562,6 +597,8 @@ def apply_admin_light_theme() -> None:
             [data-testid="stSidebar"] {
                 background: #ffffff !important;
                 border-right: 1px solid var(--admin-border);
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
             }
             .stSidebar [data-testid="stMarkdownContainer"],
             .stSidebar p,
