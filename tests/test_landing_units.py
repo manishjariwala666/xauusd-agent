@@ -96,6 +96,7 @@ def test_public_footer_contains_professional_legal_links() -> None:
     assert "Telegram" in source
     assert "© {current_year}" in source
     assert 'role="contentinfo"' in source
+    assert "_safe_site_setting" not in source
 
 
 def test_public_footer_stack_renders_disclaimer_then_footer() -> None:

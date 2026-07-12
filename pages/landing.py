@@ -1259,8 +1259,8 @@ def _render_site_footer() -> None:
     )
     social_links = []
     for label, url in (
-        ("Telegram", _safe_site_setting("telegram_invite_url") or settings.telegram_invite_url),
-        ("Profit Proof", _safe_site_setting("profit_proof_telegram_url") or settings.profit_proof_telegram_url),
+        ("Telegram", settings.telegram_invite_url),
+        ("Profit Proof", settings.profit_proof_telegram_url),
         ("WhatsApp", settings.support_whatsapp_url),
     ):
         if url:
