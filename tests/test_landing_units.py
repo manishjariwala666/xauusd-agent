@@ -115,6 +115,18 @@ def test_public_routes_call_footer_stack_after_every_early_return() -> None:
     assert "_render_disclaimer()" not in source
 
 
+def test_public_content_reads_are_deadline_safe() -> None:
+    import inspect
+
+    all_source = inspect.getsource(landing._all_public_content)
+    type_source = inspect.getsource(landing._safe_content)
+
+    assert "_with_deadline" in all_source
+    assert "_with_deadline" in type_source
+    assert "timeout_seconds=2.5" in all_source
+    assert "timeout_seconds=2.5" in type_source
+
+
 def test_post_gallery_split_orders_by_view_count():
     items = [
         {"id": 1, "title": "Fresh", "view_count": 2, "created_at": "2026-07-11"},

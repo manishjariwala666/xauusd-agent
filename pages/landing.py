@@ -907,11 +907,12 @@ def _matches_content_identifier(item: dict[str, Any], identifier: str) -> bool:
 
 
 def _all_public_content(limit: int = 80) -> list[dict[str, Any]]:
-    try:
-        items = list_content(public_only=True, limit=limit)
-    except Exception:
-        logger.exception("Public content loading failed: all")
-        return []
+    items = _with_deadline(
+        lambda: list_content(public_only=True, limit=limit),
+        default=[],
+        label="Public content loading: all",
+        timeout_seconds=2.5,
+    )
     return _dedupe_research_items(items)
 
 
@@ -1295,12 +1296,13 @@ def _render_site_footer() -> None:
 
 
 def _safe_content(content_type: str, limit: int) -> list[dict[str, Any]]:
-    try:
-        return list_content(
+    return _with_deadline(
+        lambda: list_content(
             content_type=content_type,
             public_only=True,
             limit=limit,
-        )
-    except Exception:
-        logger.exception("Public content loading failed: type={}", content_type)
-        return []
+        ),
+        default=[],
+        label=f"Public content loading: type={content_type}",
+        timeout_seconds=2.5,
+    )
