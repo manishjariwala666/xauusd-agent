@@ -44,7 +44,7 @@ def get_supabase() -> Client:
     return create_client(settings.supabase_url, settings.supabase_key)
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def _apply_safe_startup_migrations() -> bool:
     """Apply idempotent DB migrations for the website/admin process."""
     try:
@@ -68,11 +68,37 @@ def _show_home() -> None:
 
 def _current_path_segments() -> list[str]:
     """Return current browser path segments for public/admin routing."""
+    candidates: list[str] = []
     try:
-        current_url = getattr(st.context, "url", "") or ""
+        candidates.append(getattr(st.context, "url", "") or "")
     except Exception:
-        current_url = ""
-    path = current_url.split("?", 1)[0].strip("/")
+        pass
+    try:
+        headers = getattr(st.context, "headers", {}) or {}
+        for header in (
+            "x-forwarded-uri",
+            "x-original-uri",
+            "x-rewrite-url",
+            "referer",
+        ):
+            value = headers.get(header) if hasattr(headers, "get") else ""
+            if value:
+                candidates.append(str(value))
+    except Exception:
+        pass
+    path = ""
+    for candidate in candidates:
+        clean = str(candidate or "").strip()
+        if not clean:
+            continue
+        if "://" in clean:
+            from urllib.parse import urlparse
+
+            clean = urlparse(clean).path
+        if clean and clean != "/":
+            path = clean
+            break
+    path = path.split("?", 1)[0].strip("/")
     return [part for part in path.split("/") if part]
 
 
