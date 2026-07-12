@@ -23,7 +23,7 @@ from services.google_sheets_service import append_message_log
 from services.google_sheets import GoogleSheetsService
 from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
-from services.url_service import public_website_base_url
+from services.url_service import public_content_url, public_website_base_url
 from services.whatsapp_service import WhatsAppService
 
 
@@ -141,9 +141,16 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
                 exc.__class__.__name__,
             )
             image_result = "Image generation skipped; blog content saved."
+    public_url = public_content_url(
+        {
+            "content_type": "AI_BLOG",
+            "slug": slug,
+        }
+    )
     return (
         f"SEO blog #{content_id} saved as "
-        f"{'published' if publish else 'draft'}. {image_result}"
+        f"{'published' if publish else 'draft'}. "
+        f"Public URL: {public_url}. {image_result}"
     )
 
 

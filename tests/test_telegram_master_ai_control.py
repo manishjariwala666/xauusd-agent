@@ -9,6 +9,7 @@ from services.telegram_master_ai_control import (
     MASTER_AI_BOT,
     SAFE_TELEGRAM_ERROR,
     SIGNAL_BOT,
+    _run_started_text,
     handle_master_command_text,
     help_text,
     is_master_command,
@@ -120,6 +121,41 @@ def test_master_bot_accepts_natural_blog_text_without_env_flag(monkeypatch) -> N
     assert "Latest blog URL" in (result.response_text or "") or "Blog page" in (
         result.response_text or ""
     )
+
+
+def test_telegram_blog_started_text_uses_venusrealm_public_url(monkeypatch) -> None:
+    def fake_list_content(*, content_type: str, public_only: bool, limit: int):
+        assert public_only is True
+        assert limit == 1
+        if content_type == "AI_BLOG":
+            return [
+                {
+                    "content_type": "AI_BLOG",
+                    "slug": "xauusd-usa-market",
+                    "seo_slug": "xauusd-usa-market",
+                }
+            ]
+        return []
+
+    monkeypatch.setenv("PUBLIC_WEBSITE_URL", "https://venusrealm.net")
+    monkeypatch.setattr(
+        "services.content_service.list_content",
+        fake_list_content,
+    )
+    progress = OrchestrationProgress(
+        run_id=42,
+        task_id=7,
+        status="COMPLETED",
+        completed_steps=1,
+        total_steps=1,
+    )
+
+    text = _run_started_text("blog", progress)
+
+    assert "Latest blog URL: https://venusrealm.net/blog/xauusd-usa-market" in text
+    assert "xauusd-buy-sell-signal.streamlit.app" not in text
+    assert "streamlit.app" not in text
+    assert "xauusd-agent-web-production.up.railway.app" not in text
 
 
 def test_master_bot_replies_helpfully_to_unknown_admin_text(monkeypatch) -> None:
