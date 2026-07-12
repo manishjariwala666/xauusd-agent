@@ -66,12 +66,19 @@ def test_streamlit_public_direct_routes_exist() -> None:
         "announcements.py",
         "market_analysis.py",
         "category.py",
-        "page.py",
     ):
         source = (ROOT / "pages" / filename).read_text(encoding="utf-8")
 
         assert "from app import run" in source
         assert "run()" in source
+
+
+def test_streamlit_static_page_direct_route_renders_public_footer() -> None:
+    source = (ROOT / "pages" / "page.py").read_text(encoding="utf-8")
+
+    assert "_render_content_route" in source
+    assert "_render_public_page_footer()" in source
+    assert "from app import run" not in source
 
 
 def test_streamlit_app_applies_safe_startup_migrations() -> None:
