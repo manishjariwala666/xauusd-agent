@@ -59,6 +59,21 @@ def test_streamlit_admin_direct_route_exists() -> None:
     assert "run()" in source
 
 
+def test_streamlit_public_direct_routes_exist() -> None:
+    for filename in (
+        "blog.py",
+        "signals.py",
+        "announcements.py",
+        "market_analysis.py",
+        "category.py",
+        "page.py",
+    ):
+        source = (ROOT / "pages" / filename).read_text(encoding="utf-8")
+
+        assert "from app import run" in source
+        assert "run()" in source
+
+
 def test_streamlit_app_applies_safe_startup_migrations() -> None:
     source = (ROOT / "app.py").read_text(encoding="utf-8")
 
