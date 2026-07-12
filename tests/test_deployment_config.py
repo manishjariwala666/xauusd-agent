@@ -35,6 +35,12 @@ def test_railway_web_uses_streamlit_and_real_healthcheck() -> None:
     assert deploy["restartPolicyType"] == "ON_FAILURE"
 
 
+def test_streamlit_public_site_hides_auto_page_navigation() -> None:
+    config = _load(".streamlit/config.toml")
+
+    assert config["client"]["showSidebarNavigation"] is False
+
+
 def test_railway_worker_uses_dedicated_process() -> None:
     config = _load("railway.worker.toml")
     deploy = config["deploy"]
