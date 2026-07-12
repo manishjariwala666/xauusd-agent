@@ -43,6 +43,7 @@ def test_able_pro_light_admin_v2_shell_exists() -> None:
     topbar_source = inspect.getsource(dashboard._render_admin_topbar)
     sidebar_source = inspect.getsource(dashboard._render_admin_light_sidebar)
     kpi_source = inspect.getsource(dashboard._render_admin_light_kpis)
+    public_theme_source = inspect.getsource(theme.apply_theme)
     theme_source = inspect.getsource(theme.apply_admin_light_theme)
 
     assert "apply_admin_light_theme()" in dashboard_source
@@ -57,6 +58,8 @@ def test_able_pro_light_admin_v2_shell_exists() -> None:
     assert "Signal Manager" in sidebar_source
     assert "admin-light-kpi-grid" in kpi_source
     assert "--admin-bg" in theme_source
+    assert 'header[data-testid="stHeader"]' in public_theme_source
+    assert '[data-testid="stDecoration"]' in public_theme_source
     assert 'initial_sidebar_state="expanded"' in Path("app.py").read_text()
     assert 'div[role="radiogroup"] label' in theme_source
 

@@ -22,8 +22,15 @@ def apply_theme() -> None:
                 --red: #ff6b72;
                 --blue: #67a6ff;
             }
-            #MainMenu, footer, [data-testid="stToolbar"] {
-                visibility: hidden;
+            #MainMenu,
+            footer,
+            [data-testid="stToolbar"],
+            [data-testid="stDecoration"],
+            [data-testid="stStatusWidget"],
+            header[data-testid="stHeader"] {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
             }
             .stApp {
                 background:
@@ -35,7 +42,7 @@ def apply_theme() -> None:
             .block-container {
                 max-width: 100%;
                 width: 100%;
-                padding-top: 1.25rem;
+                padding-top: .35rem;
                 padding-bottom: 3rem;
                 padding-left: clamp(.9rem, 3vw, 2.4rem);
                 padding-right: clamp(.9rem, 3vw, 2.4rem);
