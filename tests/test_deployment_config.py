@@ -50,6 +50,13 @@ def test_streamlit_app_applies_safe_startup_migrations() -> None:
     assert "Website startup migrations failed" in source
 
 
+def test_streamlit_app_routes_admin_paths_to_login_or_admin() -> None:
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+
+    assert "def _current_path_segments" in source
+    assert 'path_segments[0] in {"admin", "login", "signup"}' in source
+
+
 def test_railway_worker_uses_dedicated_process() -> None:
     config = _load("railway.worker.toml")
     deploy = config["deploy"]

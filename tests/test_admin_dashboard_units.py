@@ -47,7 +47,7 @@ def test_able_pro_light_admin_v2_shell_exists() -> None:
     theme_source = inspect.getsource(theme.apply_admin_light_theme)
 
     assert "apply_admin_light_theme()" in dashboard_source
-    assert "selected_page = _render_admin_light_sidebar()" in dashboard_source
+    assert "selected_page = _render_admin_light_sidebar(_admin_page_from_url())" in dashboard_source
     assert "_render_admin_topbar()" in dashboard_source
     assert "_render_admin_light_kpis()" in dashboard_source
     assert "Blog Studio" in dashboard_source
@@ -62,6 +62,19 @@ def test_able_pro_light_admin_v2_shell_exists() -> None:
     assert '[data-testid="stDecoration"]' in public_theme_source
     assert 'initial_sidebar_state="expanded"' in Path("app.py").read_text()
     assert 'div[role="radiogroup"] label' in theme_source
+
+
+def test_admin_has_direct_browser_routes_for_sections() -> None:
+    dashboard_source = inspect.getsource(dashboard.render_admin_dashboard)
+    sidebar_source = inspect.getsource(dashboard._render_admin_light_sidebar)
+    links_source = inspect.getsource(dashboard._render_admin_deep_links)
+
+    assert '"/admin/blog-studio"' in inspect.getsource(dashboard)
+    assert '"/admin/content-manager"' in inspect.getsource(dashboard)
+    assert "_admin_page_from_url()" in dashboard_source
+    assert "_render_admin_deep_links(selected_page)" in dashboard_source
+    assert "admin-route-link" in sidebar_source
+    assert "admin-sub-link" in links_source
 
 
 def test_admin_ai_agents_has_numbered_on_off_controls() -> None:

@@ -66,6 +66,16 @@ def _show_home() -> None:
     st.rerun()
 
 
+def _current_path_segments() -> list[str]:
+    """Return current browser path segments for public/admin routing."""
+    try:
+        current_url = getattr(st.context, "url", "") or ""
+    except Exception:
+        current_url = ""
+    path = current_url.split("?", 1)[0].strip("/")
+    return [part for part in path.split("/") if part]
+
+
 def render_sidebar() -> None:
     """Render common authenticated navigation and account controls."""
     settings = get_settings()
@@ -113,9 +123,13 @@ def run() -> None:
     if getattr(settings, "block_search_indexing", False):
         _render_noindex_marker()
 
+    path_segments = _current_path_segments()
+
     if not is_authenticated():
         action = str(st.query_params.get("action", ""))
-        if action in {"verify", "reset-password"}:
+        if action in {"verify", "reset-password"} or (
+            path_segments and path_segments[0] in {"admin", "login", "signup"}
+        ):
             login_page()
             return
         if "public_view" not in st.session_state:

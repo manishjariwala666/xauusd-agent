@@ -14,6 +14,7 @@ from core.auth import (
     reset_password,
     verify_email,
 )
+from pages.landing import _render_site_footer
 
 
 def login_page() -> None:
@@ -33,9 +34,11 @@ def login_page() -> None:
     token = str(st.query_params.get("token", ""))
     if action == "verify":
         _render_verification(token)
+        _render_site_footer()
         return
     if action == "reset-password":
         _render_password_reset(token)
+        _render_site_footer()
         return
 
     _, center, _ = st.columns([1, 1.2, 1])
@@ -56,6 +59,7 @@ def login_page() -> None:
             _render_resend_verification()
         with recovery_tab:
             _render_recovery()
+    _render_site_footer()
 
 
 def _render_sign_in() -> None:
@@ -81,22 +85,16 @@ def _render_sign_in() -> None:
 
 
 def _render_google_login() -> None:
-    """Show Google login only when an OAuth URL has been configured."""
+    """Show Google login only when a real OAuth URL has been configured."""
     settings = get_settings()
-    if settings.google_oauth_login_url:
-        st.link_button(
-            "Continue with Gmail",
-            settings.google_oauth_login_url,
-            use_container_width=True,
-        )
-        st.caption("Google sign-in uses the configured secure OAuth provider.")
-    else:
-        st.button(
-            "Continue with Gmail",
-            use_container_width=True,
-            disabled=True,
-            help="Google OAuth is not configured yet.",
-        )
+    if not settings.google_oauth_login_url:
+        return
+    st.link_button(
+        "Continue with Gmail",
+        settings.google_oauth_login_url,
+        use_container_width=True,
+    )
+    st.caption("Google sign-in uses the configured secure OAuth provider.")
 
 
 def _render_registration() -> None:
