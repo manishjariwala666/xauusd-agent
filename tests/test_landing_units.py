@@ -145,6 +145,26 @@ def test_blog_detail_by_slug_route_dispatches_to_content_detail(monkeypatch):
     assert calls == [("xauusd-usa-market", landing.BLOG_CONTENT_TYPES)]
 
 
+def test_blog_alias_route_dispatches_to_same_blog_source(monkeypatch):
+    calls = []
+
+    def fake_render_content_route(slug, *, allowed_types=None):
+        calls.append((slug, allowed_types))
+
+    monkeypatch.setattr(landing, "_render_content_route", fake_render_content_route)
+
+    handled = landing._render_path_route(
+        ["blogs", "xauusd-usa-market"],
+        supabase=None,
+        settings=object(),
+        categories=[],
+        on_sign_in=lambda: None,
+    )
+
+    assert handled
+    assert calls == [("xauusd-usa-market", landing.BLOG_CONTENT_TYPES)]
+
+
 def test_category_page_route_dispatches_with_subcategory(monkeypatch):
     calls = []
 
@@ -170,3 +190,30 @@ def test_category_page_route_dispatches_with_subcategory(monkeypatch):
 
     assert handled
     assert calls == [("xauusd", categories, "usa-market")]
+
+
+def test_subject_route_dispatches_to_mapped_category(monkeypatch):
+    calls = []
+
+    def fake_render_category_route(
+        selected_category,
+        categories,
+        on_sign_in,
+        *,
+        subcategory_slug="",
+    ):
+        calls.append((selected_category, categories, subcategory_slug))
+
+    monkeypatch.setattr(landing, "_render_category_route", fake_render_category_route)
+    categories = [{"slug": "analysis-department", "title": "Analysis"}]
+
+    handled = landing._render_path_route(
+        ["market-analysis"],
+        supabase=None,
+        settings=object(),
+        categories=categories,
+        on_sign_in=lambda: None,
+    )
+
+    assert handled
+    assert calls == [("analysis-department", categories, "")]

@@ -18,12 +18,17 @@ from services.content_service import (
     list_content,
     record_content_view,
 )
+from services.content_router import (
+    BLOG_CONTENT_TYPES,
+    content_slug as router_content_slug,
+    content_url_for_item,
+    path_url as router_path_url,
+    route_source_for,
+)
 from services.public_market_service import (
     get_top_crypto_gainers,
     get_xauusd_snapshot,
 )
-
-BLOG_CONTENT_TYPES = ("BLOG", "AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION")
 
 
 def render_landing_page(
@@ -291,15 +296,19 @@ def _render_path_route(
 
     route = segments[0].strip().lower()
     slug = segments[1].strip() if len(segments) > 1 else ""
+    source = route_source_for(route)
 
-    if route == "blog":
+    if not source:
+        return False
+
+    if source.route == "blog":
         if slug:
-            _render_content_route(slug, allowed_types=BLOG_CONTENT_TYPES)
+            _render_content_route(slug, allowed_types=source.allowed_content_types)
         else:
             _render_blog_index()
         return True
 
-    if route == "category" and slug:
+    if source.route == "category" and slug:
         subcategory_slug = segments[2].strip() if len(segments) > 2 else ""
         _render_category_route(
             slug,
@@ -309,34 +318,40 @@ def _render_path_route(
         )
         return True
 
-    if route == "announcements":
+    if source.route == "announcements":
         if slug:
             _render_announcement_route(slug)
         else:
             _render_announcements_index()
         return True
 
-    if route == "signals":
+    if source.route == "signals":
         if slug:
-            _render_content_route(slug, allowed_types=("SIGNAL_POST",))
+            _render_content_route(slug, allowed_types=source.allowed_content_types)
         else:
             _render_signals_index(supabase, settings, on_sign_in)
         return True
 
-    if route == "page" and slug:
-        _render_content_route(slug, allowed_types=("PAGE",))
+    if source.route == "page" and slug:
+        _render_content_route(slug, allowed_types=source.allowed_content_types)
+        return True
+
+    if source.is_category_backed:
+        if slug:
+            _render_content_route(slug, allowed_types=source.allowed_content_types)
+        else:
+            _render_category_route(
+                source.category_slug,
+                categories,
+                on_sign_in,
+            )
         return True
 
     return False
 
 
 def _content_slug(item: dict[str, Any]) -> str:
-    return str(
-        item.get("seo_slug")
-        or item.get("slug")
-        or item.get("id")
-        or ""
-    ).strip()
+    return router_content_slug(item)
 
 
 def _local_url(**params: str) -> str:
@@ -353,28 +368,12 @@ def _local_url(**params: str) -> str:
 
 def _path_url(*parts: str) -> str:
     """Build an absolute public route URL from safe path segments."""
-    clean_parts = [
-        quote(str(part).strip("/"), safe="")
-        for part in parts
-        if part is not None and str(part).strip("/")
-    ]
-    return "/" + "/".join(clean_parts)
+    return router_path_url(*parts)
 
 
 def _content_url(item: dict[str, Any]) -> str:
     """Return the correct public route for one content item."""
-    slug = _content_slug(item)
-    if not slug:
-        return str(item.get("external_url") or "#")
-
-    content_type = str(item.get("content_type") or "").upper()
-    if content_type == "ANNOUNCEMENT":
-        return _path_url("announcements", slug)
-    if content_type == "PAGE":
-        return _path_url("page", slug)
-    if content_type == "SIGNAL_POST":
-        return _path_url("signals", slug)
-    return _path_url("blog", slug)
+    return content_url_for_item(item)
 
 
 def _slug_fragment(value: str) -> str:
