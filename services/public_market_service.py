@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from threading import Lock
 import time
 from typing import Any
@@ -12,7 +13,6 @@ import requests
 from sqlalchemy import text
 
 from core.database import session_scope
-from services.market_data import MarketDataService
 
 
 @dataclass(frozen=True)
@@ -35,20 +35,16 @@ def get_xauusd_snapshot(supabase: Any) -> dict[str, Any] | None:
     load. Worker/API jobs still use ``MarketDataService`` for fresh provider
     fetches before writing new signals.
     """
-    snapshot = _latest_persisted_xauusd_snapshot()
-    if snapshot is not None:
-        return snapshot
-
-    # Backward-compatible fallback for empty databases or local development.
-    price = MarketDataService(supabase).fetch_current_price()
-    if price is None:
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(_latest_persisted_xauusd_snapshot)
+    try:
+        return future.result(timeout=1.5)
+    except TimeoutError:
+        logger.warning("Persisted XAUUSD snapshot timed out for public page")
+        future.cancel()
         return None
-    return {
-        "symbol": price.symbol,
-        "price": float(price.price),
-        "observed_at": price.observed_at,
-        "source": price.source,
-    }
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _latest_persisted_xauusd_snapshot() -> dict[str, Any] | None:

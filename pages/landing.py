@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import re
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from typing import Any, Callable
 from urllib.parse import quote, unquote, urlencode, urlparse
 
@@ -170,19 +171,19 @@ def _render_hero(on_sign_in: Callable[[], None]) -> None:
 
 
 def _safe_categories() -> list[dict[str, Any]]:
-    try:
-        return list_categories(public_only=True)
-    except Exception:
-        logger.exception("Public category loading failed")
-        return []
+    return _with_deadline(
+        lambda: list_categories(public_only=True),
+        default=_fallback_categories(),
+        label="Public category loading",
+    )
 
 
 def _safe_site_setting(key: str) -> str:
-    try:
-        return get_site_setting(key)
-    except Exception:
-        logger.exception("Public site setting loading failed: key={}", key)
-        return ""
+    return _with_deadline(
+        lambda: get_site_setting(key),
+        default="",
+        label=f"Public site setting loading: key={key}",
+    )
 
 
 def _site_feature_enabled(key: str, *, default: bool) -> bool:
@@ -192,6 +193,83 @@ def _site_feature_enabled(key: str, *, default: bool) -> bool:
     if value in {"false", "0", "no", "off"}:
         return False
     return default
+
+
+def _with_deadline(
+    callback: Callable[[], Any],
+    *,
+    default: Any,
+    label: str,
+    timeout_seconds: float = 1.5,
+) -> Any:
+    """Run a non-critical public read without blocking the whole page."""
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(callback)
+    try:
+        return future.result(timeout=timeout_seconds)
+    except TimeoutError:
+        logger.warning("{} timed out; using public fallback", label)
+        future.cancel()
+        return default
+    except Exception:
+        logger.exception("{} failed; using public fallback", label)
+        return default
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _fallback_categories() -> list[dict[str, Any]]:
+    """Professional public fallback categories when DB is slow/unavailable."""
+    return [
+        {
+            "slug": "xauusd-signals",
+            "title": "XAUUSD Signals",
+            "description": "Live gold targets, buy/sell levels, and risk context.",
+            "icon": "🥇",
+            "route_path": "/signals/xauusd",
+            "source_type": "market_signals",
+        },
+        {
+            "slug": "ai-blog",
+            "title": "AI Blog",
+            "description": "Published market research and SEO trading education.",
+            "icon": "✍️",
+            "route_path": "/blog",
+            "source_type": "content_items",
+        },
+        {
+            "slug": "market-analysis",
+            "title": "Market Analysis",
+            "description": "Index, crypto, and XAUUSD structure insights.",
+            "icon": "📊",
+            "route_path": "/market-analysis",
+            "source_type": "content_items",
+        },
+        {
+            "slug": "announcements",
+            "title": "Announcements",
+            "description": "Service, festival, and market announcements.",
+            "icon": "📣",
+            "route_path": "/announcements",
+            "source_type": "content_items",
+        },
+        {
+            "slug": "payment-subscription",
+            "title": "Payment / Subscription",
+            "description": "Secure subscription verification and access information.",
+            "icon": "💳",
+            "route_path": "/page/payment-subscription",
+            "source_type": "content_items",
+        },
+        {
+            "slug": "contact-support",
+            "title": "Contact / Support",
+            "description": "Verified-member support and assistance.",
+            "icon": "💬",
+            "route_path": "/page/contact-support",
+            "source_type": "content_items",
+        },
+    ]
 
 
 def _render_categories(categories: list[dict[str, Any]]) -> None:
