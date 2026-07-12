@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import streamlit as st
 
+from config import get_settings
 from core.auth import (
     AuthResult,
     authenticate_credentials,
     register_user,
     request_password_reset,
+    resend_verification_email,
     reset_password,
     verify_email,
 )
@@ -38,18 +40,26 @@ def login_page() -> None:
 
     _, center, _ = st.columns([1, 1.2, 1])
     with center:
-        login_tab, create_tab, recovery_tab = st.tabs(
-            ["Sign In", "Create New Account", "Forgot Password"]
+        login_tab, create_tab, verify_tab, recovery_tab = st.tabs(
+            [
+                "Sign In",
+                "Create New Account",
+                "Resend Verification",
+                "Forgot Password",
+            ]
         )
         with login_tab:
             _render_sign_in()
         with create_tab:
             _render_registration()
+        with verify_tab:
+            _render_resend_verification()
         with recovery_tab:
             _render_recovery()
 
 
 def _render_sign_in() -> None:
+    _render_google_login()
     with st.form("login_form"):
         email = st.text_input("Email address", autocomplete="email")
         password = st.text_input(
@@ -68,6 +78,25 @@ def _render_sign_in() -> None:
     if result.success:
         st.rerun()
     _display_result(result)
+
+
+def _render_google_login() -> None:
+    """Show Google login only when an OAuth URL has been configured."""
+    settings = get_settings()
+    if settings.google_oauth_login_url:
+        st.link_button(
+            "Continue with Gmail",
+            settings.google_oauth_login_url,
+            use_container_width=True,
+        )
+        st.caption("Google sign-in uses the configured secure OAuth provider.")
+    else:
+        st.button(
+            "Continue with Gmail",
+            use_container_width=True,
+            disabled=True,
+            help="Google OAuth is not configured yet.",
+        )
 
 
 def _render_registration() -> None:
@@ -137,6 +166,22 @@ def _render_recovery() -> None:
         )
     if submitted:
         _display_result(request_password_reset(email))
+
+
+def _render_resend_verification() -> None:
+    st.caption("Use this if your account was created but the email did not arrive.")
+    with st.form("resend_verification_form"):
+        email = st.text_input(
+            "Registered email address",
+            key="verify_email_resend",
+            autocomplete="email",
+        )
+        submitted = st.form_submit_button(
+            "Resend Verification Email",
+            use_container_width=True,
+        )
+    if submitted:
+        _display_result(resend_verification_email(email))
 
 
 def _render_verification(token: str) -> None:

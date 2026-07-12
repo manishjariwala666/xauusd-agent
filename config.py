@@ -159,6 +159,7 @@ class Settings:
     smtp_password: str
     email_from: str
     smtp_use_tls: bool
+    google_oauth_login_url: str
     telegram_invite_url: str
     support_whatsapp_url: str
     telegram_bot_token: str
@@ -264,6 +265,7 @@ class Settings:
             email_from=_read_secret("EMAIL_FROM"),
             smtp_use_tls=_read_secret("SMTP_USE_TLS", "true").lower()
             in {"1", "true", "yes", "on"},
+            google_oauth_login_url=_read_secret("GOOGLE_OAUTH_LOGIN_URL"),
             telegram_invite_url=_read_secret("TELEGRAM_INVITE_URL"),
             support_whatsapp_url=_read_secret("SUPPORT_WHATSAPP_URL"),
             telegram_bot_token=_compact_secret_token(

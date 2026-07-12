@@ -19,6 +19,7 @@ from config import get_settings
 from core.database import session_scope
 from services.email_service import (
     EmailDeliveryError,
+    is_email_delivery_configured,
     send_password_reset_email,
     send_verification_email,
 )
@@ -209,6 +210,7 @@ def register_user(
 
     try:
         with session_scope() as session:
+            user_columns = _table_columns(session, "users")
             exists = session.execute(
                 text(
                     "SELECT 1 FROM public.users "
@@ -219,25 +221,49 @@ def register_user(
             if exists:
                 return AuthResult(False, "An account already exists for this email.")
 
+            insert_columns = [
+                "email",
+                "password_hash",
+                "whatsapp",
+                "txid",
+                "status",
+                "role",
+                "email_verified",
+                "approval_status",
+                "payment_status",
+                "verification_token_hash",
+                "verification_expires_at",
+            ]
+            insert_values = [
+                ":email",
+                ":password_hash",
+                ":whatsapp",
+                ":txid",
+                "'Pending'",
+                ":role",
+                "FALSE",
+                ":approval_status",
+                "'NOT_STARTED'",
+                ":token_hash",
+                ":expires_at",
+            ]
+            if user_columns.get("phone"):
+                insert_columns.append("phone")
+                insert_values.append(":phone")
             session.execute(
                 text(
-                    """
+                    f"""
                     INSERT INTO public.users (
-                        email, password_hash, whatsapp, txid, status,
-                        role, email_verified, approval_status, payment_status,
-                        verification_token_hash, verification_expires_at
+                        {", ".join(insert_columns)}
                     )
-                    VALUES (
-                        :email, :password_hash, :whatsapp, :txid, 'Pending',
-                        :role, FALSE, :approval_status, 'NOT_STARTED',
-                        :token_hash, :expires_at
-                    )
+                    VALUES ({", ".join(insert_values)})
                     """
                 ),
                 {
                     "email": normalized_email,
                     "password_hash": password_hash,
                     "whatsapp": normalized_whatsapp,
+                    "phone": normalized_whatsapp,
                     "txid": normalized_txid or None,
                     "role": ROLE_USER,
                     "approval_status": STATUS_PENDING,
@@ -255,9 +281,10 @@ def register_user(
     except EmailDeliveryError:
         LOGGER.exception("Verification email was not delivered.")
         return AuthResult(
-            False,
-            "Account created, but verification email could not be sent. "
-            "Please contact support.",
+            True,
+            "Account created and saved. Verification email could not be sent "
+            "right now. Use Resend Verification after SMTP is configured, or "
+            "contact support.",
             level="warning",
         )
 
@@ -266,6 +293,70 @@ def register_user(
         "Account created. Please verify your email, then wait for USDT approval.",
         level="success",
     )
+
+
+def resend_verification_email(email: str) -> AuthResult:
+    """Send a fresh verification link for an existing unverified account."""
+    normalized_email = email.strip().lower()
+    generic_result = AuthResult(
+        True,
+        "If this email is registered and unverified, a verification link has been sent.",
+        "success",
+    )
+    if not _EMAIL_PATTERN.fullmatch(normalized_email):
+        return generic_result
+    if not is_email_delivery_configured():
+        return AuthResult(
+            False,
+            "Email delivery is not configured yet. Please contact support.",
+            "warning",
+        )
+
+    verification_token = secrets.token_urlsafe(32)
+    try:
+        with session_scope() as session:
+            row = (
+                session.execute(
+                    text(
+                        """
+                        SELECT id, email, email_verified
+                        FROM public.users
+                        WHERE LOWER(email) = :email
+                        LIMIT 1
+                        """
+                    ),
+                    {"email": normalized_email},
+                )
+                .mappings()
+                .first()
+            )
+            if not row or bool(row["email_verified"]):
+                return generic_result
+            session.execute(
+                text(
+                    """
+                    UPDATE public.users
+                    SET verification_token_hash = :token_hash,
+                        verification_expires_at = :expires_at
+                    WHERE id = :user_id
+                    """
+                ),
+                {
+                    "token_hash": _hash_token(verification_token),
+                    "expires_at": datetime.now(timezone.utc)
+                    + timedelta(hours=24),
+                    "user_id": row["id"],
+                },
+            )
+        send_verification_email(str(row["email"]), verification_token)
+    except Exception:
+        LOGGER.exception("Verification resend failed.")
+        return AuthResult(
+            False,
+            "Verification email could not be sent right now.",
+            "warning",
+        )
+    return generic_result
 
 
 def verify_email(token: str) -> AuthResult:
@@ -319,6 +410,12 @@ def request_password_reset(email: str) -> AuthResult:
     )
     if not _EMAIL_PATTERN.fullmatch(normalized_email):
         return generic_result
+    if not is_email_delivery_configured():
+        return AuthResult(
+            False,
+            "Email delivery is not configured yet. Please contact support.",
+            "warning",
+        )
 
     reset_token = secrets.token_urlsafe(32)
     try:
@@ -429,6 +526,21 @@ def list_users() -> list[dict[str, Any]]:
             .all()
         )
         return [dict(row) for row in rows]
+
+
+def _table_columns(session: Any, table_name: str) -> dict[str, bool]:
+    rows = session.execute(
+        text(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = :table_name
+            """
+        ),
+        {"table_name": table_name},
+    ).scalars()
+    return {str(column): True for column in rows}
 
 
 def set_user_approval(user_id: int, approval_status: str) -> None:

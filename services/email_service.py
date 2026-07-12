@@ -35,6 +35,20 @@ def send_verification_email(recipient: str, token: str) -> None:
     )
 
 
+def is_email_delivery_configured() -> bool:
+    """Return whether transactional SMTP delivery has required settings."""
+    settings = get_settings()
+    return all(
+        (
+            settings.smtp_host,
+            settings.smtp_username,
+            settings.smtp_password,
+            settings.email_from,
+            settings.app_base_url or settings.public_website_url,
+        )
+    )
+
+
 def send_password_reset_email(recipient: str, token: str) -> None:
     """Send a single-use password reset link."""
     settings = get_settings()
@@ -53,10 +67,11 @@ def send_password_reset_email(recipient: str, token: str) -> None:
 
 
 def _build_link(settings: Settings, action: str, token: str) -> str:
-    if not settings.app_base_url:
+    base_url = settings.app_base_url or settings.public_website_url
+    if not base_url:
         raise EmailDeliveryError("APP_BASE_URL is not configured.")
     query = urlencode({"action": action, "token": token})
-    return f"{settings.app_base_url.rstrip('/')}?{query}"
+    return f"{base_url.rstrip('/')}?{query}"
 
 
 def _send(
