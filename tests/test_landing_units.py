@@ -217,3 +217,49 @@ def test_subject_route_dispatches_to_mapped_category(monkeypatch):
 
     assert handled
     assert calls == [("analysis-department", categories, "")]
+
+
+def test_subject_subroute_dispatches_to_category_subsection(monkeypatch):
+    calls = []
+
+    def fake_render_category_route(
+        selected_category,
+        categories,
+        on_sign_in,
+        *,
+        subcategory_slug="",
+    ):
+        calls.append((selected_category, subcategory_slug))
+
+    monkeypatch.setattr(landing, "_render_category_route", fake_render_category_route)
+
+    handled = landing._render_path_route(
+        ["market-analysis", "nifty"],
+        supabase=None,
+        settings=object(),
+        categories=[],
+        on_sign_in=lambda: None,
+    )
+
+    assert handled
+    assert calls == [("analysis-department", "nifty")]
+
+
+def test_signals_xauusd_route_dispatches_to_live_signal_index(monkeypatch):
+    calls = []
+
+    def fake_render_signals_index(supabase, settings, on_sign_in):
+        calls.append((supabase, settings))
+
+    monkeypatch.setattr(landing, "_render_signals_index", fake_render_signals_index)
+
+    handled = landing._render_path_route(
+        ["signals", "xauusd"],
+        supabase="db",
+        settings="settings",
+        categories=[],
+        on_sign_in=lambda: None,
+    )
+
+    assert handled
+    assert calls == [("db", "settings")]

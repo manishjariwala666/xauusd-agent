@@ -26,6 +26,7 @@ from services.content_router import (
     route_source_for,
 )
 from services.public_market_service import (
+    get_live_market_signals,
     get_top_crypto_gainers,
     get_xauusd_snapshot,
 )
@@ -108,7 +109,9 @@ def _render_nav(brand_name: str, on_sign_in: Callable[[], None]) -> None:
                 <div class="nav-note">
                     <a href="/blog" target="_self">Blog</a>
                     <a href="/signals" target="_self">Signals</a>
+                    <a href="/market-analysis" target="_self">Market Analysis</a>
                     <a href="/announcements" target="_self">Announcements</a>
+                    <a href="/page/privacy-policy" target="_self">Privacy</a>
                 </div>
             </div>
             """,
@@ -206,7 +209,8 @@ def _render_categories(categories: list[dict[str, Any]]) -> None:
         for column, category in zip(columns, categories[start : start + 3]):
             with column:
                 slug = str(category.get("slug") or category.get("id") or "")
-                url = _path_url("category", slug)
+                route_path = str(category.get("route_path") or "").strip()
+                url = route_path if route_path else _path_url("category", slug)
                 st.markdown(
                     f"""
                     <a class="premium-card clickable-card" href="{html.escape(url)}" target="_self">
@@ -302,7 +306,14 @@ def _render_path_route(
         return False
 
     if source.route == "blog":
-        if slug:
+        if slug == "seo-tools":
+            _render_category_route(
+                "ai-blog",
+                categories,
+                on_sign_in,
+                subcategory_slug=slug,
+            )
+        elif slug:
             _render_content_route(slug, allowed_types=source.allowed_content_types)
         else:
             _render_blog_index()
@@ -326,7 +337,9 @@ def _render_path_route(
         return True
 
     if source.route == "signals":
-        if slug:
+        if slug in {"xauusd", "gold", "live"}:
+            _render_signals_index(supabase, settings, on_sign_in)
+        elif slug:
             _render_content_route(slug, allowed_types=source.allowed_content_types)
         else:
             _render_signals_index(supabase, settings, on_sign_in)
@@ -338,7 +351,12 @@ def _render_path_route(
 
     if source.is_category_backed:
         if slug:
-            _render_content_route(slug, allowed_types=source.allowed_content_types)
+            _render_category_route(
+                source.category_slug,
+                categories,
+                on_sign_in,
+                subcategory_slug=slug,
+            )
         else:
             _render_category_route(
                 source.category_slug,
@@ -607,6 +625,8 @@ def _render_signals_index(
     )
     xauusd = get_xauusd_snapshot(supabase) or {}
     _render_xauusd_signal_section(xauusd, settings, on_sign_in)
+    live_signals = get_live_market_signals(limit=12)
+    _render_live_signal_table(live_signals)
     items = _content_items_by_type(("SIGNAL_POST",), limit=40)
     _render_content_grid(
         items,
@@ -614,6 +634,36 @@ def _render_signals_index(
             "No public signal posts are available yet. "
             "Premium buy/sell targets remain inside verified member access."
         ),
+    )
+
+
+def _render_live_signal_table(signals: list[dict[str, Any]]) -> None:
+    """Render live market_signals rows without caching the trading table."""
+    st.markdown(
+        '<h2 class="section-title">Live Trading Table</h2>',
+        unsafe_allow_html=True,
+    )
+    if not signals:
+        st.info("No live public signal rows are available yet.")
+        return
+    st.dataframe(
+        [
+            {
+                "time": item.get("signal_time"),
+                "symbol": item.get("symbol") or "XAUUSD",
+                "direction": item.get("signal_type"),
+                "entry": item.get("price"),
+                "target_1": item.get("target_1") or item.get("target_price"),
+                "target_2": item.get("target_2"),
+                "target_3": item.get("target_3"),
+                "stop_loss": item.get("stop_loss"),
+                "risk": item.get("risk_level") or "—",
+                "timeframe": item.get("timeframe") or "—",
+            }
+            for item in signals
+        ],
+        use_container_width=True,
+        hide_index=True,
     )
 
 
@@ -1084,6 +1134,7 @@ def _render_social_share(app_url: str) -> None:
 
 
 def _render_disclaimer() -> None:
+    _render_site_footer()
     st.markdown(
         """
         <div class="risk-box">
@@ -1094,6 +1145,40 @@ def _render_disclaimer() -> None:
             responsible for every trading decision and should never risk
             capital you cannot afford to lose.
         </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_site_footer() -> None:
+    """Render public website footer navigation and legal links."""
+    links = [
+        ("Home", "/"),
+        ("Blog", "/blog"),
+        ("Signals", "/signals"),
+        ("XAUUSD", "/signals/xauusd"),
+        ("Market Analysis", "/market-analysis"),
+        ("Nifty & Options", "/market-analysis/nifty"),
+        ("Crypto Volatility", "/market-analysis/crypto"),
+        ("SEO & Automation", "/blog/seo-tools"),
+        ("Privacy Policy", "/page/privacy-policy"),
+        ("Terms", "/page/terms-and-conditions"),
+        ("Legal / Risk", "/page/risk-disclaimer"),
+        ("Contact", "/page/contact"),
+    ]
+    link_html = "".join(
+        f'<a href="{html.escape(url)}" target="_self">{html.escape(label)}</a>'
+        for label, url in links
+    )
+    st.markdown(
+        f"""
+        <footer class="site-footer">
+            <div class="footer-brand">AI Market Analytics Pro</div>
+            <div class="footer-links">{link_html}</div>
+            <div class="footer-note">
+                Research, education, XAUUSD signal context, and member support.
+            </div>
+        </footer>
         """,
         unsafe_allow_html=True,
     )

@@ -1161,6 +1161,15 @@ def _category_public_url(category_slug: str, subcategory_slug: str = "") -> str:
     return f"{base_url}/category/{quote(category_slug)}"
 
 
+def _category_route_url(category: dict[str, Any]) -> str:
+    """Build the public URL for a category using its configured route path."""
+    base_url = _admin_public_site_url()
+    route_path = str(category.get("route_path") or "").strip()
+    if route_path:
+        return f"{base_url}/{route_path.strip('/')}"
+    return _category_public_url(str(category.get("slug") or ""))
+
+
 def _slug_fragment(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
 
@@ -1908,6 +1917,10 @@ def _seo_checklist(
 
 def _render_category_manager() -> None:
     st.subheader("Website Categories")
+    st.caption(
+        "Create website menu/category routes with their data source and SEO meta "
+        "description. Use market_signals only for live trading signal pages."
+    )
     try:
         categories = list_categories(public_only=False)
         subcategories = list_content(
@@ -1926,7 +1939,10 @@ def _render_category_manager() -> None:
                 {
                     "title": category["title"],
                     "slug": category["slug"],
-                    "public_link": _category_public_url(str(category["slug"])),
+                    "route_path": category.get("route_path") or "",
+                    "source_type": category.get("source_type") or "content_items",
+                    "seo_meta": category.get("meta_description") or "",
+                    "public_link": _category_route_url(category),
                     "active": category["is_active"],
                     "public": category["is_public"],
                 }
@@ -1941,8 +1957,37 @@ def _render_category_manager() -> None:
     )
     selected = options[st.selectbox("Select category", list(options))]
     with st.form("category_editor"):
+        st.markdown("#### Category Route & Source")
         title = st.text_input("Title", value=selected["title"] if selected else "")
-        slug = st.text_input("Slug", value=selected["slug"] if selected else "")
+        slug = st.text_input("URL Slug", value=selected["slug"] if selected else "")
+        route_path = st.text_input(
+            "Public URL Path",
+            value=(selected.get("route_path") or "") if selected else "",
+            placeholder="/market-analysis/nifty",
+            help="Example: /signals/xauusd, /market-analysis/nifty, /blog/seo-tools",
+        )
+        source_values = [
+            "content_items",
+            "market_signals",
+            "site_settings",
+            "external_api",
+        ]
+        selected_source = (
+            selected.get("source_type") if selected else "content_items"
+        ) or "content_items"
+        source_type = st.selectbox(
+            "Source Type",
+            source_values,
+            index=source_values.index(selected_source)
+            if selected_source in source_values
+            else 0,
+            help="market_signals reads live trading rows; content_items reads CMS/blog/page data.",
+        )
+        meta_description = st.text_area(
+            "SEO Meta Description",
+            value=(selected.get("meta_description") or "") if selected else "",
+            max_chars=320,
+        )
         description = st.text_area(
             "Description",
             value=(selected.get("description") or "") if selected else "",
@@ -1981,6 +2026,9 @@ def _render_category_manager() -> None:
                 display_order=int(order),
                 is_public=is_public,
                 is_active=is_active,
+                route_path=route_path,
+                source_type=source_type,
+                meta_description=meta_description,
             )
         except Exception as exc:
             logger.exception("Category save failed")

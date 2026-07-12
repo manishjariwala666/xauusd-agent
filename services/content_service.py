@@ -58,12 +58,30 @@ def list_categories(public_only: bool = True) -> list[dict[str, Any]]:
         else ""
     )
     with session_scope() as session:
+        columns = _table_columns(session, "content_categories")
+        route_path_expression = (
+            "route_path"
+            if columns.get("route_path")
+            else "NULL::text AS route_path"
+        )
+        source_type_expression = (
+            "source_type"
+            if columns.get("source_type")
+            else "'content_items'::text AS source_type"
+        )
+        meta_description_expression = (
+            "meta_description"
+            if columns.get("meta_description")
+            else "NULL::text AS meta_description"
+        )
         rows = (
             session.execute(
                 text(
                     f"""
                     SELECT id, slug, title, description, icon, display_order,
-                           is_public, is_active
+                           is_public, is_active, {route_path_expression},
+                           {source_type_expression},
+                           {meta_description_expression}
                     FROM public.content_categories
                     {where_clause}
                     ORDER BY display_order, title
@@ -85,62 +103,102 @@ def save_category(
     display_order: int,
     is_public: bool,
     is_active: bool,
+    route_path: str = "",
+    source_type: str = "content_items",
+    meta_description: str = "",
     category_id: int | None = None,
 ) -> None:
     """Create or update one website category."""
     normalized_slug = slug.strip().lower().replace(" ", "-")
     if not title.strip() or not normalized_slug:
         raise ValueError("Category title and slug are required.")
+    normalized_source = (source_type or "content_items").strip().lower()
+    if normalized_source not in {
+        "content_items",
+        "market_signals",
+        "site_settings",
+        "external_api",
+    }:
+        raise ValueError("Unsupported category source type.")
     with session_scope() as session:
+        columns = _table_columns(session, "content_categories")
+        payload = {
+            "title": title.strip(),
+            "slug": normalized_slug,
+            "description": description.strip(),
+            "icon": icon.strip(),
+            "display_order": display_order,
+            "is_public": is_public,
+            "is_active": is_active,
+            "route_path": route_path.strip(),
+            "source_type": normalized_source,
+            "meta_description": meta_description.strip(),
+        }
         if category_id is None:
+            insert_columns = [
+                "title",
+                "slug",
+                "description",
+                "icon",
+                "display_order",
+                "is_public",
+                "is_active",
+            ]
+            insert_values = [
+                ":title",
+                ":slug",
+                ":description",
+                ":icon",
+                ":display_order",
+                ":is_public",
+                ":is_active",
+            ]
+            if columns.get("route_path"):
+                insert_columns.append("route_path")
+                insert_values.append(":route_path")
+            if columns.get("source_type"):
+                insert_columns.append("source_type")
+                insert_values.append(":source_type")
+            if columns.get("meta_description"):
+                insert_columns.append("meta_description")
+                insert_values.append(":meta_description")
             session.execute(
                 text(
-                    """
+                    f"""
                     INSERT INTO public.content_categories (
-                        title, slug, description, icon, display_order,
-                        is_public, is_active
+                        {", ".join(insert_columns)}
                     )
-                    VALUES (
-                        :title, :slug, :description, :icon, :display_order,
-                        :is_public, :is_active
-                    )
+                    VALUES ({", ".join(insert_values)})
                     """
                 ),
-                {
-                    "title": title.strip(),
-                    "slug": normalized_slug,
-                    "description": description.strip(),
-                    "icon": icon.strip(),
-                    "display_order": display_order,
-                    "is_public": is_public,
-                    "is_active": is_active,
-                },
+                payload,
             )
         else:
+            payload["category_id"] = category_id
+            assignments = [
+                "title = :title",
+                "slug = :slug",
+                "description = :description",
+                "icon = :icon",
+                "display_order = :display_order",
+                "is_public = :is_public",
+                "is_active = :is_active",
+            ]
+            if columns.get("route_path"):
+                assignments.append("route_path = :route_path")
+            if columns.get("source_type"):
+                assignments.append("source_type = :source_type")
+            if columns.get("meta_description"):
+                assignments.append("meta_description = :meta_description")
             session.execute(
                 text(
-                    """
+                    f"""
                     UPDATE public.content_categories
-                    SET title = :title,
-                        slug = :slug,
-                        description = :description,
-                        icon = :icon,
-                        display_order = :display_order,
-                        is_public = :is_public,
-                        is_active = :is_active
+                    SET {", ".join(assignments)}
                     WHERE id = :category_id
                     """
                 ),
-                {
-                    "category_id": category_id,
-                    "title": title.strip(),
-                    "slug": normalized_slug,
-                    "description": description.strip(),
-                    "icon": icon.strip(),
-                    "display_order": display_order,
-                    "is_public": is_public,
-                    "is_active": is_active,
-                },
+                payload,
             )
     logger.info("Website category saved: slug={}", normalized_slug)
 

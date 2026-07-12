@@ -163,6 +163,20 @@ def test_admin_signal_manager_has_required_manual_fields() -> None:
         assert label in source
 
 
+def test_admin_category_manager_has_route_source_and_seo_fields() -> None:
+    source = inspect.getsource(dashboard._render_category_manager)
+    link_source = inspect.getsource(dashboard._category_route_url)
+
+    assert "URL Slug" in source
+    assert "Public URL Path" in source
+    assert "Source Type" in source
+    assert "SEO Meta Description" in source
+    assert "market_signals" in source
+    assert "content_items" in source
+    assert "_category_route_url(category)" in source
+    assert "route_path" in link_source
+
+
 def test_user_lead_and_logs_panels_exist() -> None:
     assert hasattr(dashboard, "_render_user_lead_manager")
     assert hasattr(dashboard, "_render_lead_editor")

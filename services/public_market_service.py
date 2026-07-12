@@ -9,7 +9,9 @@ from typing import Any
 
 from loguru import logger
 import requests
+from sqlalchemy import text
 
+from core.database import session_scope
 from services.market_data import MarketDataService
 
 
@@ -83,3 +85,83 @@ def get_top_crypto_gainers(limit: int = 20) -> list[CryptoQuote]:
     with _cache_lock:
         _crypto_cache = (now, quotes)
     return quotes[:limit]
+
+
+def get_live_market_signals(limit: int = 12) -> list[dict[str, Any]]:
+    """Read latest public XAUUSD signals directly from market_signals.
+
+    This intentionally does not use an in-process cache, so the public
+    `/signals` route reflects the latest trading table rows after refresh.
+    """
+    try:
+        with session_scope() as session:
+            columns = _table_columns(session, "market_signals")
+            target_1 = (
+                "target_1"
+                if columns.get("target_1")
+                else "target_price"
+            )
+            target_2 = (
+                "target_2"
+                if columns.get("target_2")
+                else "NULL::numeric"
+            )
+            target_3 = (
+                "target_3"
+                if columns.get("target_3")
+                else "NULL::numeric"
+            )
+            risk_level = (
+                "risk_level"
+                if columns.get("risk_level")
+                else "NULL::text"
+            )
+            timeframe = (
+                "timeframe"
+                if columns.get("timeframe")
+                else "NULL::text"
+            )
+            note = "note" if columns.get("note") else "NULL::text"
+            rows = (
+                session.execute(
+                    text(
+                        f"""
+                        SELECT id, symbol, price, signal_type,
+                               target_price, {target_1} AS target_1,
+                               {target_2} AS target_2,
+                               {target_3} AS target_3,
+                               stop_loss, source, sheet_label,
+                               {risk_level} AS risk_level,
+                               {timeframe} AS timeframe,
+                               {note} AS note,
+                               signal_time, updated_at
+                        FROM public.market_signals
+                        WHERE signal_type IN ('BUY', 'SELL', 'HOLD')
+                        ORDER BY signal_time DESC
+                        LIMIT :limit
+                        """
+                    ),
+                    {"limit": max(1, min(int(limit), 50))},
+                )
+                .mappings()
+                .all()
+            )
+    except Exception:
+        logger.exception("Live market signal loading failed")
+        return []
+    return [dict(row) for row in rows]
+
+
+def _table_columns(session: Any, table_name: str) -> dict[str, bool]:
+    rows = session.execute(
+        text(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = :table_name
+            """
+        ),
+        {"table_name": table_name},
+    ).scalars()
+    return {str(column): True for column in rows}

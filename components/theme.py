@@ -247,6 +247,36 @@ def apply_theme() -> None:
                 font-size: .9rem;
                 line-height: 1.6;
             }
+            .site-footer {
+                margin: 2rem 0 1rem;
+                padding: 1.4rem;
+                border: 1px solid var(--border);
+                border-radius: 18px;
+                background: rgba(13, 20, 36, .78);
+            }
+            .footer-brand {
+                color: var(--text);
+                font-size: 1.05rem;
+                font-weight: 900;
+                margin-bottom: .75rem;
+            }
+            .footer-links {
+                display: flex;
+                flex-wrap: wrap;
+                gap: .65rem 1rem;
+            }
+            .footer-links a {
+                color: var(--muted) !important;
+                font-size: .86rem;
+                font-weight: 700;
+                text-decoration: none !important;
+            }
+            .footer-links a:hover { color: var(--gold) !important; }
+            .footer-note {
+                color: var(--muted);
+                font-size: .84rem;
+                margin-top: .8rem;
+            }
             .social-row {
                 display: flex;
                 flex-wrap: wrap;

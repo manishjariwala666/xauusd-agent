@@ -40,6 +40,7 @@ def test_content_system_migration_is_automatic_and_complete() -> None:
     assert "008_content_system_extensions.sql" in _AUTOMATIC_MIGRATIONS
     assert "010_admin_operations_extensions.sql" in _AUTOMATIC_MIGRATIONS
     assert "012_content_view_analytics.sql" in _AUTOMATIC_MIGRATIONS
+    assert "013_category_source_routing.sql" in _AUTOMATIC_MIGRATIONS
     sql = (ROOT / "migrations/008_content_system_extensions.sql").read_text(
         encoding="utf-8"
     )
@@ -48,6 +49,9 @@ def test_content_system_migration_is_automatic_and_complete() -> None:
     )
     analytics_sql = (
         ROOT / "migrations/012_content_view_analytics.sql"
+    ).read_text(encoding="utf-8")
+    category_sql = (
+        ROOT / "migrations/013_category_source_routing.sql"
     ).read_text(encoding="utf-8")
 
     assert "ADD COLUMN IF NOT EXISTS slug TEXT" in sql
@@ -58,6 +62,9 @@ def test_content_system_migration_is_automatic_and_complete() -> None:
     assert "ADD COLUMN IF NOT EXISTS telegram_id TEXT" in ops_sql
     assert "ADD COLUMN IF NOT EXISTS view_count" in analytics_sql
     assert "ADD COLUMN IF NOT EXISTS last_viewed_at" in analytics_sql
+    assert "ADD COLUMN IF NOT EXISTS route_path TEXT" in category_sql
+    assert "ADD COLUMN IF NOT EXISTS source_type TEXT" in category_sql
+    assert "ADD COLUMN IF NOT EXISTS meta_description TEXT" in category_sql
 
 
 def test_content_seo_select_clause_has_safe_fallbacks() -> None:

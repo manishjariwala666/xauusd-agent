@@ -23,6 +23,7 @@ _AUTOMATIC_MIGRATIONS = (
     "010_admin_operations_extensions.sql",
     "011_command_mode_agent_policy.sql",
     "012_content_view_analytics.sql",
+    "013_category_source_routing.sql",
 )
 
 
