@@ -22,6 +22,7 @@ from core.auth import (
 )
 from pages.landing import render_landing_page
 from pages.login import login_page
+from services.migration_service import apply_pending_migrations
 from user.dashboard import render_user_dashboard
 
 
@@ -41,6 +42,17 @@ def get_supabase() -> Client:
     """Create the server-side Supabase client from protected configuration."""
     settings = get_settings()
     return create_client(settings.supabase_url, settings.supabase_key)
+
+
+@st.cache_resource
+def _apply_safe_startup_migrations() -> bool:
+    """Apply idempotent DB migrations for the website/admin process."""
+    try:
+        apply_pending_migrations()
+    except Exception:
+        LOGGER.exception("Website startup migrations failed.")
+        return False
+    return True
 
 
 def _show_login() -> None:
@@ -85,6 +97,7 @@ def _render_noindex_marker() -> None:
 def run() -> None:
     """Initialize dependencies and route public, user, and admin experiences."""
     try:
+        _apply_safe_startup_migrations()
         supabase = get_supabase()
         settings = get_settings()
         initialize_session()

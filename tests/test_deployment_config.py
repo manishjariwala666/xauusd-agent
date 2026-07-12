@@ -41,6 +41,15 @@ def test_streamlit_public_site_hides_auto_page_navigation() -> None:
     assert config["client"]["showSidebarNavigation"] is False
 
 
+def test_streamlit_app_applies_safe_startup_migrations() -> None:
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+
+    assert "from services.migration_service import apply_pending_migrations" in source
+    assert "def _apply_safe_startup_migrations" in source
+    assert "_apply_safe_startup_migrations()" in source
+    assert "Website startup migrations failed" in source
+
+
 def test_railway_worker_uses_dedicated_process() -> None:
     config = _load("railway.worker.toml")
     deploy = config["deploy"]
