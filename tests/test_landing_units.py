@@ -56,6 +56,17 @@ def test_find_category_matches_slug_or_id():
     assert landing._find_category(categories, "missing") is None
 
 
+def test_fallback_market_analysis_category_matches_public_route() -> None:
+    categories = landing._fallback_categories()
+    market_category = landing._find_category(categories, "analysis-department")
+
+    assert market_category is not None
+    assert market_category["title"] == "Market Analysis"
+    assert market_category["route_path"] == (
+        "/category?category=analysis-department"
+    )
+
+
 def test_matches_content_identifier_uses_seo_slug_or_id():
     item = {"id": 42, "seo_slug": "usa-market-gold", "title": "Gold"}
 

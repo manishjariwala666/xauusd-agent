@@ -249,7 +249,7 @@ def _fallback_categories() -> list[dict[str, Any]]:
             "source_type": "content_items",
         },
         {
-            "slug": "market-analysis",
+            "slug": "analysis-department",
             "title": "Market Analysis",
             "description": "Index, crypto, and XAUUSD structure insights.",
             "icon": "📊",
