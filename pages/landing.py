@@ -991,12 +991,14 @@ def _matches_content_identifier(item: dict[str, Any], identifier: str) -> bool:
     }
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def _all_public_content(limit: int = 80) -> list[dict[str, Any]]:
+    """Load public content once per short window so homepage does not stall."""
     items = _with_deadline(
         lambda: list_content(public_only=True, limit=limit),
         default=[],
         label="Public content loading: all",
-        timeout_seconds=12.0,
+        timeout_seconds=5.0,
     )
     return _dedupe_research_items(items)
 
@@ -1006,10 +1008,13 @@ def _content_items_by_type(
     *,
     limit: int,
 ) -> list[dict[str, Any]]:
-    """Load and merge public content rows across multiple content types."""
-    items: list[dict[str, Any]] = []
-    for content_type in content_types:
-        items.extend(_safe_content(content_type, limit))
+    """Load public content once and filter by type for faster page rendering."""
+    allowed = {content_type.upper() for content_type in content_types}
+    fetch_limit = max(limit, limit * max(len(allowed), 1))
+    items = [
+        item for item in _all_public_content(limit=fetch_limit)
+        if str(item.get("content_type") or "").strip().upper() in allowed
+    ]
     items.sort(
         key=lambda item: item.get("published_at") or item.get("created_at"),
         reverse=True,
@@ -1028,7 +1033,7 @@ def _render_back_home_button() -> None:
 
 
 def _render_research_content() -> None:
-    items = _content_items_by_type(BLOG_CONTENT_TYPES, limit=10)[:6]
+    items = _content_items_by_type(BLOG_CONTENT_TYPES, limit=60)[:6]
     if not items:
         return
     st.markdown(
@@ -1389,5 +1394,5 @@ def _safe_content(content_type: str, limit: int) -> list[dict[str, Any]]:
         ),
         default=[],
         label=f"Public content loading: type={content_type}",
-        timeout_seconds=12.0,
+        timeout_seconds=5.0,
     )
