@@ -208,6 +208,7 @@ def list_content(
     content_type: str | None = None,
     public_only: bool = True,
     limit: int = 50,
+    exact_slug: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return published public content or the complete admin content list."""
     clauses: list[str] = []
@@ -219,7 +220,6 @@ def list_content(
         clauses.extend(
             ("ci.is_public = TRUE", "ci.is_published = TRUE")
         )
-    where_clause = "WHERE " + " AND ".join(clauses) if clauses else ""
     with session_scope() as session:
         schema = _content_schema(session)
         slug_expression = (
@@ -232,6 +232,12 @@ def list_content(
                 else ("cs.slug" if schema["has_content_seo"] else "NULL::text")
             )
         )
+        if exact_slug:
+            clauses.append(
+                f"(CAST(ci.id AS text) = :exact_slug OR {slug_expression} = :exact_slug)"
+            )
+            parameters["exact_slug"] = exact_slug
+        where_clause = "WHERE " + " AND ".join(clauses) if clauses else ""
         subcategory_expression = (
             "ci.subcategory"
             if schema["content_item_columns"].get("subcategory")

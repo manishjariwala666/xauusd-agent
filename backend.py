@@ -158,18 +158,12 @@ def public_content_detail(slug: str) -> dict[str, Any]:
     normalized_slug = str(slug or "").strip()
     if not normalized_slug:
         raise HTTPException(404, "Public content not found.")
-    item = next(
-        (
-            row
-            for row in list_content(public_only=True, limit=100)
-            if normalized_slug
-            in {
-                str(row.get("slug") or "").strip(),
-                str(row.get("id") or "").strip(),
-            }
-        ),
-        None,
+    rows = list_content(
+        public_only=True,
+        limit=1,
+        exact_slug=normalized_slug,
     )
+    item = rows[0] if rows else None
     if item is None:
         raise HTTPException(404, "Public content not found.")
     return {"item": item}

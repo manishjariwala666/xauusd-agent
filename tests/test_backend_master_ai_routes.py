@@ -61,7 +61,11 @@ def test_public_content_endpoints_only_request_public_rows(monkeypatch) -> None:
         "public_only": True,
         "limit": 5,
     }
-    assert calls[1] == {"public_only": True, "limit": 100}
+    assert calls[1] == {
+        "public_only": True,
+        "limit": 1,
+        "exact_slug": "gold",
+    }
 
 
 def test_public_categories_and_signals_endpoints(monkeypatch) -> None:
