@@ -87,6 +87,30 @@ def test_content_listing_selects_seo_metadata_when_table_exists() -> None:
     assert "cs.image_prompt" in select_clause
 
 
+def test_content_schema_introspection_is_cached(monkeypatch) -> None:
+    from services import content_service
+
+    content_service._CONTENT_SCHEMA_CACHE = None
+    calls: list[str] = []
+    monkeypatch.setattr(
+        content_service,
+        "_table_exists",
+        lambda _session, name: calls.append(name) or True,
+    )
+    monkeypatch.setattr(
+        content_service,
+        "_table_columns",
+        lambda _session, name: calls.append(name) or {"id": True},
+    )
+
+    first = content_service._content_schema(object())
+    second = content_service._content_schema(object())
+
+    assert first is second
+    assert calls == ["content_seo", "content_items", "content_seo"]
+    content_service._CONTENT_SCHEMA_CACHE = None
+
+
 def test_content_service_supports_view_analytics_safely() -> None:
     import inspect
 

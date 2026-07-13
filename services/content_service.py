@@ -49,6 +49,8 @@ CONTENT_STATUS_DRAFT = "draft"
 CONTENT_STATUS_PUBLISHED = "published"
 CONTENT_STATUSES = (CONTENT_STATUS_DRAFT, CONTENT_STATUS_PUBLISHED)
 
+_CONTENT_SCHEMA_CACHE: dict[str, Any] | None = None
+
 
 def list_categories(public_only: bool = True) -> list[dict[str, Any]]:
     """Return ordered active categories for public or admin rendering."""
@@ -558,11 +560,15 @@ def _json_payload(value: Any, *, default: Any) -> Any:
 
 def _content_schema(session: Any) -> dict[str, Any]:
     """Inspect content tables so old/new database states both work."""
-    return {
+    global _CONTENT_SCHEMA_CACHE
+    if _CONTENT_SCHEMA_CACHE is not None:
+        return _CONTENT_SCHEMA_CACHE
+    _CONTENT_SCHEMA_CACHE = {
         "has_content_seo": _table_exists(session, "content_seo"),
         "content_item_columns": _table_columns(session, "content_items"),
         "content_seo_columns": _table_columns(session, "content_seo"),
     }
+    return _CONTENT_SCHEMA_CACHE
 
 
 def _table_exists(session: Any, table_name: str) -> bool:

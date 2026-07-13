@@ -37,6 +37,12 @@ async def lifespan(_: FastAPI):
     except Exception:
         logger.exception("Startup migrations failed; API will remain online.")
     try:
+        # Warm the schema cache once so public detail requests stay within the
+        # frontend's strict two-second network budget.
+        list_content(public_only=True, limit=1)
+    except Exception:
+        logger.exception("Public content cache warmup failed; API will remain online.")
+    try:
         _configure_telegram_webhook()
     except Exception:
         logger.exception("Telegram webhook startup configuration failed")
