@@ -23,13 +23,24 @@ def apply_theme() -> None:
                 --blue: #67a6ff;
             }
             html,
-            body,
+            body {
+                height: auto !important;
+                min-height: 100% !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+            }
             .stApp,
             [data-testid="stAppViewContainer"],
             [data-testid="stMain"] {
-                overflow-y: auto !important;
+                height: auto !important;
+                min-height: 100vh !important;
+                max-height: none !important;
+                overflow-y: visible !important;
                 overflow-x: hidden !important;
-                min-height: 100%;
+            }
+            .stApp,
+            [data-testid="stAppViewContainer"] {
+                position: relative !important;
             }
             #MainMenu,
             [data-testid="stToolbar"],

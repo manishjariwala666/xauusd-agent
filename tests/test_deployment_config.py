@@ -45,7 +45,10 @@ def test_global_theme_allows_vertical_scroll_and_custom_footer() -> None:
     source = (ROOT / "components" / "theme.py").read_text(encoding="utf-8")
 
     assert "overflow-y: auto !important" in source
+    assert "overflow-y: visible !important" in source
     assert "overflow-x: hidden !important" in source
+    assert "height: auto !important" in source
+    assert "min-height: 100vh !important" in source
     assert "footer," not in source
     assert ".site-footer" in source
     assert "[data-testid=\"stSidebar\"]" in source
