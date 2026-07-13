@@ -69,12 +69,38 @@ def test_admin_has_direct_browser_routes_for_sections() -> None:
     sidebar_source = inspect.getsource(dashboard._render_admin_light_sidebar)
     links_source = inspect.getsource(dashboard._render_admin_deep_links)
 
-    assert '"/admin/blog-studio"' in inspect.getsource(dashboard)
-    assert '"/admin/content-manager"' in inspect.getsource(dashboard)
+    assert '"/admin?page=blog-studio"' in inspect.getsource(dashboard)
+    assert '"/admin?page=content-manager"' in inspect.getsource(dashboard)
     assert "_admin_page_from_url()" in dashboard_source
     assert "_render_admin_deep_links(selected_page)" in dashboard_source
     assert "admin-route-link" in sidebar_source
     assert "admin-sub-link" in links_source
+
+
+def test_admin_routes_use_streamlit_safe_query_urls() -> None:
+    assert len(dashboard.ADMIN_PAGE_PATHS) == 13
+    assert all(
+        path.startswith("/admin?page=")
+        for path in dashboard.ADMIN_PAGE_PATHS.values()
+    )
+    assert all(
+        path.count("/") == 1
+        for path in dashboard.ADMIN_PAGE_PATHS.values()
+    )
+
+
+def test_admin_query_route_resolves_every_section(monkeypatch) -> None:
+    query_params = {"page": ""}
+    monkeypatch.setattr(dashboard.st, "query_params", query_params)
+
+    for route_key, expected_page in dashboard.ADMIN_ROUTE_MAP.items():
+        if route_key == "admin":
+            continue
+        query_params["page"] = route_key
+        assert dashboard._admin_page_from_url() == expected_page
+
+    query_params["page"] = "not-a-real-admin-page"
+    assert dashboard._admin_page_from_url() == "Command Center"
 
 
 def test_admin_ai_agents_has_numbered_on_off_controls() -> None:

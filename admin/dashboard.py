@@ -75,19 +75,23 @@ ADMIN_ROUTE_MAP = {
 }
 
 ADMIN_PAGE_PATHS = {
-    "Command Center": "/admin/command-center",
-    "Blog Studio": "/admin/blog-studio",
-    "Overview": "/admin/overview",
-    "Payments": "/admin/payments",
-    "Content": "/admin/content-manager",
-    "Categories": "/admin/categories",
-    "Profit Proof": "/admin/profit-proof",
-    "Channel Links": "/admin/channel-links",
-    "Signals": "/admin/signals",
-    "Users / Leads": "/admin/users",
-    "Logs": "/admin/logs",
-    "Pipeline": "/admin/pipeline",
-    "AI Agents": "/admin/agents",
+    # Streamlit serves its websocket endpoint relative to the application root.
+    # Nested browser paths such as `/admin/blog-studio` can therefore load the
+    # HTML shell but never connect, leaving a blank page in production. Query
+    # routes remain unique/shareable while keeping Streamlit on `/admin`.
+    "Command Center": "/admin?page=command-center",
+    "Blog Studio": "/admin?page=blog-studio",
+    "Overview": "/admin?page=overview",
+    "Payments": "/admin?page=payments",
+    "Content": "/admin?page=content-manager",
+    "Categories": "/admin?page=categories",
+    "Profit Proof": "/admin?page=profit-proof",
+    "Channel Links": "/admin?page=channel-links",
+    "Signals": "/admin?page=signals",
+    "Users / Leads": "/admin?page=users",
+    "Logs": "/admin?page=logs",
+    "Pipeline": "/admin?page=pipeline",
+    "AI Agents": "/admin?page=agents",
 }
 
 
@@ -140,7 +144,17 @@ def render_admin_dashboard(supabase: Any) -> None:
 
 
 def _admin_page_from_url() -> str:
-    """Resolve a direct `/admin/...` browser path to an admin section."""
+    """Resolve the safe `/admin?page=...` route to an admin section."""
+    try:
+        query_page = str(st.query_params.get("page", "") or "").strip().lower()
+    except Exception:
+        query_page = ""
+    if query_page:
+        return ADMIN_ROUTE_MAP.get(query_page, "Command Center")
+
+    # Keep path parsing for local development and backward compatibility. The
+    # UI never generates nested production paths because those paths can leave
+    # the Streamlit websocket disconnected behind a custom domain.
     try:
         current_url = getattr(st.context, "url", "") or ""
     except Exception:
@@ -223,21 +237,21 @@ def _render_admin_light_sidebar(default_page: str = "Command Center") -> str:
 def _render_admin_deep_links(selected_page: str) -> None:
     """Expose stable browser URLs for key admin sections."""
     links = [
-        ("Command Center", "/admin/command-center"),
-        ("Blog Studio", "/admin/blog-studio"),
-        ("Overview", "/admin/overview"),
-        ("Payments", "/admin/payments"),
-        ("Content Manager", "/admin/content-manager"),
-        ("Categories", "/admin/categories"),
-        ("Signals", "/admin/signals"),
-        ("Users", "/admin/users"),
-        ("Logs", "/admin/logs"),
-        ("Agents", "/admin/agents"),
+        ("Command Center", "Command Center"),
+        ("Blog Studio", "Blog Studio"),
+        ("Overview", "Overview"),
+        ("Payments", "Payments"),
+        ("Content Manager", "Content"),
+        ("Categories", "Categories"),
+        ("Signals", "Signals"),
+        ("Users", "Users / Leads"),
+        ("Logs", "Logs"),
+        ("Agents", "AI Agents"),
     ]
     html_links = "".join(
-        f'<a class="admin-sub-link {"active" if ADMIN_ROUTE_MAP.get(url.rsplit("/", 1)[-1]) == selected_page else ""}" '
-        f'href="{url}" target="_self">{label}</a>'
-        for label, url in links
+        f'<a class="admin-sub-link {"active" if page_name == selected_page else ""}" '
+        f'href="{ADMIN_PAGE_PATHS[page_name]}" target="_self">{label}</a>'
+        for label, page_name in links
     )
     st.markdown(
         f'<nav class="admin-sub-links">{html_links}</nav>',
