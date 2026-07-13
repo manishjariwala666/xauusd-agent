@@ -11,6 +11,7 @@ import jwt
 import pytest
 
 from services import admin_auth_api, admin_auth_service
+from admin_staging_backend import app as staging_app
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -215,3 +216,18 @@ def test_existing_streamlit_authentication_file_is_not_replaced() -> None:
     assert "def authenticate_credentials" in streamlit_auth
     assert "bcrypt.checkpw" in streamlit_auth
     assert "st.session_state" in streamlit_auth
+
+
+def test_staging_admin_service_fails_closed_and_has_no_public_routes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ADMIN_STAGING_ONLY", raising=False)
+    client = TestClient(staging_app, raise_server_exceptions=False)
+    assert client.get("/health").status_code == 503
+    assert client.get("/content").status_code == 503
+
+    monkeypatch.setenv("ADMIN_STAGING_ONLY", "true")
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.headers["x-robots-tag"] == "noindex, nofollow, noarchive"
+    assert client.get("/content").status_code == 404
