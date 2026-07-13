@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 from services.admin_auth_api import router as admin_auth_router
+from services.admin_content_api import router as admin_content_router
 
 
 def _staging_enabled() -> bool:
@@ -27,6 +28,7 @@ app = FastAPI(
     openapi_url=None,
 )
 app.include_router(admin_auth_router)
+app.include_router(admin_content_router)
 
 
 @app.middleware("http")
