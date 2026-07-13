@@ -7,6 +7,8 @@ import hmac
 import json
 import os
 from contextlib import asynccontextmanager
+from threading import RLock
+from time import monotonic
 import traceback
 from typing import Any
 
@@ -29,6 +31,36 @@ from services.telegram_service import TelegramService
 from services.url_service import public_api_base_url
 
 
+PUBLIC_CONTENT_CACHE_TTL_SECONDS = 60
+_public_content_cache: list[dict[str, Any]] = []
+_public_content_cache_at = 0.0
+_public_content_cache_lock = RLock()
+
+
+def _public_content_snapshot(*, force: bool = False) -> list[dict[str, Any]]:
+    """Return a short-lived public snapshot without caching live signals."""
+    global _public_content_cache, _public_content_cache_at
+    now = monotonic()
+    if (
+        not force
+        and _public_content_cache
+        and now - _public_content_cache_at < PUBLIC_CONTENT_CACHE_TTL_SECONDS
+    ):
+        return list(_public_content_cache)
+    with _public_content_cache_lock:
+        now = monotonic()
+        if (
+            not force
+            and _public_content_cache
+            and now - _public_content_cache_at < PUBLIC_CONTENT_CACHE_TTL_SECONDS
+        ):
+            return list(_public_content_cache)
+        rows = list_content(public_only=True, limit=100)
+        _public_content_cache = rows
+        _public_content_cache_at = now
+        return list(rows)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Start the API even when optional startup tasks are temporarily degraded."""
@@ -39,7 +71,7 @@ async def lifespan(_: FastAPI):
     try:
         # Warm the schema cache once so public detail requests stay within the
         # frontend's strict two-second network budget.
-        list_content(public_only=True, limit=1)
+        _public_content_snapshot(force=True)
     except Exception:
         logger.exception("Public content cache warmup failed; API will remain online.")
     try:
@@ -149,13 +181,14 @@ def public_content(
     normalized_type = str(content_type or "").strip().upper() or None
     if normalized_type and normalized_type not in PUBLIC_CONTENT_TYPES:
         raise HTTPException(400, "Unsupported public content type.")
-    return {
-        "items": list_content(
-            content_type=normalized_type,
-            public_only=True,
-            limit=limit,
-        )
-    }
+    items = _public_content_snapshot()
+    if normalized_type:
+        items = [
+            item
+            for item in items
+            if str(item.get("content_type") or "").upper() == normalized_type
+        ]
+    return {"items": items[:limit]}
 
 
 @app.get("/public/content/{slug}")
@@ -164,12 +197,25 @@ def public_content_detail(slug: str) -> dict[str, Any]:
     normalized_slug = str(slug or "").strip()
     if not normalized_slug:
         raise HTTPException(404, "Public content not found.")
-    rows = list_content(
-        public_only=True,
-        limit=1,
-        exact_slug=normalized_slug,
+    item = next(
+        (
+            row
+            for row in _public_content_snapshot()
+            if normalized_slug
+            in {
+                str(row.get("slug") or "").strip(),
+                str(row.get("id") or "").strip(),
+            }
+        ),
+        None,
     )
-    item = rows[0] if rows else None
+    if item is None:
+        rows = list_content(
+            public_only=True,
+            limit=1,
+            exact_slug=normalized_slug,
+        )
+        item = rows[0] if rows else None
     if item is None:
         raise HTTPException(404, "Public content not found.")
     return {"item": item}

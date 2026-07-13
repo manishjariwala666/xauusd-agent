@@ -47,6 +47,8 @@ def test_public_content_endpoints_only_request_public_rows(monkeypatch) -> None:
         return [{"id": 1, "slug": "gold", "content_type": "BLOG"}]
 
     monkeypatch.setattr(backend, "list_content", fake_list_content)
+    monkeypatch.setattr(backend, "_public_content_cache", [])
+    monkeypatch.setattr(backend, "_public_content_cache_at", 0.0)
     client = TestClient(app)
 
     listing = client.get("/public/content?content_type=BLOG&limit=5")
@@ -56,16 +58,36 @@ def test_public_content_endpoints_only_request_public_rows(monkeypatch) -> None:
     assert detail.status_code == 200
     assert listing.json()["items"][0]["slug"] == "gold"
     assert detail.json()["item"]["slug"] == "gold"
-    assert calls[0] == {
-        "content_type": "BLOG",
-        "public_only": True,
-        "limit": 5,
-    }
-    assert calls[1] == {
-        "public_only": True,
-        "limit": 1,
-        "exact_slug": "gold",
-    }
+    assert calls == [{"public_only": True, "limit": 100}]
+
+
+def test_public_content_cache_has_short_ttl_and_does_not_cache_signals(
+    monkeypatch,
+) -> None:
+    content_calls: list[int] = []
+    signal_calls: list[int] = []
+    monkeypatch.setattr(backend, "_public_content_cache", [])
+    monkeypatch.setattr(backend, "_public_content_cache_at", 0.0)
+    monkeypatch.setattr(
+        backend,
+        "list_content",
+        lambda **_kwargs: content_calls.append(1) or [{"slug": "gold"}],
+    )
+    monkeypatch.setattr(
+        backend,
+        "get_live_market_signals",
+        lambda limit=12: signal_calls.append(limit) or [],
+    )
+    client = TestClient(app)
+
+    assert client.get("/public/content").status_code == 200
+    assert client.get("/public/content").status_code == 200
+    assert client.get("/public/signals?limit=2").status_code == 200
+    assert client.get("/public/signals?limit=2").status_code == 200
+
+    assert content_calls == [1]
+    assert signal_calls == [2, 2]
+    assert backend.PUBLIC_CONTENT_CACHE_TTL_SECONDS == 60
 
 
 def test_public_categories_and_signals_endpoints(monkeypatch) -> None:
