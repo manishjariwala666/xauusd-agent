@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import datetime
@@ -32,6 +33,7 @@ from services.public_market_service import (
     get_top_crypto_gainers,
     get_xauusd_snapshot,
 )
+from services.url_service import canonical_url
 
 
 def render_landing_page(
@@ -55,8 +57,14 @@ def render_landing_page(
         return
 
     selected_post = _query_param_value("post")
+    selected_page = _query_param_value("page")
     selected_announcement = _query_param_value("announcement")
     selected_category = _query_param_value("category")
+
+    if selected_page:
+        _render_content_route(selected_page, allowed_types=("PAGE",))
+        _render_public_page_footer()
+        return
 
     if selected_post:
         _render_content_route(selected_post)
@@ -113,7 +121,7 @@ def _render_nav(brand_name: str, on_sign_in: Callable[[], None]) -> None:
                     <a href="/signals" target="_self">Signals</a>
                     <a href="/market-analysis" target="_self">Market Analysis</a>
                     <a href="/announcements" target="_self">Announcements</a>
-                    <a href="/page/privacy-policy" target="_self">Privacy</a>
+                    <a href="/?page=privacy-policy" target="_self">Privacy</a>
                 </div>
             </div>
             """,
@@ -525,13 +533,20 @@ def _dedupe_research_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _render_content_detail(item: dict[str, Any]) -> None:
     record_content_view(int(item.get("id") or 0))
     title = str(item.get("title") or "Research Article")
+    _render_content_seo_meta(item, title)
     st.markdown(
         f'<h1 class="section-title">{html.escape(title)}</h1>',
         unsafe_allow_html=True,
     )
 
     if item.get("image_url"):
-        st.image(str(item["image_url"]), use_container_width=True)
+        image_url = html.escape(str(item["image_url"]))
+        image_alt = html.escape(_content_image_alt(item, title))
+        st.markdown(
+            f'<img class="content-image" src="{image_url}" alt="{image_alt}" '
+            'loading="eager">',
+            unsafe_allow_html=True,
+        )
     else:
         _fallback_blog_banner(title)
 
@@ -554,7 +569,7 @@ def _render_content_detail(item: dict[str, Any]) -> None:
     if body:
         st.markdown(body)
     else:
-        st.warning("Article body is empty.")
+        st.markdown(_fallback_article_body(title, excerpt), unsafe_allow_html=True)
 
     _render_related_posts(item)
 
@@ -566,6 +581,76 @@ def _render_content_detail(item: dict[str, Any]) -> None:
         except Exception:
             st.experimental_set_query_params()
             st.experimental_rerun()
+
+
+def _render_content_seo_meta(item: dict[str, Any], title: str) -> None:
+    """Render crawlable canonical, Open Graph, and article schema metadata."""
+    absolute_url = canonical_url(_content_url(item))
+    description = str(
+        item.get("meta_description")
+        or item.get("excerpt")
+        or "Public XAUUSD market research and risk-aware trading education."
+    ).strip()[:320]
+    meta_title = str(item.get("meta_title") or title).strip()[:255]
+    image_url = str(item.get("image_url") or "").strip()
+    image_alt = _content_image_alt(item, title)
+    schema = item.get("schema_jsonld") if isinstance(item.get("schema_jsonld"), dict) else {}
+    if not schema:
+        schema = {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "headline": meta_title,
+            "description": description,
+            "url": absolute_url,
+        }
+    schema.setdefault("@context", "https://schema.org")
+    schema.setdefault("@type", "Article")
+    schema.setdefault("headline", meta_title)
+    schema.setdefault("description", description)
+    schema.setdefault("url", absolute_url)
+    if image_url:
+        schema.setdefault("image", image_url)
+    st.markdown(
+        (
+            f'<link rel="canonical" href="{html.escape(absolute_url)}">'
+            f'<meta name="description" content="{html.escape(description)}">'
+            f'<meta property="og:type" content="article">'
+            f'<meta property="og:url" content="{html.escape(absolute_url)}">'
+            f'<meta property="og:title" content="{html.escape(meta_title)}">'
+            f'<meta property="og:description" content="{html.escape(description)}">'
+            f'<meta property="og:image" content="{html.escape(image_url)}">'
+            f'<meta property="og:image:alt" content="{html.escape(image_alt)}">'
+            '<script type="application/ld+json">'
+            f'{html.escape(json.dumps(schema, ensure_ascii=False))}'
+            '</script>'
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _content_image_alt(item: dict[str, Any], title: str) -> str:
+    """Return stable descriptive alt text for article images."""
+    open_graph = item.get("open_graph") if isinstance(item.get("open_graph"), dict) else {}
+    return str(
+        open_graph.get("og:image:alt")
+        or open_graph.get("featured_image_alt")
+        or f"Professional market research image for {title}"
+    ).strip()
+
+
+def _fallback_article_body(title: str, excerpt: str) -> str:
+    """Avoid blank public articles if a legacy record has no body."""
+    safe_title = html.escape(title or "Market Research")
+    safe_excerpt = html.escape(
+        excerpt or "This public market update is being prepared for readers."
+    )
+    return (
+        '<article class="article-fallback">'
+        f"<p>{safe_excerpt}</p>"
+        f"<p>{safe_title} is available as a public market-research record. "
+        "Full editorial content is being refreshed by the publishing system.</p>"
+        "</article>"
+    )
 
 
 def _render_xauusd_signal_section(
@@ -911,7 +996,7 @@ def _all_public_content(limit: int = 80) -> list[dict[str, Any]]:
         lambda: list_content(public_only=True, limit=limit),
         default=[],
         label="Public content loading: all",
-        timeout_seconds=2.5,
+        timeout_seconds=12.0,
     )
     return _dedupe_research_items(items)
 
@@ -1240,7 +1325,7 @@ def _render_site_footer() -> None:
     settings = get_settings()
     links = [
         ("Home", "/"),
-        ("About", "/about"),
+        ("About", "/?page=about"),
         ("Blog", "/blog"),
         ("Signals", "/signals"),
         ("XAUUSD", "/signals/xauusd"),
@@ -1248,10 +1333,10 @@ def _render_site_footer() -> None:
         ("Nifty & Options", "/market-analysis/nifty"),
         ("Crypto Volatility", "/market-analysis/crypto"),
         ("SEO & Automation", "/blog/seo-tools"),
-        ("Contact", "/contact"),
-        ("Privacy Policy", "/privacy-policy"),
-        ("Terms", "/terms"),
-        ("Risk Disclaimer", "/risk-disclaimer"),
+        ("Contact", "/?page=contact"),
+        ("Privacy Policy", "/?page=privacy-policy"),
+        ("Terms", "/?page=terms-and-conditions"),
+        ("Risk Disclaimer", "/?page=risk-disclaimer"),
     ]
     link_html = "".join(
         f'<a href="{html.escape(url)}" target="_self">{html.escape(label)}</a>'
@@ -1304,5 +1389,5 @@ def _safe_content(content_type: str, limit: int) -> list[dict[str, Any]]:
         ),
         default=[],
         label=f"Public content loading: type={content_type}",
-        timeout_seconds=2.5,
+        timeout_seconds=12.0,
     )

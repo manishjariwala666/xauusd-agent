@@ -88,25 +88,49 @@ class AIProvider:
         output_dir: str | Path,
         filename: str = "generated.png",
     ) -> str:
-        """Generate an image with Gemini image generation."""
-        import base64
-        import os
-        from pathlib import Path
-        from google import genai
-
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY is required for image generation.")
-
-        model = os.environ.get("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image")
-
+        """Generate a production image using an official provider API."""
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         file_path = output_path / filename
 
-        client = genai.Client(api_key=api_key)
+        if self.settings.openai_api_key:
+            return self._openai_image(prompt, file_path)
+        return self._gemini_image(prompt, file_path)
+
+    def _openai_image(self, prompt: str, file_path: Path) -> str:
+        """Generate an image with the official OpenAI Images API."""
+        response = requests.post(
+            "https://api.openai.com/v1/images/generations",
+            headers={
+                "Authorization": f"Bearer {self.settings.openai_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self.settings.ai_image_model or "gpt-image-1",
+                "prompt": prompt,
+                "size": "1536x1024",
+                "n": 1,
+                "response_format": "b64_json",
+            },
+            timeout=90,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        data = (payload.get("data") or [{}])[0].get("b64_json")
+        if not data:
+            raise RuntimeError("OpenAI image API returned no image data.")
+        file_path.write_bytes(base64.b64decode(data))
+        return str(file_path)
+
+    def _gemini_image(self, prompt: str, file_path: Path) -> str:
+        """Generate an image with the configured Gemini image model."""
+        if not self.settings.gemini_api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY or GEMINI_API_KEY is required for image generation."
+            )
+        client = genai.Client(api_key=self.settings.gemini_api_key)
         interaction = client.interactions.create(
-            model=model,
+            model=self.settings.ai_image_model,
             input=prompt,
         )
 

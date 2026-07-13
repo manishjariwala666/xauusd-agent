@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
+import time
 from typing import Any
 from urllib.parse import quote
 
@@ -91,6 +92,12 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
                 "WHERE slug = 'ai-blog' LIMIT 1"
             )
         ).scalar_one_or_none()
+    public_url = public_content_url(
+        {
+            "content_type": "AI_BLOG",
+            "slug": slug,
+        }
+    )
     content_id = save_content(
         content_type="AI_BLOG",
         title=str(generated["title"])[:250],
@@ -113,6 +120,7 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         schema_jsonld=generated["schema_jsonld"],
         open_graph={
             "og:type": "article",
+            "og:url": public_url,
             "og:title": str(generated["meta_title"]),
             "og:description": str(generated["meta_description"]),
         },
@@ -124,7 +132,8 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         image_prompt=str(generated.get("image_prompt") or "")[:2000],
     )
     image_result = "Image generation skipped."
-    if bool(payload.get("include_image", False)):
+    include_image = bool(payload.get("include_image", publish))
+    if include_image:
         try:
             image_result = run_image_agent(
                 {
@@ -141,12 +150,6 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
                 exc.__class__.__name__,
             )
             image_result = "Image generation skipped; blog content saved."
-    public_url = public_content_url(
-        {
-            "content_type": "AI_BLOG",
-            "slug": slug,
-        }
-    )
     return (
         f"SEO blog #{content_id} saved as "
         f"{'published' if publish else 'draft'}. "
@@ -437,14 +440,35 @@ def run_image_agent(payload: dict[str, Any]) -> str:
     if not prompt:
         return "Image generation skipped: no prompt was available."
     workdir = Path("/tmp/ai-market-analytics/images")
-    try:
-        source = AIProvider().generate_image(prompt=prompt, output_dir=workdir)
-    except Exception as exc:
-        logger.warning(
-            "Image provider failed; skipping optional image generation: {}",
-            exc.__class__.__name__,
+    workdir.mkdir(parents=True, exist_ok=True)
+    professional_prompt = _professional_image_prompt(prompt)
+    source: Path | None = None
+    provider = AIProvider()
+    settings = get_settings()
+    for attempt in range(1, 4):
+        try:
+            source = Path(
+                provider.generate_image(
+                    prompt=professional_prompt,
+                    output_dir=workdir,
+                    filename=f"content-{content_id or 'manual'}-{attempt}.png",
+                )
+            )
+            break
+        except Exception as exc:
+            logger.warning(
+                "Image provider attempt {} failed: {}",
+                attempt,
+                exc.__class__.__name__,
+            )
+            if attempt < 3:
+                time.sleep(attempt)
+    used_fallback = source is None
+    if source is None:
+        source = _create_professional_fallback_image(
+            professional_prompt,
+            workdir / f"content-{content_id or 'manual'}-fallback.png",
         )
-        return "Image generation skipped: provider unavailable."
     image = Image.open(source).convert("RGB")
     banner = ImageOps.fit(image, (1536, 1024), method=Image.Resampling.LANCZOS)
     draw = ImageDraw.Draw(banner)
@@ -459,21 +483,41 @@ def run_image_agent(payload: dict[str, Any]) -> str:
     ImageOps.fit(
         banner, (480, 320), method=Image.Resampling.LANCZOS
     ).save(thumbnail, "WEBP", quality=78, method=6)
-    settings = get_settings()
-    supabase = create_client(settings.supabase_url, settings.supabase_key)
-    object_prefix = f"ai-content/{source.stem}"
-    urls = []
-    for local, suffix in ((optimized, "banner.webp"), (thumbnail, "thumb.webp")):
-        path = f"{object_prefix}/{suffix}"
-        supabase.storage.from_("profit-screenshots").upload(
-            path,
-            local.read_bytes(),
-            {"content-type": "image/webp", "upsert": "true"},
+    try:
+        supabase = create_client(settings.supabase_url, settings.supabase_key)
+        object_prefix = f"ai-content/{source.stem}"
+        urls = []
+        for local, suffix in ((optimized, "banner.webp"), (thumbnail, "thumb.webp")):
+            path = f"{object_prefix}/{suffix}"
+            supabase.storage.from_("profit-screenshots").upload(
+                path,
+                local.read_bytes(),
+                {"content-type": "image/webp", "upsert": "true"},
+            )
+            urls.append(
+                supabase.storage.from_("profit-screenshots").get_public_url(path)
+            )
+    except Exception as exc:
+        logger.warning(
+            "Image storage upload skipped after generation: {}",
+            exc.__class__.__name__,
         )
-        urls.append(
-            supabase.storage.from_("profit-screenshots").get_public_url(path)
-        )
+        return "Image generation skipped: image storage is unavailable."
     if content_id:
+        image_alt = _image_alt_text(content_id, prompt)
+        model_name = (
+            "professional-fallback"
+            if used_fallback
+            else settings.ai_image_model
+        )
+        image_meta = {
+            "og:image": urls[0],
+            "og:image:alt": image_alt,
+            "featured_image_url": urls[0],
+            "featured_image_alt": image_alt,
+            "image_model": model_name,
+            "image_generated_at": datetime.now(timezone.utc).isoformat(),
+        }
         with session_scope() as session:
             session.execute(
                 text(
@@ -482,7 +526,72 @@ def run_image_agent(payload: dict[str, Any]) -> str:
                 ),
                 {"url": urls[0], "id": int(content_id)},
             )
+            session.execute(
+                text(
+                    """
+                    UPDATE public.content_seo
+                    SET open_graph = COALESCE(open_graph, '{}'::jsonb)
+                                     || CAST(:image_meta AS jsonb),
+                        twitter_card = COALESCE(twitter_card, '{}'::jsonb)
+                                       || CAST(:twitter_meta AS jsonb),
+                        updated_at = NOW()
+                    WHERE content_id = :id
+                    """
+                ),
+                {
+                    "image_meta": json.dumps(image_meta),
+                    "twitter_meta": json.dumps(
+                        {
+                            "twitter:image": urls[0],
+                            "twitter:image:alt": image_alt,
+                        }
+                    ),
+                    "id": int(content_id),
+                },
+            )
+    if used_fallback:
+        return f"Fallback image uploaded after provider failure: {len(urls)} assets."
     return f"Image assets generated and uploaded: {len(urls)}."
+
+
+def _professional_image_prompt(prompt: str) -> str:
+    """Constrain generated blog images to safe, professional finance visuals."""
+    return (
+        f"{prompt}\n\n"
+        "Create a professional 16:9 editorial finance/trading image. "
+        "Use abstract gold-market, macro, and risk-management visual motifs. "
+        "Do not include logos, broker names, fake chart numbers, price labels, "
+        "or readable marketing text. Minimal or no text inside the image."
+    )
+
+
+def _create_professional_fallback_image(prompt: str, path: Path) -> Path:
+    """Create a crawl-safe fallback image when provider generation fails."""
+    image = Image.new("RGB", (1536, 1024), (8, 13, 26))
+    draw = ImageDraw.Draw(image)
+    for y in range(1024):
+        shade = int(18 + (y / 1024) * 30)
+        draw.line((0, y, 1536, y), fill=(shade, shade + 6, shade + 18))
+    draw.ellipse((1020, -140, 1710, 520), fill=(70, 45, 14))
+    draw.rectangle((90, 690, 1440, 780), fill=(244, 193, 93))
+    draw.rectangle((90, 790, 1120, 835), fill=(103, 166, 255))
+    draw.text(
+        (96, 900),
+        "AI Market Analytics Pro",
+        fill=(238, 244, 255),
+        font=ImageFont.load_default(),
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(path, "PNG")
+    return path
+
+
+def _image_alt_text(content_id: object, prompt: str) -> str:
+    """Build descriptive alt text without exposing internal prompts."""
+    return (
+        "Professional financial market illustration for an AI Market "
+        f"Analytics Pro article about {str(prompt or 'XAUUSD market analysis')[:120]}."
+    )
 
 
 def _master_optional_agent(agent_key: str, handler):

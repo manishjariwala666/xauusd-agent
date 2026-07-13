@@ -77,7 +77,25 @@ def test_content_card_uses_single_html_block_to_avoid_literal_markup() -> None:
 
     assert "card_html =" in source
     assert "st.markdown(card_html, unsafe_allow_html=True)" in source
+    assert 'href="{html.escape(url)}"' in source
+    assert '<a class="content-card clickable-card"' in source
     assert '"""' not in source
+
+
+def test_blog_detail_renders_canonical_schema_and_fallback_body() -> None:
+    import inspect
+
+    detail_source = inspect.getsource(landing._render_content_detail)
+    seo_source = inspect.getsource(landing._render_content_seo_meta)
+
+    assert "_render_content_seo_meta(item, title)" in detail_source
+    assert "_fallback_article_body(title, excerpt)" in detail_source
+    assert 'alt="{image_alt}"' in detail_source
+    assert 'rel="canonical"' in seo_source
+    assert 'property="og:image"' in seo_source
+    assert 'property="og:image:alt"' in seo_source
+    assert 'type="application/ld+json"' in seo_source
+    assert '"@type": "Article"' in seo_source
 
 
 def test_public_footer_contains_professional_legal_links() -> None:
@@ -96,6 +114,8 @@ def test_public_footer_contains_professional_legal_links() -> None:
     assert "Telegram" in source
     assert "© {current_year}" in source
     assert 'role="contentinfo"' in source
+    assert "/?page=privacy-policy" in source
+    assert "/?page=terms-and-conditions" in source
     assert "_safe_site_setting" not in source
 
 
@@ -124,8 +144,8 @@ def test_public_content_reads_are_deadline_safe() -> None:
 
     assert "_with_deadline" in all_source
     assert "_with_deadline" in type_source
-    assert "timeout_seconds=2.5" in all_source
-    assert "timeout_seconds=2.5" in type_source
+    assert "timeout_seconds=12.0" in all_source
+    assert "timeout_seconds=12.0" in type_source
 
 
 def test_post_gallery_split_orders_by_view_count():
