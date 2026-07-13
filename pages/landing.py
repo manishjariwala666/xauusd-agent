@@ -94,10 +94,7 @@ def render_landing_page(
     if _site_feature_enabled("feature_public_blog", default=True):
         _render_research_content()
         _render_homepage_post_gallery()
-    try:
-        profit_proof_url = get_site_setting("profit_proof_telegram_url")
-    except Exception:
-        profit_proof_url = ""
+    profit_proof_url = _safe_site_setting("profit_proof_telegram_url")
     _render_profit_proof(
         profit_proof_url or settings.profit_proof_telegram_url
     )
@@ -179,19 +176,23 @@ def _render_hero(on_sign_in: Callable[[], None]) -> None:
         st.info(announcement)
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def _safe_categories() -> list[dict[str, Any]]:
     return _with_deadline(
         lambda: list_categories(public_only=True),
         default=_fallback_categories(),
         label="Public category loading",
+        timeout_seconds=0.8,
     )
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def _safe_site_setting(key: str) -> str:
     return _with_deadline(
         lambda: get_site_setting(key),
         default="",
         label=f"Public site setting loading: key={key}",
+        timeout_seconds=0.8,
     )
 
 
@@ -663,11 +664,7 @@ def _render_xauusd_signal_section(
     trend = str(
         xauusd.get("trend") or xauusd.get("direction") or "Live watch"
     ).title()
-    try:
-        configured_public_telegram = get_site_setting("profit_proof_telegram_url")
-    except Exception:
-        logger.exception("Public Telegram CTA setting could not be loaded")
-        configured_public_telegram = ""
+    configured_public_telegram = _safe_site_setting("profit_proof_telegram_url")
     public_telegram_url = (
         configured_public_telegram or settings.profit_proof_telegram_url
     )
@@ -998,7 +995,7 @@ def _all_public_content(limit: int = 80) -> list[dict[str, Any]]:
         lambda: list_content(public_only=True, limit=limit),
         default=[],
         label="Public content loading: all",
-        timeout_seconds=5.0,
+        timeout_seconds=2.0,
     )
     return _dedupe_research_items(items)
 
@@ -1394,5 +1391,5 @@ def _safe_content(content_type: str, limit: int) -> list[dict[str, Any]]:
         ),
         default=[],
         label=f"Public content loading: type={content_type}",
-        timeout_seconds=5.0,
+        timeout_seconds=2.0,
     )

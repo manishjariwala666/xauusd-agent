@@ -145,8 +145,8 @@ def test_public_content_reads_are_deadline_safe() -> None:
     assert "_with_deadline" in all_source
     assert "_with_deadline" in type_source
     assert "@st.cache_data" in inspect.getsource(landing._all_public_content)
-    assert "timeout_seconds=5.0" in all_source
-    assert "timeout_seconds=5.0" in type_source
+    assert "timeout_seconds=2.0" in all_source
+    assert "timeout_seconds=2.0" in type_source
 
 
 def test_post_gallery_split_orders_by_view_count():
