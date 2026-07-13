@@ -34,6 +34,14 @@ def test_next_public_api_has_two_second_fallback_and_cache() -> None:
     assert "return fallback" in source
     assert "/public/signals?limit=12" in source
 
+    for relative in (
+        "app/blog/page.tsx",
+        "app/category/[slug]/page.tsx",
+        "app/category/[slug]/[subcategory]/page.tsx",
+    ):
+        route = (WEB / relative).read_text(encoding="utf-8")
+        assert "getContent(undefined, 12)" in route
+
 
 def test_next_images_are_compressed_to_modern_formats() -> None:
     config = (WEB / "next.config.ts").read_text(encoding="utf-8")
