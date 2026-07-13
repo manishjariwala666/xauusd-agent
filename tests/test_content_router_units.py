@@ -30,7 +30,7 @@ def test_route_source_maps_subject_urls_to_category_sources() -> None:
 
 def test_content_url_for_item_routes_to_correct_section() -> None:
     assert content_url_for_item({"content_type": "BLOG", "slug": "gold"}) == (
-        "/blog/gold"
+        "/blog?post=gold"
     )
     assert content_url_for_item(
         {"content_type": "ANNOUNCEMENT", "slug": "launch"}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 
 RAILWAY_API_FALLBACK_URL = "https://xauusd-agent-api-production.up.railway.app"
@@ -70,4 +70,7 @@ def public_content_url(
         return canonical_url(f"/page/{encoded_slug}", base_url=base_url)
     if content_type == "SIGNAL_POST":
         return canonical_url(f"/signals/{encoded_slug}", base_url=base_url)
-    return canonical_url(f"/blog/{encoded_slug}", base_url=base_url)
+    return canonical_url(
+        f"/blog?{urlencode({'post': slug})}",
+        base_url=base_url,
+    )

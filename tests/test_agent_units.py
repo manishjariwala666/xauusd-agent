@@ -119,7 +119,7 @@ def test_worker_blog_agent_returns_final_venusrealm_public_url(monkeypatch) -> N
 
     result = run_blog_agent({"topic": "xauusd usa market"})
 
-    assert "Public URL: https://venusrealm.net/blog/xauusd-usa-market" in result
+    assert "Public URL: https://venusrealm.net/blog?post=xauusd-usa-market" in result
     assert "xauusd-buy-sell-signal.streamlit.app" not in result
     assert "streamlit.app" not in result
     assert "xauusd-agent-web-production.up.railway.app" not in result

@@ -394,6 +394,7 @@ def _render_path_route(
         return False
 
     if source.route == "blog":
+        selected_post = _query_param_value("post")
         if slug == "seo-tools":
             _render_category_route(
                 "ai-blog",
@@ -401,8 +402,11 @@ def _render_path_route(
                 on_sign_in,
                 subcategory_slug=slug,
             )
-        elif slug:
-            _render_content_route(slug, allowed_types=source.allowed_content_types)
+        elif slug or selected_post:
+            _render_content_route(
+                slug or selected_post,
+                allowed_types=source.allowed_content_types,
+            )
         else:
             _render_blog_index()
         return True

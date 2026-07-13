@@ -224,4 +224,3 @@ def test_sitemap_uses_public_website_url_and_blog_routes() -> None:
     assert "public_website_base_url(settings)" in source
     assert "/blog/" in source
     assert "Sitemap: {base}/sitemap.xml" in source
-    assert "?post=" not in source

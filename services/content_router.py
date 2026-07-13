@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 
 BLOG_CONTENT_TYPES = ("BLOG", "AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION")
@@ -152,4 +152,4 @@ def content_url_for_item(item: dict[str, Any]) -> str:
         return path_url("page", slug)
     if content_type == "SIGNAL_POST":
         return path_url("signals", slug)
-    return path_url("blog", slug)
+    return f"/blog?{urlencode({'post': slug})}"

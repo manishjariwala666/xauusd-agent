@@ -17,7 +17,7 @@ def test_public_content_url_builds_clean_blog_detail_link(monkeypatch) -> None:
         {"content_type": "AI_BLOG", "seo_slug": "xauusd usa market"}
     )
 
-    assert url == "https://venusrealm.net/blog/xauusd%20usa%20market"
+    assert url == "https://venusrealm.net/blog?post=xauusd+usa+market"
 
 
 def test_website_url_and_api_url_stay_separate(monkeypatch) -> None:

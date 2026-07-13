@@ -33,7 +33,7 @@ def test_content_url_routes_by_type():
         "/signals/buy"
     )
     assert landing._content_url({"content_type": "BLOG", "slug": "gold"}) == (
-        "/blog/gold"
+        "/blog?post=gold"
     )
 
 
@@ -212,6 +212,27 @@ def test_blog_detail_by_slug_route_dispatches_to_content_detail(monkeypatch):
 
     assert handled
     assert calls == [("xauusd-usa-market", landing.BLOG_CONTENT_TYPES)]
+
+
+def test_blog_query_post_route_dispatches_to_content_detail(monkeypatch):
+    calls = []
+
+    def fake_render_content_route(slug, *, allowed_types=None):
+        calls.append((slug, allowed_types))
+
+    monkeypatch.setattr(landing, "_render_content_route", fake_render_content_route)
+    monkeypatch.setattr(landing, "_query_param_value", lambda name: "safe-slug")
+
+    handled = landing._render_path_route(
+        ["blog"],
+        supabase=None,
+        settings=object(),
+        categories=[],
+        on_sign_in=lambda: None,
+    )
+
+    assert handled
+    assert calls == [("safe-slug", landing.BLOG_CONTENT_TYPES)]
 
 
 def test_blog_alias_route_dispatches_to_same_blog_source(monkeypatch):
