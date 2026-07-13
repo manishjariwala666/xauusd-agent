@@ -20,6 +20,7 @@ from core.auth import (
     is_authenticated,
     logout_user,
 )
+from core.database import get_engine
 from pages.landing import render_landing_page
 from pages.login import login_page
 from services.migration_service import apply_pending_migrations
@@ -52,6 +53,13 @@ def _apply_safe_startup_migrations() -> bool:
     except Exception:
         LOGGER.exception("Website startup migrations failed.")
         return False
+    return True
+
+
+@st.cache_resource(show_spinner=False)
+def _initialize_database_pool() -> bool:
+    """Keep one Streamlit-scoped SQLAlchemy pool across all page reruns."""
+    get_engine()
     return True
 
 
@@ -134,6 +142,7 @@ def run() -> None:
     """Initialize dependencies and route public, user, and admin experiences."""
     try:
         _apply_safe_startup_migrations()
+        _initialize_database_pool()
         supabase = get_supabase()
         settings = get_settings()
         initialize_session()

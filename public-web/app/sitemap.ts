@@ -1,0 +1,3 @@
+import type { MetadataRoute } from "next";
+import { getContent, siteUrl } from "@/lib/api";
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> { if ((process.env.BLOCK_SEARCH_INDEXING || "true").toLowerCase() !== "false") return []; const items = await getContent(undefined, 100); return [{ url: siteUrl(), lastModified: new Date() }, ...items.map((item) => ({ url: siteUrl(item.content_type === "ANNOUNCEMENT" ? `/announcements/${item.slug}` : item.content_type === "PAGE" ? `/page/${item.slug}` : `/blog/${item.slug}`), lastModified: new Date(item.published_at || item.created_at || Date.now()) }))]; }

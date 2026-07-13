@@ -64,6 +64,15 @@ def test_able_pro_light_admin_v2_shell_exists() -> None:
     assert 'div[role="radiogroup"] label' in theme_source
 
 
+def test_admin_kpis_use_short_ttl_cache() -> None:
+    source = inspect.getsource(dashboard._load_admin_light_kpis)
+    render_source = inspect.getsource(dashboard._render_admin_light_kpis)
+
+    assert "@st.cache_data(ttl=30" in inspect.getsource(dashboard)
+    assert "session_scope()" in source
+    assert "_load_admin_light_kpis()" in render_source
+
+
 def test_admin_has_direct_browser_routes_for_sections() -> None:
     dashboard_source = inspect.getsource(dashboard.render_admin_dashboard)
     sidebar_source = inspect.getsource(dashboard._render_admin_light_sidebar)

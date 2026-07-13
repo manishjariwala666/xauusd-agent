@@ -240,3 +240,29 @@ admin authorization, dedupe protection, or public command safety rules.
 - Confirm normal users cannot access the Admin or AI Agents interfaces.
 - After production checks pass, set `BLOCK_SEARCH_INDEXING=false` on website
   and API, regenerate SEO files, and verify `robots.txt` allows the sitemap.
+
+## Next.js public website migration
+
+The final production target separates public traffic from internal admin:
+
+- `venusrealm.net` → Railway service rooted at `public-web/` (Next.js).
+- `admin.venusrealm.net` → existing Streamlit admin service.
+- API and worker remain on their existing Railway services.
+
+Create the Next.js service from this repository and set its Railway root
+directory to `public-web`. Configure:
+
+- `BACKEND_BASE_URL=https://xauusd-agent-api-production.up.railway.app`
+- `NEXT_PUBLIC_SITE_URL=https://venusrealm.net`
+- `ADMIN_DASHBOARD_URL=https://admin.venusrealm.net`
+- `BLOCK_SEARCH_INDEXING=true`
+
+Before moving the root domain, attach `admin.venusrealm.net` to the Streamlit
+service and verify admin login. Deploy Next.js first on its Railway preview URL
+and verify `/`, `/blog`, one `/blog/{slug}`, `/signals`, one category,
+`/robots.txt`, and `/sitemap.xml`. Only then move `venusrealm.net` from the
+Streamlit service to the Next.js service. Keep indexing blocked until all
+public routes and canonical URLs are approved.
+
+Rollback: move `venusrealm.net` back to the Streamlit web service. API, worker,
+Telegram and PostgreSQL remain unchanged, so no database rollback is needed.

@@ -98,6 +98,9 @@ def test_streamlit_app_applies_safe_startup_migrations() -> None:
     assert "def _apply_safe_startup_migrations" in source
     assert "_apply_safe_startup_migrations()" in source
     assert "Website startup migrations failed" in source
+    assert "def _initialize_database_pool" in source
+    assert "_initialize_database_pool()" in source
+    assert "get_engine()" in source
 
 
 def test_streamlit_app_routes_admin_paths_to_login_or_admin() -> None:

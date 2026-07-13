@@ -307,7 +307,37 @@ def _render_admin_shell_header() -> None:
 
 
 def _render_admin_light_kpis() -> None:
-    """Show first-glance admin health cards without changing core queries."""
+    """Show cached first-glance admin health cards."""
+    kpis = _load_admin_light_kpis()
+
+    st.markdown(
+        f"""
+        <section class="admin-light-kpi-grid">
+            <div class="admin-light-kpi">
+                <div><div class="value">{kpis['blogs']}</div><div class="label">Total Blogs</div><div class="trend">↗ CMS ready</div></div>
+                <div class="admin-kpi-icon">✍️</div>
+            </div>
+            <div class="admin-light-kpi">
+                <div><div class="value">{kpis['signals']}</div><div class="label">XAUUSD Signals</div><div class="trend">↗ broadcast stack</div></div>
+                <div class="admin-kpi-icon">📡</div>
+            </div>
+            <div class="admin-light-kpi">
+                <div><div class="value">{kpis['users']}</div><div class="label">Users / Leads</div><div class="trend">↗ CRM view</div></div>
+                <div class="admin-kpi-icon">👥</div>
+            </div>
+            <div class="admin-light-kpi">
+                <div><div class="value">{kpis['errors']}</div><div class="label">System Errors</div><div class="trend">↗ logs tracked</div></div>
+                <div class="admin-kpi-icon">🛡️</div>
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def _load_admin_light_kpis() -> dict[str, str]:
+    """Cache admin count queries so widget reruns do not hit PostgreSQL."""
     kpis = {
         "blogs": "—",
         "signals": "—",
@@ -348,46 +378,7 @@ def _render_admin_light_kpis() -> None:
             kpis = {key: str(int(rows[key] or 0)) for key in kpis}
     except Exception:
         logger.debug("Able Pro admin KPI cards are using safe fallback values.")
-
-    st.markdown(
-        f"""
-        <section class="admin-light-kpi-grid">
-            <div class="admin-light-kpi">
-                <div>
-                    <div class="value">{kpis["blogs"]}</div>
-                    <div class="label">Total Blogs</div>
-                    <div class="trend">↗ CMS ready</div>
-                </div>
-                <div class="admin-kpi-icon">✍️</div>
-            </div>
-            <div class="admin-light-kpi">
-                <div>
-                    <div class="value">{kpis["signals"]}</div>
-                    <div class="label">XAUUSD Signals</div>
-                    <div class="trend">↗ broadcast stack</div>
-                </div>
-                <div class="admin-kpi-icon">📡</div>
-            </div>
-            <div class="admin-light-kpi">
-                <div>
-                    <div class="value">{kpis["users"]}</div>
-                    <div class="label">Users / Leads</div>
-                    <div class="trend">↗ CRM view</div>
-                </div>
-                <div class="admin-kpi-icon">👥</div>
-            </div>
-            <div class="admin-light-kpi">
-                <div>
-                    <div class="value">{kpis["errors"]}</div>
-                    <div class="label">System Errors</div>
-                    <div class="trend">↗ logs tracked</div>
-                </div>
-                <div class="admin-kpi-icon">🛡️</div>
-            </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+    return kpis
 
 
 def _status_badge(value: str | None) -> str:

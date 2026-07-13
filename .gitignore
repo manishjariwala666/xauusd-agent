@@ -6,3 +6,6 @@ google_creds.json
 pico.save
 *.swp
 service_account.json
+public-web/node_modules/
+public-web/.next/
+public-web/*.tsbuildinfo

@@ -18,7 +18,9 @@ from sqlalchemy import text
 from config import get_settings
 from core.database import session_scope
 from services.conversation_service import record_inbound_message
+from services.content_service import list_categories, list_content
 from services.migration_service import apply_pending_migrations
+from services.public_market_service import get_live_market_signals
 from services.telegram_master_ai_control import is_master_command
 from services.telegram_master_ai_webhook import (
     handle_master_telegram_webhook,
@@ -112,6 +114,73 @@ def robots() -> Response:
     if _search_indexing_blocked():
         return Response(_blocked_robots_txt(), media_type="text/plain")
     return Response(_public_setting("SEO_ROBOTS_TXT"), media_type="text/plain")
+
+
+PUBLIC_CONTENT_TYPES = {
+    "BLOG",
+    "AI_BLOG",
+    "ADVISORY",
+    "ANALYSIS",
+    "EDUCATION",
+    "ANNOUNCEMENT",
+    "PAGE",
+    "SIGNAL_POST",
+}
+
+
+@app.get("/public/categories")
+def public_categories() -> dict[str, Any]:
+    """Return public category navigation for the lightweight website."""
+    return {"items": list_categories(public_only=True)}
+
+
+@app.get("/public/content")
+def public_content(
+    content_type: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> dict[str, Any]:
+    """Return published public content without exposing admin-only rows."""
+    normalized_type = str(content_type or "").strip().upper() or None
+    if normalized_type and normalized_type not in PUBLIC_CONTENT_TYPES:
+        raise HTTPException(400, "Unsupported public content type.")
+    return {
+        "items": list_content(
+            content_type=normalized_type,
+            public_only=True,
+            limit=limit,
+        )
+    }
+
+
+@app.get("/public/content/{slug}")
+def public_content_detail(slug: str) -> dict[str, Any]:
+    """Return one published item by slug for crawlable public detail pages."""
+    normalized_slug = str(slug or "").strip()
+    if not normalized_slug:
+        raise HTTPException(404, "Public content not found.")
+    item = next(
+        (
+            row
+            for row in list_content(public_only=True, limit=100)
+            if normalized_slug
+            in {
+                str(row.get("slug") or "").strip(),
+                str(row.get("id") or "").strip(),
+            }
+        ),
+        None,
+    )
+    if item is None:
+        raise HTTPException(404, "Public content not found.")
+    return {"item": item}
+
+
+@app.get("/public/signals")
+def public_signals(
+    limit: int = Query(default=12, ge=1, le=50),
+) -> dict[str, Any]:
+    """Return the latest public signal rows without caching stale targets."""
+    return {"items": get_live_market_signals(limit=limit)}
 
 
 
