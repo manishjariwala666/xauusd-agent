@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit
 
 
 BLOG_CONTENT_TYPES = ("BLOG", "AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION")
@@ -129,6 +129,76 @@ def path_url(*parts: str) -> str:
     return "/" + "/".join(clean_parts)
 
 
+def streamlit_safe_public_url(value: str) -> str:
+    """Convert legacy nested paths into Streamlit-safe public URLs.
+
+    Streamlit Cloud/Railway can return its HTML shell for nested paths while
+    the frontend websocket still connects relative to that nested location.
+    The result is a completely blank page.  Base pages plus query parameters
+    keep every destination unique without breaking the Streamlit connection.
+    """
+    raw = str(value or "").strip()
+    if not raw or raw == "#" or "://" in raw:
+        return raw
+
+    parsed = urlsplit(raw)
+    segments = [
+        unquote(part).strip()
+        for part in parsed.path.strip("/").split("/")
+        if part.strip()
+    ]
+    if not segments:
+        return raw
+
+    route = segments[0].lower()
+    slug = segments[1] if len(segments) > 1 else ""
+    subcategory = segments[2] if len(segments) > 2 else ""
+    params = dict(parse_qsl(parsed.query, keep_blank_values=False))
+    base_path = "/" + route
+
+    if route == "blog" and slug:
+        if slug == "seo-tools":
+            base_path = "/category"
+            params.update({"category": "ai-blog", "subcategory": slug})
+        else:
+            params["post"] = slug
+    elif route == "announcements" and slug:
+        params["announcement"] = slug
+    elif route == "signals" and slug:
+        if slug not in {"xauusd", "gold", "live"}:
+            params["signal"] = slug
+    elif route == "page" and slug:
+        base_path = "/"
+        params["page"] = slug
+    elif route == "category" and slug:
+        params["category"] = slug
+        if subcategory:
+            params["subcategory"] = subcategory
+    elif route == "market-analysis":
+        base_path = "/category"
+        params["category"] = "analysis-department"
+        if slug:
+            params["subcategory"] = slug
+    elif route == "education":
+        base_path = "/category"
+        params["category"] = "market-education"
+        if slug:
+            params["subcategory"] = slug
+    elif route == "xauusd-signals":
+        base_path = "/category"
+        params["category"] = "xauusd-signals"
+        if slug:
+            params["subcategory"] = slug
+    elif len(segments) > 1:
+        # Unknown nested routes must not be emitted because they reproduce the
+        # same blank-page failure.  Preserve their identity as query data.
+        base_path = "/"
+        params["route"] = "/".join(segments)
+
+    query = urlencode(params)
+    return base_path + (f"?{query}" if query else "")
+
+
 def content_slug(item: dict[str, Any]) -> str:
     """Return the best public slug for a content row."""
     return str(
@@ -147,9 +217,9 @@ def content_url_for_item(item: dict[str, Any]) -> str:
 
     content_type = str(item.get("content_type") or "").upper()
     if content_type == "ANNOUNCEMENT":
-        return path_url("announcements", slug)
+        return streamlit_safe_public_url(path_url("announcements", slug))
     if content_type == "PAGE":
-        return path_url("page", slug)
+        return streamlit_safe_public_url(path_url("page", slug))
     if content_type == "SIGNAL_POST":
-        return path_url("signals", slug)
-    return f"/blog?{urlencode({'post': slug})}"
+        return streamlit_safe_public_url(path_url("signals", slug))
+    return streamlit_safe_public_url(path_url("blog", slug))

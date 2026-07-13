@@ -20,6 +20,20 @@ def test_public_content_url_builds_clean_blog_detail_link(monkeypatch) -> None:
     assert url == "https://venusrealm.net/blog?post=xauusd+usa+market"
 
 
+def test_public_content_urls_never_emit_blank_nested_streamlit_paths(monkeypatch) -> None:
+    monkeypatch.setenv("PUBLIC_WEBSITE_URL", "https://venusrealm.net")
+
+    assert url_service.public_content_url(
+        {"content_type": "ANNOUNCEMENT", "slug": "market update"}
+    ) == "https://venusrealm.net/announcements?announcement=market+update"
+    assert url_service.public_content_url(
+        {"content_type": "PAGE", "slug": "about us"}
+    ) == "https://venusrealm.net/?page=about+us"
+    assert url_service.public_content_url(
+        {"content_type": "SIGNAL_POST", "slug": "gold buy"}
+    ) == "https://venusrealm.net/signals?signal=gold+buy"
+
+
 def test_website_url_and_api_url_stay_separate(monkeypatch) -> None:
     monkeypatch.setenv("PUBLIC_WEBSITE_URL", "https://venusrealm.net")
     monkeypatch.setenv("PUBLIC_API_URL", "https://api.venusrealm.net")

@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import time
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import urlencode
 
 from loguru import logger
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -918,7 +918,10 @@ def _write_seo_files() -> None:
                 """
             )
         ).scalars()
-        urls = [f"{base}/blog/{quote(str(slug))}" for slug in slugs]
+        urls = [
+            f"{base}/blog?{urlencode({'post': str(slug)})}"
+            for slug in slugs
+        ]
     now = datetime.now(timezone.utc).date().isoformat()
     sitemap = (
         '<?xml version="1.0" encoding="UTF-8"?>'

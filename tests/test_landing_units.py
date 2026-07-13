@@ -8,10 +8,12 @@ def test_local_url_builds_encoded_streamlit_query_links():
 
 
 def test_path_url_builds_clean_public_routes():
-    assert landing._path_url("blog", "xauusd usa") == "/blog/xauusd%20usa"
+    assert landing._path_url("blog", "xauusd usa") == (
+        "/blog?post=xauusd+usa"
+    )
     assert (
         landing._path_url("category", "xauusd", "usa-market")
-        == "/category/xauusd/usa-market"
+        == "/category?category=xauusd&subcategory=usa-market"
     )
 
 
@@ -24,13 +26,13 @@ def test_path_segments_decode_public_routes():
 
 def test_content_url_routes_by_type():
     assert landing._content_url({"content_type": "PAGE", "slug": "about"}) == (
-        "/page/about"
+        "/?page=about"
     )
     assert landing._content_url(
         {"content_type": "ANNOUNCEMENT", "slug": "launch"}
-    ) == "/announcements/launch"
+    ) == "/announcements?announcement=launch"
     assert landing._content_url({"content_type": "SIGNAL_POST", "slug": "buy"}) == (
-        "/signals/buy"
+        "/signals?signal=buy"
     )
     assert landing._content_url({"content_type": "BLOG", "slug": "gold"}) == (
         "/blog?post=gold"

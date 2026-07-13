@@ -222,5 +222,5 @@ def test_sitemap_uses_public_website_url_and_blog_routes() -> None:
     source = (ROOT / "services/production_agents.py").read_text(encoding="utf-8")
 
     assert "public_website_base_url(settings)" in source
-    assert "/blog/" in source
+    assert "/blog?" in source
     assert "Sitemap: {base}/sitemap.xml" in source

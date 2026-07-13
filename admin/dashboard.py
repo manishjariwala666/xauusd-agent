@@ -48,10 +48,10 @@ from services.google_sheets_service import (
     is_google_sheets_configured,
 )
 from services.market_data import MarketDataService
+from services.content_router import streamlit_safe_public_url
 from services.telegram_service import TelegramService
 from services.url_service import public_content_url, public_website_base_url
 from user.dashboard import render_signal_feed
-from urllib.parse import quote
 
 
 ADMIN_ROUTE_MAP = {
@@ -1255,9 +1255,12 @@ def _content_public_url(item: dict[str, Any]) -> str:
 
 def _category_public_url(category_slug: str, subcategory_slug: str = "") -> str:
     base_url = _admin_public_site_url()
-    if subcategory_slug:
-        return f"{base_url}/category/{quote(category_slug)}/{quote(subcategory_slug)}"
-    return f"{base_url}/category/{quote(category_slug)}"
+    relative_url = streamlit_safe_public_url(
+        "/category/" + "/".join(
+            value for value in (category_slug, subcategory_slug) if value
+        )
+    )
+    return f"{base_url}{relative_url}"
 
 
 def _category_route_url(category: dict[str, Any]) -> str:
@@ -1265,7 +1268,7 @@ def _category_route_url(category: dict[str, Any]) -> str:
     base_url = _admin_public_site_url()
     route_path = str(category.get("route_path") or "").strip()
     if route_path:
-        return f"{base_url}/{route_path.strip('/')}"
+        return f"{base_url}{streamlit_safe_public_url(route_path)}"
     return _category_public_url(str(category.get("slug") or ""))
 
 
@@ -2062,8 +2065,12 @@ def _render_category_manager() -> None:
         route_path = st.text_input(
             "Public URL Path",
             value=(selected.get("route_path") or "") if selected else "",
-            placeholder="/market-analysis/nifty",
-            help="Example: /signals/xauusd, /market-analysis/nifty, /blog/seo-tools",
+            placeholder="/category?category=analysis-department&subcategory=nifty",
+            help=(
+                "Use a base page plus query fields, for example /signals or "
+                "/category?category=analysis-department&subcategory=nifty. "
+                "Legacy nested paths are converted automatically."
+            ),
         )
         source_values = [
             "content_items",

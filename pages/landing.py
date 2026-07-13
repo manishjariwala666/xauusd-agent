@@ -27,6 +27,7 @@ from services.content_router import (
     content_url_for_item,
     path_url as router_path_url,
     route_source_for,
+    streamlit_safe_public_url,
 )
 from services.public_market_service import (
     get_live_market_signals,
@@ -236,7 +237,7 @@ def _fallback_categories() -> list[dict[str, Any]]:
             "title": "XAUUSD Signals",
             "description": "Live gold targets, buy/sell levels, and risk context.",
             "icon": "🥇",
-            "route_path": "/signals/xauusd",
+            "route_path": "/signals",
             "source_type": "market_signals",
         },
         {
@@ -252,7 +253,7 @@ def _fallback_categories() -> list[dict[str, Any]]:
             "title": "Market Analysis",
             "description": "Index, crypto, and XAUUSD structure insights.",
             "icon": "📊",
-            "route_path": "/market-analysis",
+            "route_path": "/category?category=analysis-department",
             "source_type": "content_items",
         },
         {
@@ -268,7 +269,7 @@ def _fallback_categories() -> list[dict[str, Any]]:
             "title": "Payment / Subscription",
             "description": "Secure subscription verification and access information.",
             "icon": "💳",
-            "route_path": "/page/payment-subscription",
+            "route_path": "/?page=payment-subscription",
             "source_type": "content_items",
         },
         {
@@ -276,7 +277,7 @@ def _fallback_categories() -> list[dict[str, Any]]:
             "title": "Contact / Support",
             "description": "Verified-member support and assistance.",
             "icon": "💬",
-            "route_path": "/page/contact-support",
+            "route_path": "/?page=contact-support",
             "source_type": "content_items",
         },
     ]
@@ -298,7 +299,9 @@ def _render_categories(categories: list[dict[str, Any]]) -> None:
             with column:
                 slug = str(category.get("slug") or category.get("id") or "")
                 route_path = str(category.get("route_path") or "").strip()
-                url = route_path if route_path else _path_url("category", slug)
+                url = streamlit_safe_public_url(
+                    route_path if route_path else _path_url("category", slug)
+                )
                 st.markdown(
                     f"""
                     <a class="premium-card clickable-card" href="{html.escape(url)}" target="_self">
@@ -324,7 +327,7 @@ def _render_announcements() -> None:
         for column, item in zip(columns, items[start : start + 2]):
             with column:
                 slug = _content_slug(item)
-                url = _path_url("announcements", slug) if slug else "#"
+                url = _content_url(item) if slug else "#"
                 st.markdown(
                     f"""
                     <a class="premium-card announcement-card clickable-card"
@@ -422,17 +425,22 @@ def _render_path_route(
         return True
 
     if source.route == "announcements":
-        if slug:
-            _render_announcement_route(slug)
+        selected_announcement = _query_param_value("announcement")
+        if slug or selected_announcement:
+            _render_announcement_route(slug or selected_announcement)
         else:
             _render_announcements_index()
         return True
 
     if source.route == "signals":
+        selected_signal = _query_param_value("signal")
         if slug in {"xauusd", "gold", "live"}:
             _render_signals_index(supabase, settings, on_sign_in)
-        elif slug:
-            _render_content_route(slug, allowed_types=source.allowed_content_types)
+        elif slug or selected_signal:
+            _render_content_route(
+                slug or selected_signal,
+                allowed_types=source.allowed_content_types,
+            )
         else:
             _render_signals_index(supabase, settings, on_sign_in)
         return True
@@ -477,8 +485,8 @@ def _local_url(**params: str) -> str:
 
 
 def _path_url(*parts: str) -> str:
-    """Build an absolute public route URL from safe path segments."""
-    return router_path_url(*parts)
+    """Build a public URL that cannot trigger a blank nested Streamlit page."""
+    return streamlit_safe_public_url(router_path_url(*parts))
 
 
 def _content_url(item: dict[str, Any]) -> str:
@@ -919,7 +927,7 @@ def _render_subcategory_links(
 ) -> None:
     links = [
         f'<a class="social-link" '
-        f'href="{html.escape(_path_url("category", category_slug))}" '
+        f'href="{html.escape(_local_url(category=category_slug))}" '
         f'target="_self">All</a>'
     ]
     selected_slug = _slug_fragment(selected_subcategory)
@@ -933,7 +941,7 @@ def _render_subcategory_links(
         )
         links.append(
             f'<a class="{css_class}" '
-            f'href="{html.escape(_path_url("category", category_slug, subcategory_slug))}" '
+            f'href="{html.escape(_local_url(category=category_slug, subcategory=subcategory_slug))}" '
             f'target="_self">{html.escape(label)}</a>'
         )
     st.markdown(
@@ -949,7 +957,7 @@ def _render_content_type_links(
 ) -> None:
     links = [
         f'<a class="social-link" '
-        f'href="{html.escape(_path_url("category", category_slug))}" '
+        f'href="{html.escape(_local_url(category=category_slug))}" '
         f'target="_self">All</a>'
     ]
     for content_type in content_types:
@@ -1334,11 +1342,11 @@ def _render_site_footer() -> None:
         ("About", "/?page=about"),
         ("Blog", "/blog"),
         ("Signals", "/signals"),
-        ("XAUUSD", "/signals/xauusd"),
-        ("Market Analysis", "/market-analysis"),
-        ("Nifty & Options", "/market-analysis/nifty"),
-        ("Crypto Volatility", "/market-analysis/crypto"),
-        ("SEO & Automation", "/blog/seo-tools"),
+        ("XAUUSD", "/signals"),
+        ("Market Analysis", "/category?category=analysis-department"),
+        ("Nifty & Options", "/category?category=analysis-department&subcategory=nifty"),
+        ("Crypto Volatility", "/category?category=analysis-department&subcategory=crypto"),
+        ("SEO & Automation", "/category?category=ai-blog&subcategory=seo-tools"),
         ("Contact", "/?page=contact"),
         ("Privacy Policy", "/?page=privacy-policy"),
         ("Terms", "/?page=terms-and-conditions"),
