@@ -36,6 +36,32 @@ _public_content_cache: list[dict[str, Any]] = []
 _public_content_cache_at = 0.0
 _public_content_cache_lock = RLock()
 
+PUBLIC_CONTENT_SUMMARY_FIELDS = {
+    "id",
+    "content_type",
+    "slug",
+    "title",
+    "excerpt",
+    "image_url",
+    "meta_title",
+    "meta_description",
+    "category_slug",
+    "category_title",
+    "subcategory",
+    "published_at",
+    "created_at",
+    "view_count",
+}
+
+
+def _public_content_summary(item: dict[str, Any]) -> dict[str, Any]:
+    """Keep list payloads small while detail responses retain full SEO data."""
+    return {
+        key: value
+        for key, value in item.items()
+        if key in PUBLIC_CONTENT_SUMMARY_FIELDS
+    }
+
 
 def _public_content_snapshot(*, force: bool = False) -> list[dict[str, Any]]:
     """Return a short-lived public snapshot without caching live signals."""
@@ -188,7 +214,12 @@ def public_content(
             for item in items
             if str(item.get("content_type") or "").upper() == normalized_type
         ]
-    return {"items": items[:limit]}
+    return {
+        "items": [
+            _public_content_summary(item)
+            for item in items[:limit]
+        ]
+    }
 
 
 @app.get("/public/content/{slug}")

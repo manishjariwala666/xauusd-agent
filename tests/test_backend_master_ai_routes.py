@@ -44,7 +44,16 @@ def test_public_content_endpoints_only_request_public_rows(monkeypatch) -> None:
 
     def fake_list_content(**kwargs):
         calls.append(kwargs)
-        return [{"id": 1, "slug": "gold", "content_type": "BLOG"}]
+        return [
+            {
+                "id": 1,
+                "slug": "gold",
+                "content_type": "BLOG",
+                "title": "Gold update",
+                "body": "Full article body must stay out of list payloads.",
+                "schema_jsonld": {"@type": "Article"},
+            }
+        ]
 
     monkeypatch.setattr(backend, "list_content", fake_list_content)
     monkeypatch.setattr(backend, "_public_content_cache", [])
@@ -57,7 +66,10 @@ def test_public_content_endpoints_only_request_public_rows(monkeypatch) -> None:
     assert listing.status_code == 200
     assert detail.status_code == 200
     assert listing.json()["items"][0]["slug"] == "gold"
+    assert "body" not in listing.json()["items"][0]
+    assert "schema_jsonld" not in listing.json()["items"][0]
     assert detail.json()["item"]["slug"] == "gold"
+    assert detail.json()["item"]["body"].startswith("Full article")
     assert calls == [{"public_only": True, "limit": 100}]
 
 
