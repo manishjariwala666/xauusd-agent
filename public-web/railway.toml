@@ -3,7 +3,7 @@ builder = "RAILPACK"
 buildCommand = "pnpm install --frozen-lockfile && pnpm build"
 
 [deploy]
-startCommand = "pnpm start -- -H 0.0.0.0 -p $PORT"
+startCommand = "pnpm start -H 0.0.0.0 -p $PORT"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

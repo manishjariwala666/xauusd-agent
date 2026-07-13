@@ -61,7 +61,7 @@ def test_next_railway_preview_has_lightweight_healthcheck() -> None:
     assert "fetch(" not in health
     assert "DATABASE" not in health
     assert 'healthcheckPath = "/api/health"' in railway
-    assert 'startCommand = "pnpm start -- -H 0.0.0.0 -p $PORT"' in railway
+    assert 'startCommand = "pnpm start -H 0.0.0.0 -p $PORT"' in railway
 
 
 def test_next_preview_admin_redirect_uses_working_production_path() -> None:
