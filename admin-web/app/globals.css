@@ -50,6 +50,43 @@ button, input { font: inherit; }
 .secondary-button { background: #eef3ff; color: var(--brand-dark); }
 .security-note { border-top: 1px solid var(--line); font-size: 12px; margin-top: 25px; padding-top: 18px; }
 .form-error { background: #fff1f0; border-radius: 8px; color: var(--danger); font-size: 13px; margin-top: 5px; padding: 10px 12px; }
+.cms-heading { align-items: center; display: flex; justify-content: space-between; }
+.filter-bar { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; display: flex; gap: 10px; margin-bottom: 18px; padding: 14px; }
+.filter-bar input, .filter-bar select, .editor-form input, .editor-form select, .editor-form textarea, .category-form input, .category-form textarea { background: #fff; border: 1px solid #cfd8e8; border-radius: 9px; min-height: 42px; padding: 9px 11px; width: 100%; }
+.filter-bar input { max-width: 420px; }
+.filter-bar select { max-width: 180px; }
+.table-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow-x: auto; width: 100%; }
+.cms-table { border-collapse: collapse; font-size: 13px; min-width: 1080px; width: 100%; }
+.cms-table th, .cms-table td { border-bottom: 1px solid var(--line); padding: 13px 12px; text-align: left; vertical-align: top; }
+.cms-table th { background: #f8faff; color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+.cms-table code, .category-list code { color: var(--muted); font-size: 11px; }
+.status-badge { border-radius: 99px; display: inline-block; font-size: 11px; font-weight: 800; padding: 3px 8px; text-transform: capitalize; }
+.status-badge.published { background: #dcfae6; color: #08783e; }
+.status-badge.draft { background: #fff2c7; color: #865900; }
+.status-badge.trash { background: #fee4e2; color: #b42318; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.row-actions a, .row-actions button { background: none; border: 0; color: var(--brand-dark); cursor: pointer; font-size: 12px; padding: 0; }
+.action-error { color: var(--danger); flex-basis: 100%; }
+.pagination { align-items: center; color: var(--muted); display: flex; gap: 16px; justify-content: flex-end; padding: 18px 2px; }
+.pagination a { color: var(--brand); font-weight: 700; }
+.editor-grid { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr) 300px; }
+.editor-main, .editor-side, .category-form, .category-list { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; }
+.editor-main, .editor-side, .category-form { display: grid; gap: 14px; }
+.editor-form label, .category-form label { color: var(--ink); display: grid; font-size: 13px; font-weight: 700; gap: 6px; }
+.editor-form textarea { font-family: inherit; line-height: 1.6; resize: vertical; }
+.editor-side { align-content: start; height: fit-content; position: sticky; top: 18px; }
+.word-count, .unsaved { color: var(--muted); font-size: 12px; text-align: right; }
+.category-layout { display: grid; gap: 22px; grid-template-columns: 340px minmax(0, 1fr); }
+.category-form { align-content: start; height: fit-content; }
+.category-form h2 { margin: 0; }
+.category-form .check-label { align-items: center; display: flex; }
+.category-form .check-label input { min-height: 0; width: auto; }
+.category-list { display: grid; gap: 0; padding: 0; }
+.category-list article { align-items: flex-start; border-bottom: 1px solid var(--line); display: flex; gap: 16px; justify-content: space-between; padding: 18px 20px; }
+.category-list article:last-child { border-bottom: 0; }
+.category-list strong, .category-list code { display: block; }
+.category-list p { color: var(--muted); font-size: 13px; margin: 6px 0; }
+.sr-only { height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; clip: rect(0,0,0,0); }
 @media (max-width: 960px) { .kpi-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 720px) {
   .admin-shell { display: block; }
@@ -63,5 +100,10 @@ button, input { font: inherit; }
   .user-menu span { display: none; }
   .breadcrumbs, .admin-main { padding-left: 16px; padding-right: 16px; }
   .kpi-grid { grid-template-columns: 1fr; }
+  .cms-heading, .filter-bar { align-items: stretch; flex-direction: column; }
+  .filter-bar input, .filter-bar select { max-width: none; }
+  .editor-grid, .category-layout { grid-template-columns: 1fr; }
+  .editor-side { position: static; }
+  .pagination { align-items: flex-start; flex-wrap: wrap; justify-content: flex-start; }
   .auth-page, .centered-state { padding: 16px; }
 }
