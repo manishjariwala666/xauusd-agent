@@ -13,6 +13,7 @@ import traceback
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from loguru import logger
 import requests
 from sqlalchemy import text
@@ -113,6 +114,7 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+app.add_middleware(GZipMiddleware, minimum_size=1_000)
 
 
 def _search_indexing_blocked() -> bool:

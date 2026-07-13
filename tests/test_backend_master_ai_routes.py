@@ -102,6 +102,32 @@ def test_public_content_cache_has_short_ttl_and_does_not_cache_signals(
     assert backend.PUBLIC_CONTENT_CACHE_TTL_SECONDS == 60
 
 
+def test_public_content_payloads_are_compressed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        backend,
+        "_public_content_cache",
+        [
+            {
+                "id": index,
+                "slug": f"gold-{index}",
+                "content_type": "BLOG",
+                "title": "Gold market research " * 20,
+            }
+            for index in range(10)
+        ],
+    )
+    monkeypatch.setattr(backend, "_public_content_cache_at", backend.monotonic())
+    client = TestClient(app)
+
+    response = client.get(
+        "/public/content?limit=10",
+        headers={"Accept-Encoding": "gzip"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get("content-encoding") == "gzip"
+
+
 def test_public_categories_and_signals_endpoints(monkeypatch) -> None:
     monkeypatch.setattr(
         backend,
