@@ -19,6 +19,7 @@ def test_next_public_site_has_required_routes() -> None:
         "app/category/[slug]/[subcategory]/page.tsx",
         "app/page/[slug]/page.tsx",
         "app/admin/page.tsx",
+        "app/api/health/route.ts",
         "app/robots.ts",
         "app/sitemap.ts",
     )
@@ -48,8 +49,27 @@ def test_next_public_site_keeps_admin_separate() -> None:
     environment = (WEB / ".env.example").read_text(encoding="utf-8")
 
     assert "ADMIN_DASHBOARD_URL" in admin
-    assert "https://admin.venusrealm.net" in environment
+    assert "https://venusrealm.net/admin?page=command-center" in environment
     assert "BACKEND_BASE_URL" in environment
+
+
+def test_next_railway_preview_has_lightweight_healthcheck() -> None:
+    health = (WEB / "app/api/health/route.ts").read_text(encoding="utf-8")
+    railway = (WEB / "railway.toml").read_text(encoding="utf-8")
+
+    assert 'status: "healthy"' in health
+    assert "fetch(" not in health
+    assert "DATABASE" not in health
+    assert 'healthcheckPath = "/api/health"' in railway
+    assert 'startCommand = "pnpm start -- -H 0.0.0.0 -p $PORT"' in railway
+
+
+def test_next_preview_admin_redirect_uses_working_production_path() -> None:
+    admin = (WEB / "app/admin/page.tsx").read_text(encoding="utf-8")
+
+    assert "ADMIN_DASHBOARD_URL" in admin
+    assert "https://venusrealm.net/admin?page=command-center" in admin
+    assert "https://admin.venusrealm.net" not in admin
 
 
 def test_next_public_tree_has_no_secret_values() -> None:
