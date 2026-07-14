@@ -28,6 +28,7 @@ from services.admin_media_api import router as admin_media_router
 from services.admin_seo_api import router as admin_seo_router
 from services.admin_signals_api import router as admin_signals_router
 from services.admin_publications_api import admin as admin_publications_router, public as public_publications_router
+from services.admin_leads_api import admin as admin_leads_router, public as public_leads_router
 from services.admin_signals_service import list_public_signals
 from services.conversation_service import record_inbound_message
 from services.content_service import list_categories, list_content
@@ -130,6 +131,8 @@ app.include_router(admin_seo_router)
 app.include_router(admin_signals_router)
 app.include_router(admin_publications_router)
 app.include_router(public_publications_router)
+app.include_router(admin_leads_router)
+app.include_router(public_leads_router)
 _local_media_root = os.getenv("ADMIN_MEDIA_LOCAL_ROOT", "").strip()
 if _local_media_root:
     Path(_local_media_root).mkdir(parents=True, exist_ok=True)
