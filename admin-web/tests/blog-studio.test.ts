@@ -25,10 +25,10 @@ describe("Phase 2B Blog Studio", () => {
   });
 
   it("provides editor preview, SEO, social, schema and metadata panels", () => {
-    const editor = source("components/content-editor.tsx");
-    for (const tab of ["Post Preview", "SEO Settings", "Open Graph", "FAQ / Schema", "Content Metadata"]) expect(editor).toContain(tab);
-    expect(editor).toContain("Read-only SEO data");
-    expect(editor).toContain("Collapsed by default");
+    const editor = source("components/content-editor.tsx") + source("components/seo-workbench.tsx");
+    for (const tab of ["Post Preview", "SEO Settings", "Open Graph", "X / Twitter", "FAQ / Schema", "Content Metadata"]) expect(editor).toContain(tab);
+    expect(editor).toContain("Save SEO");
+    expect(editor).toContain("Collapsed for performance");
     expect(editor).toContain("All changes saved");
   });
 
