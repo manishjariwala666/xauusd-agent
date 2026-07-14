@@ -1,5 +1,5 @@
 import { cache } from "react";
-import type { Category, ContentItem, Signal } from "./types";
+import type { Category, ContentItem, Signal, SignalPage } from "./types";
 
 const API_BASE = (
   process.env.BACKEND_BASE_URL ||
@@ -66,22 +66,40 @@ async function fetchContentDetail(slug: string): Promise<ContentItem | null> {
 // that the API receives one detail request per render instead of two.
 export const getContentDetail = cache(fetchContentDetail);
 
-export async function getSignals(): Promise<Signal[]> {
-  const response = await fetchJson<{ items: Signal[] }>(
-    "/public/signals?limit=12",
-    { items: [] },
-    0
-  );
-  return response.items;
+function normalizeSignal(signal: Signal): Signal {
+  return { ...signal, direction: signal.direction || signal.signal_type, signal_type: signal.direction || signal.signal_type, entry_price: signal.entry_price ?? signal.price, price: signal.entry_price ?? signal.price, published_at: signal.published_at || signal.signal_time };
+}
+
+async function signalJson<T>(path: string): Promise<T | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
+  try {
+    const response = await fetch(`${API_BASE}${path}`, { signal: controller.signal, cache: "no-store" });
+    return response.ok ? await response.json() as T : null;
+  } catch { return null; }
+  finally { clearTimeout(timeout); }
+}
+
+export async function getSignals(query = new URLSearchParams()): Promise<SignalPage> {
+  const parameters = new URLSearchParams(query);
+  parameters.set("page_size", "12");
+  const current = await signalJson<SignalPage>(`/public/signals/v2?${parameters}`);
+  if (current) return { ...current, items: current.items.map(normalizeSignal) };
+  return { items: [], page: 1, page_size: 12, total: 0, pages: 1, fallback: true };
+}
+
+export async function getSignalDetail(publicId: string): Promise<Signal | null> {
+  const response = await signalJson<{ item: Signal }>(`/public/signals/v2/${encodeURIComponent(publicId)}`);
+  return response?.item ? normalizeSignal(response.item) : null;
 }
 
 export async function getSignalSnapshot(): Promise<Signal[]> {
   const response = await fetchJson<{ items: Signal[] }>(
-    "/public/signals?limit=3",
+    "/public/signals/v2?page_size=3",
     { items: [] },
     300
   );
-  return response.items;
+  return response.items.map(normalizeSignal);
 }
 
 export function siteUrl(path = ""): string {

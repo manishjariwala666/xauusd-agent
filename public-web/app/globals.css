@@ -347,3 +347,46 @@ p { color: var(--muted); }
   html { scroll-behavior: auto; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+/* Phase 4A public signals */
+.public-signal-filters { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)) auto; gap: 12px; align-items: end; margin-bottom: 22px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--cream); }
+.public-signal-filters label { display: grid; gap: 6px; color: var(--muted); font-size: .72rem; font-weight: 750; text-transform: uppercase; }
+.public-signal-filters input, .public-signal-filters select { min-width: 0; height: 46px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--ink); }
+.signals-status { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+.signals-status p { margin: 0; font-size: .78rem; }
+.public-signal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.public-signal-card { min-width: 0; padding: 26px; border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 12px 38px rgba(12,32,51,.055); }
+.public-signal-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.public-signal-card-head span { color: var(--muted); font-size: .7rem; }
+.public-signal-card h2 { margin: 7px 0 0; font-size: 1.8rem; }
+.public-direction { display: inline-flex; flex-direction: column; align-items: flex-end; padding: 7px 10px; border: 1px solid currentColor; border-radius: 9px; font-size: .78rem; font-weight: 850; }
+.public-direction.buy { color: var(--green); background: #effaf6; }
+.public-direction.sell { color: var(--red); background: #fff4f4; }
+.public-direction small { color: currentColor; font-size: .55rem; letter-spacing: .08em; }
+.public-signal-card dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 24px 0; }
+.public-signal-card dl div { min-width: 0; padding: 12px; border-radius: 9px; background: var(--soft); }
+.public-signal-card dt, .signal-level-grid span, .target-strip span { color: var(--muted); font-size: .64rem; font-weight: 750; text-transform: uppercase; }
+.public-signal-card dd { overflow-wrap: anywhere; margin: 4px 0 0; font-weight: 750; }
+.legacy-note { color: var(--muted); font-size: .72rem; }
+.signal-detail { width: min(980px, 100%); margin: 64px auto 112px; }
+.signal-detail-header { max-width: 850px; margin: 0 auto 50px; text-align: center; }
+.signal-detail-header h1 { margin: 16px 0 20px; font-size: clamp(3rem, 7vw, 5.7rem); }
+.signal-detail-header > p { max-width: 720px; margin: auto; font-size: 1.12rem; }
+.signal-detail section { margin: 48px 0; }
+.signal-level-section, .signal-analysis, .signal-risk-note { padding: clamp(24px, 5vw, 48px); border: 1px solid var(--line); border-radius: 20px; }
+.signal-level-section { background: var(--navy-950); color: white; }
+.signal-level-section h2 { color: white; }
+.signal-level-grid, .target-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 28px; }
+.signal-level-grid div, .target-strip div { padding: 16px; border: 1px solid rgba(255,255,255,.13); border-radius: 10px; background: rgba(255,255,255,.05); }
+.signal-level-grid span, .target-strip span { display: block; color: #93a6b7; }
+.signal-level-grid strong, .target-strip strong { display: block; margin-top: 5px; overflow-wrap: anywhere; }
+.signal-analysis > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.signal-analysis section { margin: 0; }
+.signal-analysis h3 { margin-top: 0; }
+.signal-risk-note { border-left: 5px solid var(--gold); background: var(--cream); }
+
+@media (max-width: 600px) {
+  .public-signal-filters, .public-signal-grid, .signal-level-grid, .target-strip, .signal-analysis > div { grid-template-columns: 1fr; }
+  .signals-status { flex-direction: column; gap: 4px; }
+  .public-signal-card { padding: 20px; }
+  .signal-detail-header { text-align: left; }
+}

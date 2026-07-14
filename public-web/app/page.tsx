@@ -23,7 +23,7 @@ export default async function HomePage() {
     { icon: "send", title: "Telegram Alerts", text: "Fast channel delivery when a verified public alert is available.", href: links.telegram || "/contact" },
     { icon: "brain", title: "AI Research", text: "AI-assisted synthesis with explicit risk framing and editorial review.", href: "/blog" }
   ];
-  const updateTime = signal?.signal_time || latest?.published_at || latest?.created_at;
+  const updateTime = signal?.updated_at || signal?.published_at || signal?.signal_time || latest?.published_at || latest?.created_at;
   return <>
     <section className="hero">
       <div className="hero-copy"><span className="eyebrow"><span />GOLD INTELLIGENCE, BUILT FOR CLARITY</span><h1>Read the gold market with <em>calm conviction.</em></h1><p>VenusRealm brings XAUUSD signals, market structure, financial astrology and AI-assisted research into one disciplined, educational view.</p><div className="hero-actions"><Link className="button button-gold" href="/signals">View Gold Signals <Icon name="arrow" size={18} /></Link>{links.telegram && <a className="button button-ghost" href={links.telegram} rel="noreferrer" target="_blank"><Icon name="send" size={18} />Join Telegram</a>}</div><div className="trust-chips"><span><Icon name="brain" size={16} />AI-assisted research</span><span><Icon name="shield" size={16} />Risk-first analysis</span><span><Icon name="book" size={16} />Educational content</span></div></div>

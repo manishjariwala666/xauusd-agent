@@ -32,14 +32,33 @@ export type ContentItem = {
 
 export type Signal = {
   id?: number;
+  public_id?: string;
   symbol?: string;
   signal_type?: string;
-  price?: number;
-  target_1?: number;
-  target_2?: number;
-  target_3?: number;
-  stop_loss?: number;
+  direction?: string;
+  price?: number | string;
+  entry_price?: number | string;
+  entry_price_min?: number | string | null;
+  entry_price_max?: number | string | null;
+  entry_type?: string;
+  target_1?: number | string | null;
+  target_2?: number | string | null;
+  target_3?: number | string | null;
+  target_4?: number | string | null;
+  stop_loss?: number | string | null;
   signal_time?: string;
+  published_at?: string | null;
+  updated_at?: string | null;
   timeframe?: string;
   status?: string;
+  market?: string;
+  risk_level?: string;
+  confidence_label?: string | null;
+  analysis_summary?: string | null;
+  technical_reason?: string | null;
+  astrology_reason?: string | null;
+  risk_note?: string | null;
+  outcome?: string | null;
 };
+
+export type SignalPage = { items: Signal[]; page: number; page_size: number; total: number; pages: number; fallback?: boolean };
