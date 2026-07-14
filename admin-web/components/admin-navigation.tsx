@@ -6,9 +6,10 @@ import { useEffect, useState } from "react";
 
 const primary = [
   ["Dashboard", "/admin/dashboard", "⌂"], ["Blog Studio", "/admin/posts", "▤"],
-  ["Pages", "/admin/pages", "□"], ["Categories", "/admin/categories", "◇"]
+  ["Pages", "/admin/pages", "□"], ["Categories", "/admin/categories", "◇"],
+  ["Media", "/admin/media", "▧"]
 ] as const;
-const future = [["Media", "▧"], ["SEO", "⌁"], ["Signals", "⌁"], ["Social", "◎"], ["Agents", "✣"], ["Logs", "≡"], ["Settings", "⚙"]] as const;
+const future = [["SEO", "⌁"], ["Signals", "⌁"], ["Social", "◎"], ["Agents", "✣"], ["Logs", "≡"], ["Settings", "⚙"]] as const;
 
 export function AdminNavigation() {
   const pathname = usePathname();

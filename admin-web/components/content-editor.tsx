@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "rea
 import { useRouter } from "next/navigation";
 import type { Category, ContentDetail } from "@/lib/content-api";
 import { SafeContentPreview } from "./safe-content-preview";
+import { FeaturedImagePicker } from "./featured-image-picker";
 
 type Tab = "preview" | "seo" | "og" | "faq" | "metadata";
 type Intent = "save" | "draft" | "publish" | "schedule";
@@ -20,6 +21,7 @@ export function ContentEditor({ kind, initial, categories, publicWebsiteUrl }: {
   const [excerpt, setExcerpt] = useState(initial?.excerpt || "");
   const [body, setBody] = useState(initial?.body || "");
   const [scheduledAt, setScheduledAt] = useState(initial?.scheduled_at ? initial.scheduled_at.slice(0, 16) : "");
+  const [pendingMediaId, setPendingMediaId] = useState<number | null>(initial?.featured_media_id || null);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -57,6 +59,10 @@ export function ContentEditor({ kind, initial, categories, publicWebsiteUrl }: {
       const response = await fetch(endpoint, { method: initial ? "PATCH" : "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": token.csrfToken }, body: JSON.stringify(payload) });
       const result = await response.json() as { id?: number; detail?: string; message?: string };
       if (!response.ok) { setMessage(result.detail || result.message || "Content could not be saved."); setSavedMessage("Save failed"); return; }
+      if (!initial && pendingMediaId && result.id) {
+        const featured = await fetch(`/api/admin/featured-image/${result.id}`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": token.csrfToken }, body: JSON.stringify({ media_id: pendingMediaId }) });
+        if (!featured.ok) { setMessage("Content was saved, but the featured image could not be attached. Retry from the editor."); }
+      }
       setDirty(false); setSavedMessage(intent === "publish" ? "Published successfully" : intent === "schedule" ? "Post scheduled" : "All changes saved");
       router.replace(`/admin/${kind}/${result.id}/edit`); router.refresh();
     } catch { setMessage("Content service is temporarily unavailable."); setSavedMessage("Save failed"); }
@@ -109,7 +115,7 @@ export function ContentEditor({ kind, initial, categories, publicWebsiteUrl }: {
           {message && <div className="form-error" role="alert">{message}</div>}
         </section>
         <section className="editor-card"><div className="card-heading"><div><h2>Organization</h2></div></div><label>Category<select name="category_id" defaultValue={initial?.category_id || ""}><option value="">Uncategorized</option>{categories.map(c => <option value={c.id} key={c.id}>{c.title}</option>)}</select></label><label>Subcategory<input name="subcategory" defaultValue={initial?.subcategory || ""} maxLength={120} /></label><label>Author<input value={initial?.author || "Current administrator"} readOnly aria-describedby="author-note" /></label><small id="author-note" className="support-note">Author reassignment is not supported by the current API.</small></section>
-        <section className="editor-card featured-card"><div className="card-heading"><div><h2>Featured image</h2></div><span className="coming-badge">Media later</span></div><div className="featured-placeholder" style={initial?.featured_image ? { backgroundImage: `url(${initial.featured_image})` } : undefined}>{!initial?.featured_image && <><b>▧</b><span>No featured image</span><small>Managed by the future Media phase</small></>}</div></section>
+        <FeaturedImagePicker contentId={initial?.id} initial={{ id: initial?.featured_media_id || null, url: initial?.featured_image || null, alt: initial?.featured_image_alt || "" }} onPendingChange={setPendingMediaId} />
         <section className="editor-card seo-side-card"><div className="score-ring" style={{ "--score": `${initial?.seo_score || 0}%` } as CSSProperties}><strong>{initial?.seo_score || 0}</strong><small>/ 100</small></div><div><h2>SEO score</h2><p>Based on existing SEO metadata.</p></div></section>
         <section className="editor-card public-card"><h2>Public URL</h2><code>{publicUrl}</code>{isPublished && publicWebsiteUrl && <a href={publicUrl} target="_blank" rel="noreferrer" className="secondary-button">Open Public Post ↗</a>}</section>
         {initial && <section className="danger-actions"><button type="button" onClick={() => action("duplicate")} disabled={busy}>Duplicate post</button>{!isTrashed && <button type="button" className="danger-link" onClick={() => action("trash")} disabled={busy}>Move to Trash</button>}</section>}

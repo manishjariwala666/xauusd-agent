@@ -67,4 +67,14 @@ describe("Phase 1 security controls", () => {
     expect(source("app/api/admin/auth/login/route.ts")).toContain("verifyCsrfToken");
     expect(source("app/api/admin/auth/logout/route.ts")).toContain("verifyCsrfToken");
   });
+
+  it("keeps media storage authority server-side", () => {
+    const browserMedia = [
+      source("components/media-library.tsx"),
+      source("components/featured-image-picker.tsx"),
+      source("app/api/admin/media/[...path]/route.ts")
+    ].join("\n");
+    expect(browserMedia).not.toMatch(/SUPABASE_SERVICE_ROLE|DATABASE_URL|storage\.from/);
+    expect(browserMedia).not.toContain("base64");
+  });
 });

@@ -8,6 +8,7 @@ export type ContentSummary = {
   author: string | null; published_at: string | null;
   scheduled_at: string | null; updated_at: string;
   views: number; seo_score: number; featured_image: string | null;
+  featured_media_id: number | null;
 };
 export type ContentDetail = ContentSummary & {
   excerpt: string; body: string; category_id: number | null;
@@ -16,6 +17,7 @@ export type ContentDetail = ContentSummary & {
   focus_keyword: string | null; faq: Array<Record<string, unknown>>;
   schema_jsonld: Record<string, unknown>; open_graph: Record<string, unknown>;
   twitter_card: Record<string, unknown>;
+  featured_image_alt: string | null;
 };
 export type Category = {
   id: number; title: string; slug: string; description: string;
