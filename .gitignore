@@ -1,11 +1,52 @@
 __pycache__/
 *.py[cod]
 .streamlit/secrets.toml
+
+# Local environment files. Keep sanitized templates tracked.
 .env
+.env.*
+!.env.example
 google_creds.json
+service_account.json
+
+# Local admin media and upload storage.
+admin-media/
+media-local/
+local-media/
+.local-media/
+uploads/
+
+# Isolated PostgreSQL data and temporary database clusters.
+pgdata/
+.pgdata/
+postgres-data/
+.postgres/
+postgres-cluster/
+tmp-postgres*/
+
+# Local preview runtime state.
+.local-preview/
+.runtime/
+*.pid
+*.sock
+*.log
+
+# Temporary build, test, and coverage artifacts.
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.turbo/
+.coverage
+coverage/
+htmlcov/
+node_modules/
+.next/
+dist/
+build/
+*.tsbuildinfo
+
 pico.save
 *.swp
-service_account.json
 public-web/node_modules/
 public-web/.next/
 public-web/*.tsbuildinfo
