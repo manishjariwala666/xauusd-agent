@@ -1,0 +1,2 @@
+import{cookies}from"next/headers";import{notFound}from"next/navigation";import{ResultEditor}from"@/components/publication-editors";import{fetchResult}from"@/lib/publications-api";import{ADMIN_SESSION_COOKIE}from"@/lib/session";
+export default async function Page({params}:{params:Promise<{id:string}>}){const{id}=await params;const x=await fetchResult(id,(await cookies()).get(ADMIN_SESSION_COOKIE)?.value||"");if(!x)notFound();return <ResultEditor initial={x} review/>}
