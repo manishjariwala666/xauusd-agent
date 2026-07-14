@@ -36,6 +36,7 @@ tmp-postgres*/
 .ruff_cache/
 .mypy_cache/
 .turbo/
+.pnpm-store/
 .coverage
 coverage/
 htmlcov/
