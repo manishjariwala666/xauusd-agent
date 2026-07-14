@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { ContentGrid } from "@/components/content-grid";
 import { Icon, type IconName } from "@/components/icon";
-import { getContent, getSignalSnapshot } from "@/lib/api";
+import { getContent, getResultSnapshot, getSignalSnapshot } from "@/lib/api";
 import { configuredLinks } from "@/lib/site-config";
 
 export const revalidate = 300;
 
 export default async function HomePage() {
-  const [content, signals] = await Promise.all([
-    getContent(undefined, 12), getSignalSnapshot()
+  const [content, signals, results] = await Promise.all([
+    getContent(undefined, 12), getSignalSnapshot(), getResultSnapshot()
   ]);
   const publishedBlogs = content.filter((item) => ["BLOG", "AI_BLOG", "ANALYSIS", "EDUCATION", "ADVISORY"].includes(item.content_type)).slice(0, 6);
   const astrology = content.filter((item) => `${item.title} ${item.excerpt || ""} ${item.category_title || ""}`.toLowerCase().includes("astrolog"));
@@ -44,7 +44,7 @@ export default async function HomePage() {
 
     <section className="why-section" aria-labelledby="why-title"><div><span className="eyebrow">WHY VENUSREALM</span><h2 id="why-title">Designed for disciplined readers, not impulsive clicks.</h2><p>Every section prioritizes context, explicit uncertainty and educational value.</p></div><div className="principle-grid">{["Risk-first approach","Transparent educational analysis","Fast configured alerts","Multi-channel updates","Structured editorial content","Human approval where applicable"].map((item) => <span key={item}><Icon name="check" size={17} />{item}</span>)}</div></section>
 
-    <section id="results" className="results-section" aria-labelledby="results-title"><div><span className="eyebrow">VERIFIED RESULTS</span><h2 id="results-title">Proof should be documented, not promised.</h2><p>No verified performance dataset is currently available through the public API. VenusRealm will not display invented win rates, profits or testimonials.</p></div><div className="empty-proof"><Icon name="target" size={28} /><strong>Awaiting verified public records</strong><span>Results will appear only with source data and clear methodology.</span></div></section>
+    <section id="results" className="results-section" aria-labelledby="results-title"><div><span className="eyebrow">VERIFIED RESULTS</span><h2 id="results-title">Proof should be documented, not promised.</h2><p>Only evidence-backed, redacted, compliance-approved records are eligible. Account profit, ROI and unverified percentages are never inferred.</p><Link className="text-link" href="/results">Read methodology and records <Icon name="arrow" size={16}/></Link></div>{results.length?<div className="empty-proof"><Icon name="target" size={28}/><strong>{results[0].symbol} {results[0].direction}: {results[0].result_points} {results[0].result_unit}</strong><span>{results[0].public_summary}</span></div>:<div className="empty-proof"><Icon name="target" size={28}/><strong>Awaiting verified public records</strong><span>No synthetic claims or placeholder percentages are shown.</span></div>}</section>
 
     <section className="video-section" aria-labelledby="video-title"><div><span className="eyebrow">VIDEO & YOUTUBE</span><h2 id="video-title">Watch the research process.</h2><p>{links.video || links.youtube ? "Open the configured VenusRealm video channel for published market education." : "No public video channel is configured for this preview. No placeholder videos are loaded."}</p></div>{(links.video || links.youtube) && <a className="button button-dark" href={links.video || links.youtube} rel="noreferrer" target="_blank">Open YouTube <Icon name="arrow" size={18} /></a>}</section>
 

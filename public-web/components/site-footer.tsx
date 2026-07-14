@@ -12,7 +12,7 @@ export function SiteFooter() {
       <div className="footer-lead"><Link className="brand footer-brand" href="/"><span className="brand-mark"><Icon name="gold" size={22} /></span><span>Venus<span>Realm</span></span></Link><p>Risk-first gold market intelligence, educational analysis and carefully structured public research.</p></div>
       <div className="footer-columns">
         <FooterColumn title="VenusRealm" links={[["About","/about"],["Contact","/contact"],["How It Works","/#how-it-works"]]} />
-        <FooterColumn title="Markets" links={[["Gold Signals","/signals"],["Market Analysis","/category/analysis-department"],["Profit Proof","/#results"],["Announcements","/announcements"]]} />
+        <FooterColumn title="Markets" links={[["Gold Signals","/signals"],["Market Analysis","/category/analysis-department"],["Verified Results","/results"],["Announcements","/announcements"]]} />
         <FooterColumn title="Resources" links={resources} />
         <FooterColumn title="Legal" links={[["Risk Disclaimer","/legal/risk-disclaimer"],["Privacy Policy","/legal/privacy-policy"],["Terms and Conditions","/legal/terms"],["Cookie Policy","/legal/cookie-policy"],["Refund Policy","/legal/refund-policy"]]} />
         {social.length > 0 && <div className="footer-column"><h2>Connect</h2>{social.map((item) => <a href={item.href} key={item.label} rel="noreferrer" target="_blank">{item.label}</a>)}</div>}

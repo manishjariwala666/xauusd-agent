@@ -62,3 +62,6 @@ export type Signal = {
 };
 
 export type SignalPage = { items: Signal[]; page: number; page_size: number; total: number; pages: number; fallback?: boolean };
+export type Announcement={slug:string;title:string;summary:string;body?:string;type:string;priority:string;pinned:boolean;featured:boolean;cta_label?:string|null;cta_url?:string|null;published_at:string;expires_at?:string|null};
+export type VerifiedResult={public_id:string;symbol:string;direction:"BUY"|"SELL";timeframe?:string|null;entry_price:string;exit_price:string;stop_loss?:string|null;targets?:string[];lifecycle_outcome:string;result_points:string;result_unit:string;calculation_basis?:string;evidence_type?:string|null;verified_at:string;published_at:string;opened_at:string;closed_at:string;public_summary:string;featured:boolean};
+export type PublicPage<T>={items:T[];page:number;page_size:number;total:number;pages:number;fallback?:boolean};

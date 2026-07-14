@@ -1,5 +1,5 @@
 import { cache } from "react";
-import type { Category, ContentItem, Signal, SignalPage } from "./types";
+import type { Announcement, Category, ContentItem, PublicPage, Signal, SignalPage, VerifiedResult } from "./types";
 
 const API_BASE = (
   process.env.BACKEND_BASE_URL ||
@@ -101,6 +101,13 @@ export async function getSignalSnapshot(): Promise<Signal[]> {
   );
   return response.items.map(normalizeSignal);
 }
+export async function getAnnouncements(query=new URLSearchParams()):Promise<PublicPage<Announcement>>{const p=new URLSearchParams(query);p.set("page_size","12");return fetchJson(`/public/announcements/v2?${p}`,{items:[],page:1,page_size:12,total:0,pages:1,fallback:true},120)}
+async function announcementDetail(slug:string){const r=await fetchJson<{item:Announcement|null}>(`/public/announcements/v2/${encodeURIComponent(slug)}`,{item:null},120);return r.item}
+export const getAnnouncementDetail=cache(announcementDetail);
+export async function getResults(query=new URLSearchParams()):Promise<PublicPage<VerifiedResult>>{const p=new URLSearchParams(query);p.set("page_size","12");return fetchJson(`/public/results?${p}`,{items:[],page:1,page_size:12,total:0,pages:1,fallback:true},120)}
+async function resultDetail(id:string){const r=await fetchJson<{item:VerifiedResult|null}>(`/public/results/${encodeURIComponent(id)}`,{item:null},120);return r.item}
+export const getResultDetail=cache(resultDetail);
+export async function getResultSnapshot():Promise<VerifiedResult[]>{const r=await fetchJson<PublicPage<VerifiedResult>>("/public/results?page_size=3",{items:[],page:1,page_size:3,total:0,pages:1},300);return r.items}
 
 export function siteUrl(path = ""): string {
   const base = (process.env.NEXT_PUBLIC_SITE_URL || "https://venusrealm.net").replace(/\/$/, "");
