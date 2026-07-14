@@ -8,6 +8,7 @@ export const primaryNavigation: NavigationItem[] = [
   { label: "Astrology", href: "/astrology" },
   { label: "Learning", href: "/category/market-education" },
   { label: "Blog", href: "/blog" },
+  { label: "Automation", href: "/automation-services" },
   { label: "About", href: "/about" }
 ];
 
