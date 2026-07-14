@@ -34,3 +34,26 @@ def test_public_pages_have_one_h1_and_no_evidence_url():
 def test_public_details_reuse_share_controls():
     assert "ShareControls" in (ROOT/"public-web/app/announcements/[slug]/page.tsx").read_text()
     assert "ShareControls" in (ROOT/"public-web/app/results/[publicId]/page.tsx").read_text()
+
+def test_publication_indexes_use_bounded_responsive_layout():
+    announcements = (ROOT / "public-web/app/announcements/page.tsx").read_text()
+    results = (ROOT / "public-web/app/results/page.tsx").read_text()
+    css = (ROOT / "public-web/app/globals.css").read_text()
+    for source in (announcements, results):
+        assert 'className="publication-page"' in source
+        assert 'className="publication-filters"' in source
+        assert 'className="publication-grid"' in source
+        assert source.count("<h1") == 1
+    assert ".publication-grid {" in css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
+    assert ".publication-card h2" in css and "font-size: clamp(" in css
+    assert "overflow-wrap: anywhere" in css and "word-break: normal" in css
+    assert "@media (max-width: 860px)" in css
+    assert "@media (max-width: 360px)" in css
+
+def test_publication_filters_have_accessible_focus_and_mobile_stack():
+    css = (ROOT / "public-web/app/globals.css").read_text()
+    assert ".publication-filters input:focus-visible" in css
+    assert ".publication-filters select:focus-visible" in css
+    assert ".publication-filters button" in css
+    assert ".publication-filters { grid-template-columns: 1fr;" in css
