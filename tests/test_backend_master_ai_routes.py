@@ -87,8 +87,8 @@ def test_public_content_cache_has_short_ttl_and_does_not_cache_signals(
     )
     monkeypatch.setattr(
         backend,
-        "get_live_market_signals",
-        lambda limit=12: signal_calls.append(limit) or [],
+        "list_public_signals",
+        lambda page=1, page_size=12: signal_calls.append(page_size) or {"items": []},
     )
     client = TestClient(app)
 
@@ -136,8 +136,8 @@ def test_public_categories_and_signals_endpoints(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         backend,
-        "get_live_market_signals",
-        lambda limit=12: [{"symbol": "XAUUSD", "limit": limit}],
+        "list_public_signals",
+        lambda page=1, page_size=12: {"items": [{"symbol": "XAUUSD", "limit": page_size}]},
     )
     client = TestClient(app)
 
