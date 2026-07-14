@@ -11,20 +11,23 @@ async function fetchJson<T>(
   fallback: T,
   revalidate = 60
 ): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2000);
-  try {
-    const response = await fetch(`${API_BASE}${path}`, {
-      signal: controller.signal,
-      next: { revalidate }
-    });
-    if (!response.ok) return fallback;
-    return (await response.json()) as T;
-  } catch {
-    return fallback;
-  } finally {
-    clearTimeout(timeout);
+  const attempts = revalidate > 0 ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        signal: controller.signal,
+        next: { revalidate }
+      });
+      if (response.ok) return (await response.json()) as T;
+    } catch {
+      // Cacheable pages get one bounded retry before using their safe fallback.
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+  return fallback;
 }
 
 export async function getCategories(): Promise<Category[]> {
