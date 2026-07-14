@@ -37,6 +37,7 @@ tmp-postgres*/
 .mypy_cache/
 .turbo/
 .pnpm-store/
+.netlify/
 .coverage
 coverage/
 htmlcov/
