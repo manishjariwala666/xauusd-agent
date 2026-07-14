@@ -25,6 +25,7 @@ from core.database import session_scope
 from services.admin_auth_api import router as admin_auth_router
 from services.admin_content_api import router as admin_content_router
 from services.admin_media_api import router as admin_media_router
+from services.admin_seo_api import router as admin_seo_router
 from services.conversation_service import record_inbound_message
 from services.content_service import list_categories, list_content
 from services.migration_service import apply_pending_migrations
@@ -123,6 +124,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1_000)
 app.include_router(admin_auth_router)
 app.include_router(admin_content_router)
 app.include_router(admin_media_router)
+app.include_router(admin_seo_router)
 _local_media_root = os.getenv("ADMIN_MEDIA_LOCAL_ROOT", "").strip()
 if _local_media_root:
     Path(_local_media_root).mkdir(parents=True, exist_ok=True)
