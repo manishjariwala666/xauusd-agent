@@ -160,7 +160,15 @@ def save_admin_seo(*, content_id: int, actor_id: int, request_id: str, payload: 
 def score_admin_seo(*, content_id: int, actor_id: int, request_id: str) -> dict[str, Any]:
     result = validate_admin_seo(content_id)
     with session_scope() as session:
-        session.execute(text("UPDATE public.content_seo SET seo_score=:score,seo_validation_issues=CAST(:issues AS JSONB),updated_by=:actor,updated_at=NOW() WHERE content_id=:id"), {"score": result["score"], "issues": json.dumps(result["issues"]), "actor": actor_id, "id": content_id})
+        content = _content_row(session, content_id)
+        session.execute(text("""
+            INSERT INTO public.content_seo (content_id,slug,seo_score,seo_validation_issues,updated_by,updated_at)
+            VALUES (:id,:slug,:score,CAST(:issues AS JSONB),:actor,NOW())
+            ON CONFLICT (content_id) DO UPDATE SET
+                slug=EXCLUDED.slug,seo_score=EXCLUDED.seo_score,
+                seo_validation_issues=EXCLUDED.seo_validation_issues,
+                updated_by=EXCLUDED.updated_by,updated_at=NOW()
+        """), {"score": result["score"], "issues": json.dumps(result["issues"]), "actor": actor_id, "id": content_id, "slug": content["slug"]})
         _audit(session, actor_id, "CONTENT_SEO_SCORED", request_id, {"content_id": content_id, "score": result["score"]})
     return {key: result[key] for key in ("content_id", "score", "issues", "valid")}
 
