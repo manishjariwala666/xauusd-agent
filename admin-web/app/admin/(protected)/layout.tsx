@@ -10,5 +10,6 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
   const result = await fetchAdminSession(token);
   if (result.status === "forbidden") redirect("/admin/forbidden");
   if (result.status !== "authenticated" || !result.user) redirect("/admin/login");
-  return <AdminShell user={result.user}>{children}</AdminShell>;
+  const localQa = process.env.ADMIN_LOCAL_QA_MODE === "true";
+  return <AdminShell user={result.user} localQa={localQa}>{children}</AdminShell>;
 }
