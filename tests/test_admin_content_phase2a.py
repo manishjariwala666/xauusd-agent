@@ -41,3 +41,14 @@ def test_existing_public_content_service_and_streamlit_admin_are_preserved() -> 
     assert "def list_content" in public_service
     assert "def save_content" in public_service
     assert "streamlit" in streamlit.lower()
+
+
+def test_phase2b_extends_existing_contract_without_new_seo_writes() -> None:
+    api = (ROOT / "services/admin_content_api.py").read_text()
+    service = (ROOT / "services/admin_content_service.py").read_text()
+    assert 'action == "duplicate"' in api
+    assert 'status: str = Query("all", pattern="^(all|draft|published|scheduled|trash)$")' in api
+    assert "category_id: int | None" in api
+    assert "duplicate_admin_content" in service
+    assert '"stats"' in service
+    assert "save_admin_content" in service

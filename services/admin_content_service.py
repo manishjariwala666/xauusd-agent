@@ -48,6 +48,7 @@ def list_admin_content(
     search: str = "",
     status: str = "all",
     sort: str = "updated_desc",
+    category_id: int | None = None,
 ) -> dict[str, Any]:
     types = _types_for_kind(kind)
     page = max(1, int(page))
@@ -62,6 +63,9 @@ def list_admin_content(
     if normalized_search:
         clauses.append("(ci.title ILIKE :search OR ci.slug ILIKE :search)")
         parameters["search"] = f"%{normalized_search[:120]}%"
+    if category_id is not None:
+        clauses.append("ci.category_id = :category_id")
+        parameters["category_id"] = int(category_id)
     normalized_status = str(status or "all").lower()
     if normalized_status == "trash":
         clauses.append("ci.deleted_at IS NOT NULL")
@@ -69,13 +73,16 @@ def list_admin_content(
         clauses.append("ci.deleted_at IS NULL")
         if normalized_status == "published":
             clauses.append("ci.is_published = TRUE")
+        elif normalized_status == "scheduled":
+            clauses.append("ci.is_published = FALSE AND ci.scheduled_at > NOW()")
         elif normalized_status == "draft":
-            clauses.append("ci.is_published = FALSE")
+            clauses.append("ci.is_published = FALSE AND (ci.scheduled_at IS NULL OR ci.scheduled_at <= NOW())")
         elif normalized_status != "all":
             raise ValueError("Unsupported content status filter.")
     order_by = _SORTS.get(str(sort or ""), _SORTS["updated_desc"])
     where_clause = " AND ".join(clauses)
     with session_scope() as session:
+        view_count = "ci.view_count" if _column_exists(session, "content_items", "view_count") else "0::bigint"
         total = session.execute(
             text(f"SELECT COUNT(*) FROM public.content_items ci WHERE {where_clause}"),
             parameters,
@@ -86,13 +93,24 @@ def list_admin_content(
                 SELECT ci.id, ci.title, ci.slug, ci.content_type,
                        CASE WHEN ci.deleted_at IS NOT NULL THEN 'trash'
                             WHEN ci.is_published THEN 'published'
+                            WHEN ci.scheduled_at > NOW() THEN 'scheduled'
                             ELSE 'draft' END AS status,
                        cc.title AS category,
                        u.email AS author,
-                       ci.published_at, ci.scheduled_at, ci.updated_at
+                       ci.published_at, ci.scheduled_at, ci.updated_at,
+                       COALESCE({view_count}, 0) AS views,
+                       COALESCE(cs.open_graph->>'image', cs.open_graph->>'image_url') AS featured_image,
+                       LEAST(100,
+                           (CASE WHEN COALESCE(cs.meta_title, '') <> '' THEN 25 ELSE 0 END) +
+                           (CASE WHEN COALESCE(cs.meta_description, '') <> '' THEN 25 ELSE 0 END) +
+                           (CASE WHEN COALESCE(cs.focus_keyword, '') <> '' THEN 20 ELSE 0 END) +
+                           (CASE WHEN COALESCE(cs.slug, ci.slug, '') <> '' THEN 15 ELSE 0 END) +
+                           (CASE WHEN jsonb_array_length(COALESCE(cs.faq, '[]'::jsonb)) > 0 THEN 15 ELSE 0 END)
+                       ) AS seo_score
                 FROM public.content_items ci
                 LEFT JOIN public.content_categories cc ON cc.id = ci.category_id
                 LEFT JOIN public.users u ON u.id = ci.created_by
+                LEFT JOIN public.content_seo cs ON cs.content_id = ci.id
                 WHERE {where_clause}
                 ORDER BY {order_by}
                 LIMIT :limit OFFSET :offset
@@ -100,29 +118,61 @@ def list_admin_content(
             ),
             parameters,
         ).mappings().all()
+        stats = session.execute(
+            text(
+                f"""
+                SELECT COUNT(*) AS total,
+                       COUNT(*) FILTER (WHERE ci.deleted_at IS NULL AND ci.is_published) AS published,
+                       COUNT(*) FILTER (WHERE ci.deleted_at IS NULL AND NOT ci.is_published
+                           AND (ci.scheduled_at IS NULL OR ci.scheduled_at <= NOW())) AS drafts,
+                       COUNT(*) FILTER (WHERE ci.deleted_at IS NULL AND NOT ci.is_published
+                           AND ci.scheduled_at > NOW()) AS scheduled,
+                       COUNT(*) FILTER (WHERE ci.deleted_at IS NOT NULL) AS trashed,
+                       COALESCE(SUM({view_count}), 0) AS total_views
+                FROM public.content_items ci
+                WHERE ci.content_type = ANY(:types)
+                """
+            ), {"types": list(types)},
+        ).mappings().one()
     return {
         "items": [dict(row) for row in rows],
         "page": page,
         "page_size": page_size,
         "total": int(total),
         "pages": max(1, (int(total) + page_size - 1) // page_size),
+        "stats": {key: int(value or 0) for key, value in dict(stats).items()},
     }
 
 
 def get_admin_content(*, kind: str, content_id: int) -> dict[str, Any]:
     types = _types_for_kind(kind)
     with session_scope() as session:
+        view_count = "ci.view_count" if _column_exists(session, "content_items", "view_count") else "0::bigint"
         row = session.execute(
             text(
-                """
+                f"""
                 SELECT ci.id, ci.content_type, ci.title, ci.slug, ci.excerpt,
                        ci.body, ci.category_id, ci.subcategory,
                        CASE WHEN ci.deleted_at IS NOT NULL THEN 'trash'
                             WHEN ci.is_published THEN 'published'
                             ELSE 'draft' END AS status,
                        ci.is_public, ci.published_at, ci.scheduled_at,
-                       ci.created_at, ci.updated_at
+                       ci.created_at, ci.updated_at, cc.title AS category,
+                       u.email AS author, COALESCE({view_count}, 0) AS views,
+                       cs.meta_title, cs.meta_description, cs.focus_keyword,
+                       cs.faq, cs.schema_jsonld, cs.open_graph, cs.twitter_card,
+                       COALESCE(cs.open_graph->>'image', cs.open_graph->>'image_url') AS featured_image,
+                       LEAST(100,
+                           (CASE WHEN COALESCE(cs.meta_title, '') <> '' THEN 25 ELSE 0 END) +
+                           (CASE WHEN COALESCE(cs.meta_description, '') <> '' THEN 25 ELSE 0 END) +
+                           (CASE WHEN COALESCE(cs.focus_keyword, '') <> '' THEN 20 ELSE 0 END) +
+                           (CASE WHEN COALESCE(cs.slug, ci.slug, '') <> '' THEN 15 ELSE 0 END) +
+                           (CASE WHEN jsonb_array_length(COALESCE(cs.faq, '[]'::jsonb)) > 0 THEN 15 ELSE 0 END)
+                       ) AS seo_score
                 FROM public.content_items ci
+                LEFT JOIN public.content_categories cc ON cc.id = ci.category_id
+                LEFT JOIN public.users u ON u.id = ci.created_by
+                LEFT JOIN public.content_seo cs ON cs.content_id = ci.id
                 WHERE ci.id = :content_id AND ci.content_type = ANY(:types)
                 """
             ),
@@ -231,6 +281,31 @@ def save_admin_content(
     except IntegrityError as exc:
         raise DuplicateSlugError("This slug is already in use.") from exc
     return get_admin_content(kind=kind, content_id=int(saved_id))
+
+
+def duplicate_admin_content(
+    *, content_id: int, actor_id: int, request_id: str,
+) -> dict[str, Any]:
+    """Create a real draft copy without mutating the source post."""
+    source = get_admin_content(kind="posts", content_id=content_id)
+    base_slug = normalize_slug(f"{source['slug']}-copy")
+    slug = base_slug
+    with session_scope() as session:
+        suffix = 2
+        while session.execute(
+            text("""SELECT 1 FROM public.content_items ci
+                    LEFT JOIN public.content_seo cs ON cs.content_id = ci.id
+                    WHERE ci.slug = :slug OR cs.slug = :slug LIMIT 1"""),
+            {"slug": slug},
+        ).scalar_one_or_none():
+            slug = f"{base_slug[:150]}-{suffix}"
+            suffix += 1
+    return save_admin_content(
+        kind="posts", actor_id=actor_id, title=f"{source['title']} (Copy)",
+        slug=slug, excerpt=source.get("excerpt") or "", body=source.get("body") or "",
+        category_id=source.get("category_id"), subcategory=source.get("subcategory") or "",
+        status="draft", scheduled_at=None, published_at=None, request_id=request_id,
+    )
 
 
 def transition_content(
@@ -435,6 +510,15 @@ def _assert_unique_slug(session: Any, slug: str, content_id: int | None) -> None
     ).scalar_one_or_none()
     if duplicate is not None:
         raise DuplicateSlugError("This slug is already in use.")
+
+
+def _column_exists(session: Any, table_name: str, column_name: str) -> bool:
+    return bool(session.execute(
+        text("""SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = :table_name
+                  AND column_name = :column_name LIMIT 1"""),
+        {"table_name": table_name, "column_name": column_name},
+    ).scalar_one_or_none())
 
 
 def _audit(

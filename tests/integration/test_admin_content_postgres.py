@@ -201,6 +201,24 @@ def test_future_schedule_remains_draft() -> None:
     assert scheduled["scheduled_at"] == scheduled_at
 
 
+def test_blog_studio_duplicate_scheduled_filter_category_and_stats() -> None:
+    scheduled_at = datetime.now(timezone.utc) + timedelta(days=1)
+    original = create(title="Studio source", slug="studio-source", scheduled_at=scheduled_at)
+    duplicate = admin_content_service.duplicate_admin_content(
+        content_id=original["id"], actor_id=1, request_id="duplicate-post",
+    )
+    assert duplicate["id"] != original["id"]
+    assert duplicate["title"] == "Studio source (Copy)"
+    assert duplicate["status"] == "draft"
+    scheduled = admin_content_service.list_admin_content(
+        kind="posts", page=1, page_size=20, status="scheduled", category_id=1,
+    )
+    assert scheduled["total"] == 1
+    assert scheduled["items"][0]["status"] == "scheduled"
+    assert scheduled["stats"]["scheduled"] == 1
+    assert scheduled["stats"]["drafts"] == 1
+
+
 def test_duplicate_slug_is_rejected_across_content_and_seo(engine) -> None:
     first = create(slug="unique-slug")
     with pytest.raises(admin_content_service.DuplicateSlugError):

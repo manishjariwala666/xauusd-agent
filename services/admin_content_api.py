@@ -23,6 +23,7 @@ from services.admin_content_service import (
     get_admin_content,
     list_admin_categories,
     list_admin_content,
+    duplicate_admin_content,
     save_admin_category,
     save_admin_content,
     transition_content,
@@ -81,13 +82,13 @@ def _safe_call(callback: Callable[[], Any]) -> Any:
 def _list(
     *, kind: str, authorization: str | None, bff_secret: str | None,
     response: Response, page: int, page_size: int, search: str,
-    status: str, sort: str,
+    status: str, sort: str, category_id: int | None,
 ) -> dict[str, Any]:
     _admin_identity(authorization, bff_secret)
     response.headers["Cache-Control"] = "private, no-store"
     return _safe_call(lambda: list_admin_content(
         kind=kind, page=page, page_size=page_size,
-        search=search, status=status, sort=sort,
+        search=search, status=status, sort=sort, category_id=category_id,
     ))
 
 
@@ -139,14 +140,15 @@ def _transition(
 def posts_list(
     response: Response, page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=50), search: str = Query("", max_length=120),
-    status: str = Query("all", pattern="^(all|draft|published|trash)$"),
+    status: str = Query("all", pattern="^(all|draft|published|scheduled|trash)$"),
     sort: str = Query("updated_desc", pattern="^(updated_desc|updated_asc|title_asc|title_desc|published_desc)$"),
+    category_id: int | None = Query(None, ge=1),
     authorization: Annotated[str | None, Header()] = None,
     x_admin_bff_key: Annotated[str | None, Header()] = None,
 ) -> dict[str, Any]:
     return _list(kind="posts", authorization=authorization, bff_secret=x_admin_bff_key,
                  response=response, page=page, page_size=page_size, search=search,
-                 status=status, sort=sort)
+                 status=status, sort=sort, category_id=category_id)
 
 
 @router.post("/posts", status_code=201)
@@ -181,6 +183,12 @@ def posts_transition(content_id: int, action: str,
                      authorization: Annotated[str | None, Header()] = None,
                      x_admin_bff_key: Annotated[str | None, Header()] = None,
                      x_request_id: Annotated[str | None, Header()] = None) -> dict[str, Any]:
+    if action == "duplicate":
+        identity = _admin_identity(authorization, x_admin_bff_key)
+        return _safe_call(lambda: duplicate_admin_content(
+            content_id=content_id, actor_id=identity.user_id,
+            request_id=_request_id(x_request_id),
+        ))
     if action not in {"publish", "unpublish", "trash"}:
         raise HTTPException(404, "Content action was not found.")
     return _transition(kind="posts", content_id=content_id, action=action,
@@ -194,12 +202,13 @@ def pages_list(
     page_size: int = Query(20, ge=1, le=50), search: str = Query("", max_length=120),
     status: str = Query("all", pattern="^(all|draft|published)$"),
     sort: str = Query("updated_desc", pattern="^(updated_desc|updated_asc|title_asc|title_desc|published_desc)$"),
+    category_id: int | None = Query(None, ge=1),
     authorization: Annotated[str | None, Header()] = None,
     x_admin_bff_key: Annotated[str | None, Header()] = None,
 ) -> dict[str, Any]:
     return _list(kind="pages", authorization=authorization, bff_secret=x_admin_bff_key,
                  response=response, page=page, page_size=page_size, search=search,
-                 status=status, sort=sort)
+                 status=status, sort=sort, category_id=category_id)
 
 
 @router.post("/pages", status_code=201)
