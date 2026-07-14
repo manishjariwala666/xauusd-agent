@@ -30,6 +30,12 @@ def test_theme_is_pre_hydrated_persistent_and_system_aware():
     assert "vr-theme" in layout and "prefers-color-scheme: dark" in layout
     assert "localStorage" in switcher and 'value="auto"' in switcher and "addEventListener" in switcher
     assert 'html[data-theme="dark"]' in css and "color-scheme:dark" in css
+    assert "--theme-heading:#f4f0e6" in css
+    assert "--theme-secondary:#d4dde5" in css
+    assert "--theme-placeholder:#91a2b0" in css
+    assert 'html[data-theme="dark"] input::placeholder' in css
+    assert 'html[data-theme="dark"] .article-body p' in css
+    assert 'html[data-theme="dark"] .footer-risk p' in css
     assert "prefers-reduced-motion" in css
 
 
