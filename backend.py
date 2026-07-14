@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 from threading import RLock
 from time import monotonic
@@ -14,6 +15,7 @@ from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 import requests
 from sqlalchemy import text
@@ -22,6 +24,7 @@ from config import get_settings
 from core.database import session_scope
 from services.admin_auth_api import router as admin_auth_router
 from services.admin_content_api import router as admin_content_router
+from services.admin_media_api import router as admin_media_router
 from services.conversation_service import record_inbound_message
 from services.content_service import list_categories, list_content
 from services.migration_service import apply_pending_migrations
@@ -119,6 +122,11 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=1_000)
 app.include_router(admin_auth_router)
 app.include_router(admin_content_router)
+app.include_router(admin_media_router)
+_local_media_root = os.getenv("ADMIN_MEDIA_LOCAL_ROOT", "").strip()
+if _local_media_root:
+    Path(_local_media_root).mkdir(parents=True, exist_ok=True)
+    app.mount("/media-local", StaticFiles(directory=_local_media_root), name="local-admin-media")
 
 
 def _search_indexing_blocked() -> bool:

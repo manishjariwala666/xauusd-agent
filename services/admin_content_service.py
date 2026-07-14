@@ -83,6 +83,10 @@ def list_admin_content(
     where_clause = " AND ".join(clauses)
     with session_scope() as session:
         view_count = "ci.view_count" if _column_exists(session, "content_items", "view_count") else "0::bigint"
+        has_media = _column_exists(session, "content_items", "media_id")
+        media_join = "LEFT JOIN public.media_assets ma ON ma.id = ci.media_id" if has_media else ""
+        media_id = "ci.media_id" if has_media else "NULL::bigint"
+        media_url = "ma.public_url" if has_media else "NULL::text"
         total = session.execute(
             text(f"SELECT COUNT(*) FROM public.content_items ci WHERE {where_clause}"),
             parameters,
@@ -99,7 +103,8 @@ def list_admin_content(
                        u.email AS author,
                        ci.published_at, ci.scheduled_at, ci.updated_at,
                        COALESCE({view_count}, 0) AS views,
-                       COALESCE(cs.open_graph->>'image', cs.open_graph->>'image_url') AS featured_image,
+                       {media_id} AS featured_media_id,
+                       COALESCE({media_url}, ci.image_url, cs.open_graph->>'image', cs.open_graph->>'image_url') AS featured_image,
                        LEAST(100,
                            (CASE WHEN COALESCE(cs.meta_title, '') <> '' THEN 25 ELSE 0 END) +
                            (CASE WHEN COALESCE(cs.meta_description, '') <> '' THEN 25 ELSE 0 END) +
@@ -111,6 +116,7 @@ def list_admin_content(
                 LEFT JOIN public.content_categories cc ON cc.id = ci.category_id
                 LEFT JOIN public.users u ON u.id = ci.created_by
                 LEFT JOIN public.content_seo cs ON cs.content_id = ci.id
+                {media_join}
                 WHERE {where_clause}
                 ORDER BY {order_by}
                 LIMIT :limit OFFSET :offset
@@ -148,6 +154,11 @@ def get_admin_content(*, kind: str, content_id: int) -> dict[str, Any]:
     types = _types_for_kind(kind)
     with session_scope() as session:
         view_count = "ci.view_count" if _column_exists(session, "content_items", "view_count") else "0::bigint"
+        has_media = _column_exists(session, "content_items", "media_id")
+        media_join = "LEFT JOIN public.media_assets ma ON ma.id = ci.media_id" if has_media else ""
+        media_id = "ci.media_id" if has_media else "NULL::bigint"
+        media_url = "ma.public_url" if has_media else "NULL::text"
+        media_alt = "ma.alt_text" if has_media else "NULL::text"
         row = session.execute(
             text(
                 f"""
@@ -161,7 +172,8 @@ def get_admin_content(*, kind: str, content_id: int) -> dict[str, Any]:
                        u.email AS author, COALESCE({view_count}, 0) AS views,
                        cs.meta_title, cs.meta_description, cs.focus_keyword,
                        cs.faq, cs.schema_jsonld, cs.open_graph, cs.twitter_card,
-                       COALESCE(cs.open_graph->>'image', cs.open_graph->>'image_url') AS featured_image,
+                       {media_id} AS featured_media_id, {media_alt} AS featured_image_alt,
+                       COALESCE({media_url}, ci.image_url, cs.open_graph->>'image', cs.open_graph->>'image_url') AS featured_image,
                        LEAST(100,
                            (CASE WHEN COALESCE(cs.meta_title, '') <> '' THEN 25 ELSE 0 END) +
                            (CASE WHEN COALESCE(cs.meta_description, '') <> '' THEN 25 ELSE 0 END) +
@@ -173,6 +185,7 @@ def get_admin_content(*, kind: str, content_id: int) -> dict[str, Any]:
                 LEFT JOIN public.content_categories cc ON cc.id = ci.category_id
                 LEFT JOIN public.users u ON u.id = ci.created_by
                 LEFT JOIN public.content_seo cs ON cs.content_id = ci.id
+                {media_join}
                 WHERE ci.id = :content_id AND ci.content_type = ANY(:types)
                 """
             ),
