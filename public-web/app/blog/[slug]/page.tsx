@@ -1,9 +1,17 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { getContentDetail, siteUrl } from "@/lib/api";
+import { getContent, getContentDetail, siteUrl } from "@/lib/api";
 
 type Props = { params: Promise<{ slug: string }> };
+const ARTICLE_TYPES = ["BLOG", "AI_BLOG", "ADVISORY", "ANALYSIS", "EDUCATION"];
+
+export const revalidate = 300;
+
+export async function generateStaticParams() {
+  const items = await getContent(undefined, 12);
+  return items.filter((item) => ARTICLE_TYPES.includes(item.content_type)).map((item) => ({ slug: item.slug }));
+}
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params; const item = await getContentDetail(slug);
   if (!item) return { title: "Article Not Found" };

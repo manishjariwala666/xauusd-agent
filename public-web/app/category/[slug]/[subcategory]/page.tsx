@@ -1,3 +1,5 @@
 import { ContentGrid } from "@/components/content-grid";
 import { getContent } from "@/lib/api";
+export const revalidate = 300;
+export async function generateStaticParams() { const items = await getContent(undefined, 12); return items.filter((item) => item.category_slug && item.subcategory).map((item) => ({ slug: item.category_slug as string, subcategory: (item.subcategory as string).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") })); }
 export default async function SubcategoryPage({ params }: { params: Promise<{ slug: string; subcategory: string }> }) { const { slug, subcategory } = await params; const items = (await getContent(undefined, 12)).filter((item) => item.category_slug === slug && (item.subcategory || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") === subcategory); return <section><div className="page-heading"><small>{slug.replaceAll("-", " ")}</small><h1>{subcategory.replaceAll("-", " ")}</h1></div><ContentGrid items={items} /></section>; }

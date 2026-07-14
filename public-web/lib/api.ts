@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Category, ContentItem, Signal } from "./types";
 
 const API_BASE = (
@@ -44,25 +45,38 @@ export async function getContent(
   const response = await fetchJson<{ items: ContentItem[] }>(
     `/public/content?${query}`,
     { items: [] },
-    60
+    300
   );
   return response.items;
 }
 
-export async function getContentDetail(slug: string): Promise<ContentItem | null> {
+async function fetchContentDetail(slug: string): Promise<ContentItem | null> {
   const response = await fetchJson<{ item: ContentItem | null }>(
     `/public/content/${encodeURIComponent(slug)}`,
     { item: null },
-    60
+    300
   );
   return response.item;
 }
+
+// Metadata and page rendering request the same article. React cache guarantees
+// that the API receives one detail request per render instead of two.
+export const getContentDetail = cache(fetchContentDetail);
 
 export async function getSignals(): Promise<Signal[]> {
   const response = await fetchJson<{ items: Signal[] }>(
     "/public/signals?limit=12",
     { items: [] },
     0
+  );
+  return response.items;
+}
+
+export async function getSignalSnapshot(): Promise<Signal[]> {
+  const response = await fetchJson<{ items: Signal[] }>(
+    "/public/signals?limit=3",
+    { items: [] },
+    300
   );
   return response.items;
 }

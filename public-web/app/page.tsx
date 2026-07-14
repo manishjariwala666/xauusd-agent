@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { ContentGrid } from "@/components/content-grid";
-import { getCategories, getContent, getSignals } from "@/lib/api";
+import { getCategories, getContent, getSignalSnapshot } from "@/lib/api";
+
+export const revalidate = 300;
 
 export default async function HomePage() {
-  const [categories, blogs, announcements, signals] = await Promise.all([
-    getCategories(), getContent(undefined, 6), getContent("ANNOUNCEMENT", 3), getSignals()
+  const [categories, content, signals] = await Promise.all([
+    getCategories(), getContent(undefined, 12), getSignalSnapshot()
   ]);
-  const publishedBlogs = blogs.filter((item) => ["BLOG", "AI_BLOG", "ANALYSIS", "EDUCATION", "ADVISORY"].includes(item.content_type));
+  const publishedBlogs = content.filter((item) => ["BLOG", "AI_BLOG", "ANALYSIS", "EDUCATION", "ADVISORY"].includes(item.content_type)).slice(0, 6);
+  const announcements = content.filter((item) => item.content_type === "ANNOUNCEMENT").slice(0, 3);
   return <>
     <section className="hero"><small>MARKET INTELLIGENCE · RISK FIRST</small><h1>Clearer signals for gold and digital assets.</h1><p>Fast public research, structured XAUUSD levels and disciplined risk context—without loading private admin analytics.</p><div className="hero-actions"><Link className="button" href="/signals">View XAUUSD Signals</Link><Link className="button ghost" href="/blog">Explore Research</Link></div></section>
     <section><div className="section-heading"><div><small>LIVE DESK</small><h2>XAUUSD Signal Snapshot</h2></div><Link href="/signals">Open signal desk →</Link></div>{signals.length ? <div className="signal-strip">{signals.slice(0, 3).map((s, index) => <div key={s.id || index}><b>{s.signal_type || "WATCH"}</b><span>{s.symbol || "XAUUSD"}</span><strong>{s.price ?? "Live levels pending"}</strong></div>)}</div> : <div className="empty-state">Live signal data is temporarily unavailable. The page remains available.</div>}</section>
