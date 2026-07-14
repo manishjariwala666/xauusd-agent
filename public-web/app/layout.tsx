@@ -5,8 +5,9 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://venusrealm.net"),
-  title: { default: "AI Market Analytics Pro", template: "%s | AI Market Analytics Pro" },
-  description: "Risk-aware XAUUSD signals, market analysis and trading education."
+  title: { default: "VenusRealm | Gold Market Intelligence", template: "%s | VenusRealm" },
+  description: "Risk-first XAUUSD signals, gold market analysis, financial astrology and AI-assisted trading education.",
+  applicationName: "VenusRealm"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

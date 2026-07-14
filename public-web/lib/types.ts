@@ -23,6 +23,9 @@ export type ContentItem = {
   subcategory?: string;
   published_at?: string;
   created_at?: string;
+  updated_at?: string;
+  author?: string;
+  author_name?: string;
   view_count?: number;
   schema_jsonld?: Record<string, unknown>;
 };
@@ -37,4 +40,6 @@ export type Signal = {
   target_3?: number;
   stop_loss?: number;
   signal_time?: string;
+  timeframe?: string;
+  status?: string;
 };
