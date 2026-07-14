@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function NotFound() { return <section className="not-found"><div><strong>404</strong><h1>This market path is not published.</h1><p>The content may have moved, may not yet be public, or may never have existed. Return to a verified VenusRealm route.</p><div className="hero-actions"><Link className="button button-dark" href="/">Return home</Link><Link className="button" href="/blog">Browse research</Link></div></div></section>; }
