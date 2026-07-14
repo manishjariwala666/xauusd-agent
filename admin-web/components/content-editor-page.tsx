@@ -11,5 +11,6 @@ export async function ContentEditorPage({ kind, id }: {
   const categories = await fetchCategories(new URLSearchParams({ page_size: "50", active: "active" }), token);
   const initial = id ? await fetchContentDetail(kind, id, token) : null;
   if (id && !initial) notFound();
-  return <ContentEditor kind={kind} initial={initial} categories={categories?.items || []} />;
+  const publicWebsiteUrl = (process.env.PUBLIC_WEBSITE_URL || "").trim().replace(/\/$/, "");
+  return <ContentEditor kind={kind} initial={initial} categories={categories?.items || []} publicWebsiteUrl={publicWebsiteUrl || undefined} />;
 }

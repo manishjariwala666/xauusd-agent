@@ -4,7 +4,7 @@ import { verifyCsrfToken } from "@/lib/csrf";
 import { getAdminServerConfig } from "@/lib/server-config";
 import { ADMIN_CSRF_COOKIE, ADMIN_SESSION_COOKIE } from "@/lib/session";
 
-const allowedPath = /^(posts|pages)(\/\d+(\/(publish|unpublish|trash))?)?$|^categories(\/\d+(\/disable)?)?$/;
+const allowedPath = /^(posts|pages)(\/\d+(\/(publish|unpublish|trash|duplicate))?)?$|^categories(\/\d+(\/disable)?)?$/;
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const path = (await context.params).path.join("/");

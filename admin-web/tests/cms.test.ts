@@ -47,7 +47,7 @@ describe("Phase 2A local CMS", () => {
     const api = source("lib/content-api.ts");
     const css = source("app/globals.css");
     expect(api).toContain("page_size");
-    expect(css).toContain("overflow-x: auto");
+    expect(css).toMatch(/overflow-x:\s*auto/);
     expect(css).toContain("@media (max-width: 720px)");
     expect(css).not.toMatch(/body\s*\{[^}]*overflow-y:\s*hidden/s);
   });
