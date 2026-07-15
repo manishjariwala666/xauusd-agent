@@ -1,6 +1,7 @@
 """Deployment configuration invariants that must not regress."""
 
 from pathlib import Path
+import json
 import tomllib
 
 from config import Settings
@@ -13,6 +14,15 @@ ROOT = Path(__file__).resolve().parents[1]
 def _load(name: str) -> dict:
     with (ROOT / name).open("rb") as file:
         return tomllib.load(file)
+
+
+def test_repository_pins_node_and_public_web_quality_commands() -> None:
+    assert (ROOT / ".node-version").read_text(encoding="utf-8").strip() == "24.14.0"
+    package = json.loads((ROOT / "public-web/package.json").read_text(encoding="utf-8"))
+    assert package["engines"]["node"] == "24.14.0"
+    assert package["packageManager"] == "pnpm@11.7.0"
+    assert package["scripts"]["lint"]
+    assert package["scripts"]["test"]
 
 
 def test_railway_api_uses_injected_port_and_healthcheck() -> None:

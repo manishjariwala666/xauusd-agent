@@ -32,7 +32,10 @@ from services.admin_leads_api import admin as admin_leads_router, public as publ
 from services.admin_signals_service import list_public_signals
 from services.conversation_service import record_inbound_message
 from services.content_service import list_categories, list_content
-from services.migration_service import apply_pending_migrations
+from services.migration_service import (
+    apply_pending_migrations,
+    required_schema_is_ready,
+)
 from services.telegram_master_ai_control import is_master_command
 from services.telegram_master_ai_webhook import (
     handle_master_telegram_webhook,
@@ -178,10 +181,16 @@ def health() -> dict[str, str]:
 
 @app.get("/ready")
 def ready() -> dict[str, str]:
-    """Return database readiness without exposing configuration details."""
-    with session_scope() as session:
-        session.execute(text("SELECT 1"))
-    return {"status": "ready", "database": "ok"}
+    """Require database connectivity and the complete approved schema."""
+    try:
+        with session_scope() as session:
+            session.execute(text("SELECT 1"))
+            schema_ready = required_schema_is_ready(session)
+    except Exception as exc:
+        raise HTTPException(503, "Service is not ready.") from exc
+    if not schema_ready:
+        raise HTTPException(503, "Service is not ready.")
+    return {"status": "ready", "database": "ok", "schema": "ok"}
 
 
 @app.get("/sitemap.xml")

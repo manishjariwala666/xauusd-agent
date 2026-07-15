@@ -208,7 +208,7 @@ def test_phase_one_migration_is_additive_and_has_manual_rollback() -> None:
     assert "ENABLE ROW LEVEL SECURITY" in forward
     assert "DROP TABLE" not in forward.upper()
     assert "DROP TABLE IF EXISTS public.admin_sessions" in rollback
-    assert "014_admin_auth_foundation.sql" not in migration_service
+    assert '"014_admin_auth_foundation.sql"' in migration_service
 
 
 def test_existing_streamlit_authentication_file_is_not_replaced() -> None:
