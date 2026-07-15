@@ -32,7 +32,7 @@ def test_phase2a_migration_is_additive_manual_and_reversible() -> None:
     assert "ADD COLUMN IF NOT EXISTS deleted_by" in forward
     assert "DROP TABLE" not in forward.upper()
     assert "DROP COLUMN IF EXISTS scheduled_at" in rollback
-    assert "015_admin_content_cms.sql" not in runner
+    assert '"015_admin_content_cms.sql"' in runner
 
 
 def test_existing_public_content_service_and_streamlit_admin_are_preserved() -> None:

@@ -1,5 +1,8 @@
 __pycache__/
 *.py[cod]
+agent-env/
+.venv/
+venv/
 .streamlit/secrets.toml
 
 # Local environment files. Keep sanitized templates tracked.
@@ -35,6 +38,8 @@ tmp-postgres*/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.cache/
+cache/
 .turbo/
 .pnpm-store/
 .netlify/
@@ -46,6 +51,9 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+*.sqlite
+*.sqlite3
+*.db
 
 pico.save
 *.swp
