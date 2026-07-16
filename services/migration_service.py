@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import re
 from typing import Any
 
@@ -36,6 +37,26 @@ _AUTOMATIC_MIGRATIONS = (
     "020_automation_service_leads.sql",
 )
 LATEST_REQUIRED_MIGRATION = _AUTOMATIC_MIGRATIONS[-1]
+MIGRATION_ALLOWLIST_ENV = "MIGRATION_ALLOWLIST"
+
+
+def _selected_migrations() -> tuple[str, ...]:
+    """Return the configured ordered migration subset, failing closed."""
+    raw_allowlist = os.getenv(MIGRATION_ALLOWLIST_ENV)
+    if raw_allowlist is None:
+        return _AUTOMATIC_MIGRATIONS
+
+    requested = {
+        name.strip() for name in raw_allowlist.split(",") if name.strip()
+    }
+    if not requested:
+        raise RuntimeError("MIGRATION_ALLOWLIST must contain a migration name.")
+
+    unknown = requested.difference(_AUTOMATIC_MIGRATIONS)
+    if unknown:
+        raise RuntimeError("MIGRATION_ALLOWLIST contains an unapproved migration.")
+
+    return tuple(name for name in _AUTOMATIC_MIGRATIONS if name in requested)
 
 
 def _without_outer_transaction(sql: str) -> str:
@@ -71,6 +92,7 @@ def required_schema_is_ready(session: Any) -> bool:
 
 def apply_pending_migrations() -> None:
     """Apply approved backend migrations transactionally once."""
+    selected_migrations = _selected_migrations()
     engine = get_engine()
     with engine.begin() as connection:
         connection.execute(
@@ -83,7 +105,7 @@ def apply_pending_migrations() -> None:
                 """
             )
         )
-    for name in _AUTOMATIC_MIGRATIONS:
+    for name in selected_migrations:
         sql = _migration_sql(name)
         with engine.begin() as connection:
             # API, worker, and web may start together. The transaction-scoped

@@ -112,6 +112,7 @@ def test_all_launch_migrations_are_registered_in_dependency_order() -> None:
 
 
 def test_each_migration_is_applied_exactly_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(migration_service.MIGRATION_ALLOWLIST_ENV, raising=False)
     state = _EngineState()
     _configure(monkeypatch, state)
     migration_service.apply_pending_migrations()
@@ -119,6 +120,39 @@ def test_each_migration_is_applied_exactly_once(monkeypatch: pytest.MonkeyPatch)
     assert state.executed == list(EXPECTED_MIGRATIONS)
     assert state.applied == set(EXPECTED_MIGRATIONS)
     assert state.locked == list(EXPECTED_MIGRATIONS) * 2
+
+
+def test_allowlist_applies_only_requested_approved_migration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        migration_service.MIGRATION_ALLOWLIST_ENV,
+        "020_automation_service_leads.sql",
+    )
+    state = _EngineState()
+    _configure(monkeypatch, state)
+
+    migration_service.apply_pending_migrations()
+
+    assert state.executed == ["020_automation_service_leads.sql"]
+    assert state.applied == {"020_automation_service_leads.sql"}
+    assert state.locked == ["020_automation_service_leads.sql"]
+
+
+@pytest.mark.parametrize("value", ["", "unknown.sql"])
+def test_allowlist_fails_closed_for_empty_or_unapproved_names(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    monkeypatch.setenv(migration_service.MIGRATION_ALLOWLIST_ENV, value)
+    state = _EngineState()
+    _configure(monkeypatch, state)
+
+    with pytest.raises(RuntimeError, match="MIGRATION_ALLOWLIST"):
+        migration_service.apply_pending_migrations()
+
+    assert state.executed == []
+    assert state.applied == set()
 
 
 def test_failure_is_not_recorded_and_stops_later_migrations(
