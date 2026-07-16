@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { proxyAutomationEnquiry } from "@/lib/automation-enquiry-proxy";
 
 const COOKIE = "vr_lead_csrf";
 const BACKEND = (process.env.BACKEND_BASE_URL || "https://xauusd-agent-api-production.up.railway.app").replace(/\/$/, "");
@@ -19,12 +20,15 @@ export async function POST(request: NextRequest) {
   const cookie = request.cookies.get(COOKIE)?.value || "";
   const supplied = request.headers.get("x-csrf-token") || "";
   if (!cookie || cookie.length !== supplied.length || !timingSafeEqual(Buffer.from(cookie), Buffer.from(supplied))) return NextResponse.json({ message: "Invalid request token." }, { status: 403 });
-  try {
-    const body = await request.text();
-    if (Buffer.byteLength(body) > 30_000) return NextResponse.json({ message: "Request is too large." }, { status: 413 });
-    const response = await fetch(`${BACKEND}/public/automation-enquiries`, { method: "POST", headers: { "Content-Type": "application/json", "X-Forwarded-For": request.headers.get("x-forwarded-for") || "" }, body, cache: "no-store", signal: AbortSignal.timeout(5000) });
-    return new NextResponse(await response.text(), { status: response.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
-  } catch {
-    return NextResponse.json({ message: "Enquiry service is temporarily unavailable." }, { status: 503 });
-  }
+  const body = await request.text();
+  if (Buffer.byteLength(body) > 30_000) return NextResponse.json({ message: "Request is too large." }, { status: 413 });
+  const result = await proxyAutomationEnquiry({
+    backendBaseUrl: BACKEND,
+    body,
+    forwardedFor: request.headers.get("x-forwarded-for") || "",
+  });
+  return NextResponse.json(result.payload, {
+    status: result.status,
+    headers: { "Cache-Control": "no-store" },
+  });
 }
