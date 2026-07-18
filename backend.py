@@ -38,6 +38,7 @@ from services.migration_service import (
 )
 from services.telegram_master_ai_control import is_master_command
 from services.telegram_master_ai_webhook import (
+    MasterTelegramDeliveryError,
     handle_master_telegram_webhook,
 )
 from services.telegram_service import TelegramService
@@ -315,8 +316,14 @@ async def telegram_master_ai_webhook(
         )
         raise HTTPException(403, "Invalid webhook signature.")
 
-    payload = await request.json()
-    return handle_master_telegram_webhook(payload)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(400, "Malformed Telegram webhook payload.") from exc
+    try:
+        return handle_master_telegram_webhook(payload)
+    except MasterTelegramDeliveryError as exc:
+        raise HTTPException(502, "Telegram reply delivery failed.") from exc
 
 
 @app.post("/webhooks/telegram")
@@ -342,7 +349,13 @@ async def telegram_webhook(
     payload = await request.json()
 
     if _should_route_generic_telegram_update_to_master(payload):
-        handle_master_telegram_webhook(payload)
+        try:
+            handle_master_telegram_webhook(
+                payload,
+                webhook_source="/webhooks/telegram",
+            )
+        except MasterTelegramDeliveryError as exc:
+            raise HTTPException(502, "Telegram reply delivery failed.") from exc
         return {"accepted": True}
 
     message = payload.get("message") or payload.get("edited_message")

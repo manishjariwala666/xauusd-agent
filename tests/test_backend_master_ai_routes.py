@@ -23,6 +23,140 @@ def test_telegram_signal_and_master_routes_are_registered() -> None:
     assert _route_has_method("/webhooks/telegram/master", "POST")
 
 
+def test_master_webhook_returns_400_for_malformed_json(monkeypatch) -> None:
+    class Settings:
+        telegram_webhook_secret = "test-webhook-secret"
+
+    monkeypatch.setattr(backend, "get_settings", lambda: Settings())
+    client = TestClient(app)
+
+    response = client.post(
+        "/webhooks/telegram/master",
+        content="{not-json",
+        headers={
+            "content-type": "application/json",
+            "X-Telegram-Bot-Api-Secret-Token": "test-webhook-secret",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Malformed Telegram webhook payload."
+
+
+def test_master_webhook_returns_502_when_reply_delivery_fails(monkeypatch) -> None:
+    class Settings:
+        telegram_webhook_secret = "test-webhook-secret"
+
+    monkeypatch.setattr(backend, "get_settings", lambda: Settings())
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    monkeypatch.setattr(
+        "services.telegram_master_ai_webhook.send_master_ai_bot_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("delivery failed")
+        ),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/webhooks/telegram/master",
+        json={
+            "update_id": 6001,
+            "message": {
+                "text": "/master help",
+                "chat": {"id": 55},
+                "from": {"id": 1001},
+            },
+        },
+        headers={
+            "X-Telegram-Bot-Api-Secret-Token": "test-webhook-secret",
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Telegram reply delivery failed."
+
+
+def test_master_processing_error_returns_200_when_safe_error_is_delivered(
+    monkeypatch,
+) -> None:
+    class Settings:
+        telegram_webhook_secret = "test-webhook-secret"
+
+    sent: list[tuple[int | str, str]] = []
+    monkeypatch.setattr(backend, "get_settings", lambda: Settings())
+    monkeypatch.setattr(
+        "services.telegram_master_ai_webhook.try_handle_telegram_update",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("processing failed")
+        ),
+    )
+    monkeypatch.setattr(
+        "services.telegram_master_ai_webhook.send_master_ai_bot_message",
+        lambda chat_id, text: sent.append((chat_id, text)),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/webhooks/telegram/master",
+        json={
+            "update_id": 6002,
+            "message": {
+                "text": "/master help",
+                "chat": {"id": 55},
+                "from": {"id": 1001},
+            },
+        },
+        headers={
+            "X-Telegram-Bot-Api-Secret-Token": "test-webhook-secret",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+    assert response.json()["status"] == "ERROR"
+    assert len(sent) == 1
+
+
+def test_master_processing_error_returns_502_when_safe_error_delivery_fails(
+    monkeypatch,
+) -> None:
+    class Settings:
+        telegram_webhook_secret = "test-webhook-secret"
+
+    monkeypatch.setattr(backend, "get_settings", lambda: Settings())
+    monkeypatch.setattr(
+        "services.telegram_master_ai_webhook.try_handle_telegram_update",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("processing failed")
+        ),
+    )
+    monkeypatch.setattr(
+        "services.telegram_master_ai_webhook.send_master_ai_bot_message",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("delivery failed")
+        ),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/webhooks/telegram/master",
+        json={
+            "update_id": 6003,
+            "message": {
+                "text": "/master help",
+                "chat": {"id": 55},
+                "from": {"id": 1001},
+            },
+        },
+        headers={
+            "X-Telegram-Bot-Api-Secret-Token": "test-webhook-secret",
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Telegram reply delivery failed."
+
+
 def test_search_indexing_can_be_blocked_without_database(monkeypatch) -> None:
     monkeypatch.setenv("BLOCK_SEARCH_INDEXING", "true")
     client = TestClient(app)
