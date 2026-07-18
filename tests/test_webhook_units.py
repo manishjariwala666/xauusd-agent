@@ -1,5 +1,8 @@
 """Offline webhook parsing tests."""
 
+import pytest
+from fastapi import HTTPException
+
 from backend import (
     health,
     ready,
@@ -26,8 +29,9 @@ def test_ready_checks_database(monkeypatch) -> None:
     calls: list[str] = []
 
     class FakeSession:
-        def execute(self, statement: object) -> None:
+        def execute(self, statement: object, parameters: object = None) -> object:
             calls.append(str(statement))
+            return type("Result", (), {"scalar_one": lambda self: True})()
 
     class FakeScope:
         def __enter__(self) -> FakeSession:
@@ -38,8 +42,43 @@ def test_ready_checks_database(monkeypatch) -> None:
 
     monkeypatch.setattr("backend.session_scope", lambda: FakeScope())
 
-    assert ready() == {"status": "ready", "database": "ok"}
+    assert ready() == {"status": "ready", "database": "ok", "schema": "ok"}
     assert calls
+
+
+def test_ready_rejects_incomplete_schema(monkeypatch) -> None:
+    class FakeSession:
+        def execute(self, statement: object, parameters: object = None) -> object:
+            return type("Result", (), {"scalar_one": lambda self: False})()
+
+    class FakeScope:
+        def __enter__(self) -> FakeSession:
+            return FakeSession()
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+    monkeypatch.setattr("backend.session_scope", lambda: FakeScope())
+    with pytest.raises(HTTPException) as error:
+        ready()
+    assert error.value.status_code == 503
+    assert error.value.detail == "Service is not ready."
+
+
+def test_ready_hides_database_failure_details(monkeypatch) -> None:
+    class FailedScope:
+        def __enter__(self) -> object:
+            raise RuntimeError("sensitive connection detail")
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+    monkeypatch.setattr("backend.session_scope", lambda: FailedScope())
+    with pytest.raises(HTTPException) as error:
+        ready()
+    assert error.value.status_code == 503
+    assert error.value.detail == "Service is not ready."
+    assert "sensitive" not in error.value.detail
 
 
 def test_generic_telegram_webhook_routes_master_ai_fallbacks() -> None:

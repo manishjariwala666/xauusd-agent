@@ -196,6 +196,10 @@ class Settings:
     human_takeover_minutes: int
     worker_poll_seconds: int
     block_search_indexing: bool
+    admin_bff_shared_secret: str
+    admin_session_ttl_minutes: int
+    admin_login_window_seconds: int
+    admin_login_max_attempts: int
 
     @classmethod
     def load(cls) -> "Settings":
@@ -350,6 +354,19 @@ class Settings:
             block_search_indexing=_read_bool_secret(
                 "BLOCK_SEARCH_INDEXING",
                 False,
+            ),
+            admin_bff_shared_secret=_read_secret("ADMIN_BFF_SHARED_SECRET"),
+            admin_session_ttl_minutes=max(
+                5,
+                min(30, int(_read_secret("ADMIN_SESSION_TTL_MINUTES", "15"))),
+            ),
+            admin_login_window_seconds=max(
+                60,
+                int(_read_secret("ADMIN_LOGIN_WINDOW_SECONDS", "900")),
+            ),
+            admin_login_max_attempts=max(
+                3,
+                min(20, int(_read_secret("ADMIN_LOGIN_MAX_ATTEMPTS", "5"))),
             ),
         )
 

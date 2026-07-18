@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 from threading import RLock
 from time import monotonic
@@ -14,18 +15,30 @@ from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 import requests
 from sqlalchemy import text
 
 from config import get_settings
 from core.database import session_scope
+from services.admin_auth_api import router as admin_auth_router
+from services.admin_content_api import router as admin_content_router
+from services.admin_media_api import router as admin_media_router
+from services.admin_seo_api import router as admin_seo_router
+from services.admin_signals_api import router as admin_signals_router
+from services.admin_publications_api import admin as admin_publications_router, public as public_publications_router
+from services.admin_leads_api import admin as admin_leads_router, public as public_leads_router
+from services.admin_signals_service import list_public_signals
 from services.conversation_service import record_inbound_message
 from services.content_service import list_categories, list_content
-from services.migration_service import apply_pending_migrations
-from services.public_market_service import get_live_market_signals
+from services.migration_service import (
+    apply_pending_migrations,
+    required_schema_is_ready,
+)
 from services.telegram_master_ai_control import is_master_command
 from services.telegram_master_ai_webhook import (
+    MasterTelegramDeliveryError,
     handle_master_telegram_webhook,
 )
 from services.telegram_service import TelegramService
@@ -115,6 +128,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(GZipMiddleware, minimum_size=1_000)
+app.include_router(admin_auth_router)
+app.include_router(admin_content_router)
+app.include_router(admin_media_router)
+app.include_router(admin_seo_router)
+app.include_router(admin_signals_router)
+app.include_router(admin_publications_router)
+app.include_router(public_publications_router)
+app.include_router(admin_leads_router)
+app.include_router(public_leads_router)
+_local_media_root = os.getenv("ADMIN_MEDIA_LOCAL_ROOT", "").strip()
+if _local_media_root:
+    Path(_local_media_root).mkdir(parents=True, exist_ok=True)
+    app.mount("/media-local", StaticFiles(directory=_local_media_root), name="local-admin-media")
 
 
 def _search_indexing_blocked() -> bool:
@@ -156,10 +182,16 @@ def health() -> dict[str, str]:
 
 @app.get("/ready")
 def ready() -> dict[str, str]:
-    """Return database readiness without exposing configuration details."""
-    with session_scope() as session:
-        session.execute(text("SELECT 1"))
-    return {"status": "ready", "database": "ok"}
+    """Require database connectivity and the complete approved schema."""
+    try:
+        with session_scope() as session:
+            session.execute(text("SELECT 1"))
+            schema_ready = required_schema_is_ready(session)
+    except Exception as exc:
+        raise HTTPException(503, "Service is not ready.") from exc
+    if not schema_ready:
+        raise HTTPException(503, "Service is not ready.")
+    return {"status": "ready", "database": "ok", "schema": "ok"}
 
 
 @app.get("/sitemap.xml")
@@ -258,8 +290,8 @@ def public_content_detail(slug: str) -> dict[str, Any]:
 def public_signals(
     limit: int = Query(default=12, ge=1, le=50),
 ) -> dict[str, Any]:
-    """Return the latest public signal rows without caching stale targets."""
-    return {"items": get_live_market_signals(limit=limit)}
+    """Return only approved public fields for published, non-deleted signals."""
+    return list_public_signals(page=1, page_size=min(limit, 24))
 
 
 
@@ -284,8 +316,14 @@ async def telegram_master_ai_webhook(
         )
         raise HTTPException(403, "Invalid webhook signature.")
 
-    payload = await request.json()
-    return handle_master_telegram_webhook(payload)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(400, "Malformed Telegram webhook payload.") from exc
+    try:
+        return handle_master_telegram_webhook(payload)
+    except MasterTelegramDeliveryError as exc:
+        raise HTTPException(502, "Telegram reply delivery failed.") from exc
 
 
 @app.post("/webhooks/telegram")
@@ -311,7 +349,13 @@ async def telegram_webhook(
     payload = await request.json()
 
     if _should_route_generic_telegram_update_to_master(payload):
-        handle_master_telegram_webhook(payload)
+        try:
+            handle_master_telegram_webhook(
+                payload,
+                webhook_source="/webhooks/telegram",
+            )
+        except MasterTelegramDeliveryError as exc:
+            raise HTTPException(502, "Telegram reply delivery failed.") from exc
         return {"accepted": True}
 
     message = payload.get("message") or payload.get("edited_message")

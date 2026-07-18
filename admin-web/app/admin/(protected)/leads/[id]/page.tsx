@@ -1,0 +1,2 @@
+import{cookies}from"next/headers";import{notFound}from"next/navigation";import{LeadDetail}from"@/components/lead-detail";import{fetchLead}from"@/lib/leads-api";import{ADMIN_SESSION_COOKIE}from"@/lib/session";
+export default async function Page({params}:{params:Promise<{id:string}>}){const{id}=await params;if(!/^\d+$/.test(id))notFound();const token=(await cookies()).get(ADMIN_SESSION_COOKIE)?.value||"";const lead=await fetchLead(id,token);if(!lead)notFound();return <LeadDetail lead={lead}/>}

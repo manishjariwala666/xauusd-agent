@@ -1,0 +1,22 @@
+import { randomUUID } from "node:crypto";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyCsrfToken } from "@/lib/csrf";
+import { getAdminServerConfig } from "@/lib/server-config";
+import { ADMIN_CSRF_COOKIE, ADMIN_SESSION_COOKIE } from "@/lib/session";
+
+const allowed = /^(issues|summary)$|^\d+(\/((validate|score)))?$/;
+
+async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+  const path = (await context.params).path.join("/");
+  if (!allowed.test(path)) return NextResponse.json({ message: "Not found." }, { status: 404 });
+  if (request.method !== "GET" && !verifyCsrfToken(request.cookies.get(ADMIN_CSRF_COOKIE)?.value, request.headers.get("x-csrf-token"))) return NextResponse.json({ message: "Invalid request." }, { status: 403 });
+  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value || "";
+  if (!token) return NextResponse.json({ message: "Authentication required." }, { status: 401 });
+  const upstreamPath = /^\d+/.test(path) ? `content/${path.replace(/^(\d+)/, "$1/seo")}` : `seo/${path}`;
+  try {
+    const config = getAdminServerConfig(); const body = request.method === "GET" ? undefined : await request.text();
+    const upstream = await fetch(`${config.backendBaseUrl}/admin/${upstreamPath}${request.nextUrl.search}`, { method: request.method, headers: { Authorization: `Bearer ${token}`, "X-Admin-BFF-Key": config.bffSecret, "X-Request-ID": randomUUID(), ...(body ? { "Content-Type": "application/json" } : {}) }, body, cache: "no-store", signal: AbortSignal.timeout(6000) });
+    return new NextResponse(await upstream.text() || null, { status: upstream.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+  } catch { return NextResponse.json({ message: "SEO service is temporarily unavailable." }, { status: 503 }); }
+}
+export const GET = proxy; export const POST = proxy; export const PUT = proxy;
