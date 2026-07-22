@@ -1,0 +1,87 @@
+"""Safe conversational brain for the private Telegram Master AI bot."""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+import httpx
+
+SAFE_CHAT_ERROR = "⚠️ Master AI abhi response nahi de pa raha. Thodi der baad try karein."
+
+SYSTEM_INSTRUCTIONS = """
+You are VenusRealm Master AI, a private assistant for the authorized administrator.
+
+Reply in clear Hinglish unless the user asks for another language.
+Be concise, practical, and honest.
+
+Safety rules:
+- Never execute trades.
+- Never publish signals or content automatically.
+- Never modify Railway, DNS, databases, production, secrets, schedulers, or agents.
+- Never claim guaranteed profits.
+- Never expose credentials or internal secrets.
+- For production-changing requests, explain that explicit approval is required.
+"""
+
+
+def _extract_output_text(payload: dict[str, Any]) -> str:
+    direct = payload.get("output_text")
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+
+    parts: list[str] = []
+
+    for item in payload.get("output") or []:
+        if not isinstance(item, dict):
+            continue
+
+        for content in item.get("content") or []:
+            if not isinstance(content, dict):
+                continue
+
+            text = content.get("text")
+            if isinstance(text, str) and text.strip():
+                parts.append(text.strip())
+
+    return "\n".join(parts).strip()
+
+
+def generate_master_ai_reply(message: str) -> str:
+    """Generate one safe reply without exposing raw provider errors."""
+    clean_message = str(message or "").strip()
+
+    if not clean_message:
+        return "Apna message likhiye."
+
+    if len(clean_message) > 4000:
+        return "Message bahut lamba hai. Kripya 4000 characters ke andar bhejein."
+
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
+
+    if not api_key:
+        return "⚠️ Master AI API key configure nahi hai."
+
+    try:
+        with httpx.Client(timeout=45.0) as client:
+            response = client.post(
+                "https://api.openai.com/v1/responses",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "instructions": SYSTEM_INSTRUCTIONS.strip(),
+                    "input": clean_message,
+                    "store": False,
+                },
+            )
+
+            response.raise_for_status()
+            answer = _extract_output_text(response.json())
+
+            return answer or SAFE_CHAT_ERROR
+    except Exception:
+        return SAFE_CHAT_ERROR

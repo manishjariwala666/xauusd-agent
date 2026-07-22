@@ -12,6 +12,7 @@ Two-bot architecture:
 from __future__ import annotations
 
 from services.google_sheets_service import append_master_log
+from services.master_ai_chat_service import generate_master_ai_reply
 from services.ai_agent_service import (
     agent_control_help_text,
     set_ai_agent_enabled_by_number,
@@ -284,11 +285,19 @@ def handle_master_command_text(
         if inferred_target and _looks_like_master_natural_command(text):
             text = f"{MASTER_COMMAND} run {inferred_target}"
         else:
+            if _looks_like_signal_text(original_text):
+                return MasterTelegramCommandResult(
+                    handled=True,
+                    response_text=_unknown_master_text_response(),
+                    chat_id=chat_id,
+                    status="IGNORED_NON_MASTER_COMMAND",
+                )
+
             return MasterTelegramCommandResult(
                 handled=True,
-                response_text=_unknown_master_text_response(),
+                response_text=generate_master_ai_reply(original_text),
                 chat_id=chat_id,
-                status="IGNORED_NON_MASTER_COMMAND",
+                status="AI_CHAT_RESPONSE",
             )
 
     try:
@@ -686,6 +695,16 @@ def _unknown_master_text_response() -> str:
         "/master run blog\n"
         "/master list ai"
     )
+
+
+def _looks_like_signal_text(text: str) -> bool:
+    normalized = str(text or "").strip().lower()
+    has_side = "buy" in normalized or "sell" in normalized
+    has_market = any(
+        token in normalized
+        for token in ("xauusd", "gold", "btc", "bitcoin", "forex", "signal")
+    )
+    return has_side and has_market
 
 
 def _public_site_url() -> str:
