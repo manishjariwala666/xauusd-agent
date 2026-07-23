@@ -193,6 +193,9 @@ class Settings:
     whatsapp_business_account_id: str
     whatsapp_verify_token: str
     meta_app_secret: str
+    green_api_instance_id: str
+    green_api_token: str
+    green_api_chat_id: str
     human_takeover_minutes: int
     worker_poll_seconds: int
     block_search_indexing: bool
@@ -343,6 +346,9 @@ class Settings:
             ),
             whatsapp_verify_token=_read_secret("WHATSAPP_VERIFY_TOKEN"),
             meta_app_secret=_read_secret("META_APP_SECRET"),
+            green_api_instance_id=_read_secret("GREEN_API_INSTANCE_ID"),
+            green_api_token=_read_secret("GREEN_API_TOKEN"),
+            green_api_chat_id=_read_secret("GREEN_API_CHAT_ID"),
             human_takeover_minutes=max(
                 1,
                 int(_read_secret("HUMAN_TAKEOVER_MINUTES", "30")),
