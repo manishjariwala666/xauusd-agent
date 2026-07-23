@@ -15,6 +15,7 @@ from services.google_sheets_service import append_master_log
 from services.master_ai_chat_service import generate_master_ai_reply
 from services.ai_agent_service import (
     agent_control_help_text,
+    list_ai_agents,
     set_ai_agent_enabled_by_number,
 )
 
@@ -697,10 +698,43 @@ def _status_text(target: str | None = None) -> str:
 
     label = labels.get(requested)
     if label:
-        return (
-            f"🤖 {label} status\n"
-            "Detailed live status ke liye `/master list ai` bhejiye."
-        )
+        key_map = {
+            "whatsapp": "whatsapp_reply_agent",
+            "wa": "whatsapp_reply_agent",
+            "announcement": "announcement_agent",
+            "announcements": "announcement_agent",
+            "telegram": "telegram_reply_agent",
+            "blog": "ai_blog_agent",
+            "news": "ai_blog_agent",
+            "signal": "signal_agent",
+            "xauusd": "signal_agent",
+        }
+        try:
+            agent = next(
+                (
+                    item for item in list_ai_agents()
+                    if item.get("agent_key") == key_map[requested]
+                ),
+                None,
+            )
+        except Exception as exc:
+            print(f"[master-ai-status] error={type(exc).__name__}")
+            agent = None
+
+        if not agent:
+            return f"🤖 {label} status unavailable."
+
+        lines = [
+            f"🤖 {label} status",
+            f"Enabled: {'ON' if agent.get('is_enabled') else 'OFF'}",
+            f"Status: {_safe_word(agent.get('status') or 'UNKNOWN')}",
+            f"Queue: {int(agent.get('queue_size') or 0)}",
+            f"Last run: {agent.get('last_run_at') or 'Never'}",
+        ]
+        last_error = str(agent.get("last_error") or "").strip()
+        if last_error:
+            lines.append(f"Last error: {last_error[:300]}")
+        return "\n".join(lines)
 
     return (
         "🤖 Unknown status option.\n"
