@@ -743,6 +743,15 @@ def _run_reply(channel: str, payload: dict[str, Any]) -> str:
 
 
 def _verified_whatsapp_recipients() -> list[str]:
+    settings = get_settings()
+
+    if (
+        settings.green_api_instance_id
+        and settings.green_api_token
+        and settings.green_api_chat_id
+    ):
+        return [settings.green_api_chat_id]
+
     with session_scope() as session:
         values = session.execute(
             text(
