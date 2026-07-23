@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from services.google_sheets_service import append_master_log
 from services.master_ai_chat_service import generate_master_ai_reply
+from services.master_ai_tool_router import execute_master_ai_action
+from services.master_ai_agent_registry import find_agent, format_agent_directory
 from services.ai_agent_service import (
     agent_control_help_text,
     list_ai_agents,
@@ -283,6 +285,84 @@ def handle_master_command_text(
         )
 
     if not is_master_command(text):
+        normalized_order = original_text.lower()
+
+        if any(
+            phrase in normalized_order
+            for phrase in (
+                "agent list",
+                "agents list",
+                "sab agent",
+                "sabhi agent",
+                "agent directory",
+                "available agent",
+            )
+        ):
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=format_agent_directory(),
+                chat_id=chat_id,
+                status="OK",
+            )
+
+        requested_agent = find_agent(original_text)
+        run_requested = any(
+            phrase in normalized_order
+            for phrase in (
+                "chalao",
+                "run karo",
+                "start karo",
+                "retry karo",
+                "dobara chalao",
+            )
+        )
+
+        action = (
+            requested_agent.run_action
+            if requested_agent and run_requested
+            else None
+        )
+
+        if requested_agent and run_requested and not action:
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=(
+                    f"🤖 {requested_agent.short_name} — "
+                    f"{requested_agent.official_name}\n"
+                    "Is agent ka direct run command abhi registered nahi hai."
+                ),
+                chat_id=chat_id,
+                status="ACTION_NOT_REGISTERED",
+            )
+
+        if action:
+            tool_result = execute_master_ai_action(
+                action,
+                source="TELEGRAM_MASTER_AI",
+                runner=runner,
+            )
+
+            response_lines = [
+                "🤖 Master AI action",
+                (
+                    f"Agent: {requested_agent.short_name} — "
+                    f"{requested_agent.official_name}"
+                ),
+                f"Action: {tool_result.action}",
+                f"Status: {tool_result.status}",
+                tool_result.message,
+            ]
+            if tool_result.run_id is not None:
+                response_lines.append(f"Run: #{tool_result.run_id}")
+
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text="\n".join(response_lines),
+                chat_id=chat_id,
+                status=tool_result.status,
+                run_id=tool_result.run_id,
+            )
+
         live_status_target = _infer_live_status_target(original_text)
         if live_status_target:
             return MasterTelegramCommandResult(
