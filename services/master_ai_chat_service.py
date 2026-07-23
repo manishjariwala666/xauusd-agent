@@ -47,8 +47,30 @@ def _extract_output_text(payload: dict[str, Any]) -> str:
     return "\n".join(parts).strip()
 
 
+def _generate_gemini_reply(message: str) -> str:
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+
+    if not api_key:
+        return ""
+
+    try:
+        from google import genai
+
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=model,
+            contents=f"{SYSTEM_INSTRUCTIONS.strip()}\n\nUser message:\n{message}",
+        )
+        answer = str(getattr(response, "text", "") or "").strip()
+        return answer
+    except Exception as exc:
+        print(f"[master-ai-chat] Gemini error type={type(exc).__name__}")
+        return ""
+
+
 def generate_master_ai_reply(message: str) -> str:
-    """Generate one safe reply without exposing raw provider errors."""
+    """Generate one safe reply with OpenAI primary and Gemini fallback."""
     clean_message = str(message or "").strip()
 
     if not clean_message:
@@ -90,10 +112,10 @@ def generate_master_ai_reply(message: str) -> str:
             f"[master-ai-chat] OpenAI HTTP error status={status_code} "
             f"request_id={request_id}"
         )
-        return SAFE_CHAT_ERROR
+        return _generate_gemini_reply(clean_message) or SAFE_CHAT_ERROR
     except httpx.RequestError as exc:
         print(f"[master-ai-chat] OpenAI network error type={type(exc).__name__}")
-        return SAFE_CHAT_ERROR
+        return _generate_gemini_reply(clean_message) or SAFE_CHAT_ERROR
     except Exception as exc:
         print(f"[master-ai-chat] Unexpected error type={type(exc).__name__}")
-        return SAFE_CHAT_ERROR
+        return _generate_gemini_reply(clean_message) or SAFE_CHAT_ERROR
