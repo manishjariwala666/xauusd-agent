@@ -283,6 +283,15 @@ def handle_master_command_text(
         )
 
     if not is_master_command(text):
+        live_status_target = _infer_live_status_target(original_text)
+        if live_status_target:
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=_status_text(live_status_target),
+                chat_id=chat_id,
+                status="OK",
+            )
+
         inferred_target = _infer_run_target(text)
         if inferred_target and _looks_like_master_natural_command(text):
             text = f"{MASTER_COMMAND} run {inferred_target}"
@@ -576,6 +585,41 @@ def _normalize_run_target(value: str | None) -> str | None:
         "europe", "japan", "india",
     )):
         return "blog"
+    return None
+
+
+def _infer_live_status_target(text: str | None) -> str | None:
+    """Map natural owner questions to one live agent-status target."""
+    value = str(text or "").strip().lower()
+    if not value:
+        return None
+
+    status_intents = (
+        "status",
+        "on/off",
+        "on hai",
+        "off hai",
+        "last run",
+        "last error",
+        "queue",
+        "kab chala",
+        "kab hua",
+        "error kya",
+    )
+    if not any(intent in value for intent in status_intents):
+        return None
+
+    targets = (
+        (("whatsapp", "wa "), "whatsapp"),
+        (("announcement", "broadcast"), "announcement"),
+        (("telegram",), "telegram"),
+        (("signal", "xauusd"), "signal"),
+        (("blog", "news"), "blog"),
+    )
+    for keywords, target in targets:
+        if any(keyword in value for keyword in keywords):
+            return target
+
     return None
 
 
