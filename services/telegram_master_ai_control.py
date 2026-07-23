@@ -311,16 +311,30 @@ def handle_master_command_text(
             )
         if command == "status":
             _log_master_command_to_sheet(
-                command="/master status",
+                command=f"/master status {target or ''}".strip(),
                 status="OK",
                 chat_id=chat_id,
                 telegram_user_id=telegram_user_id,
             )
             return MasterTelegramCommandResult(
                 handled=True,
-                response_text=_status_text(status_loader(limit=5)),
+                response_text=_status_text(target),
                 chat_id=chat_id,
                 status="OK",
+            )
+
+        if command in {"news", "xauusd", "buy", "sell"}:
+            prompt = {
+                "news": "Latest important market and business news ka concise summary do. Koi content publish mat karo.",
+                "xauusd": "XAUUSD ka current market context aur neutral analysis do. Live price unavailable ho to clearly batao. Koi trade execute ya signal publish mat karo.",
+                "buy": "XAUUSD ke buy-side factors aur risks explain karo. Guaranteed signal mat do aur koi trade execute mat karo.",
+                "sell": "XAUUSD ke sell-side factors aur risks explain karo. Guaranteed signal mat do aur koi trade execute mat karo.",
+            }[command]
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=generate_master_ai_reply(prompt),
+                chat_id=chat_id,
+                status="AI_CHAT_RESPONSE",
             )
         if command in {"on", "off", "list_ai"}:
             response = _handle_ai_toggle_command(command, target)
@@ -433,7 +447,7 @@ def parse_master_command(text: str) -> tuple[str, str | None]:
     if command in {"help", "h", "?", "commands"}:
         return "help", None
     if command in {"status", "st", "health"}:
-        return "status", None
+        return "status", tail or None
     if command in {"list", "show"} and tail.lower() in {"ai", "ais", "agents"}:
         return "list_ai", None
     if command in {"on", "off", "enable", "disable"}:
@@ -652,20 +666,46 @@ def get_telegram_bot_token_env(bot_role: TelegramBotRole) -> str:
     return SIGNAL_BOT_TOKEN_ENV
 
 
-def _status_text(rows: Iterable[dict[str, Any]]) -> str:
-    safe_rows = list(rows or [])
-    if not safe_rows:
-        return "🤖 Master AI status\nNo orchestration runs yet."
+def _status_text(target: str | None = None) -> str:
+    """Return a clean owner-facing status menu instead of failed-run history."""
+    requested = str(target or "").strip().lower()
 
-    lines = ["🤖 Master AI status"]
-    for row in safe_rows[:5]:
-        run_id = row.get("run_id") or row.get("id") or "—"
-        status = _safe_word(row.get("status") or "UNKNOWN")
-        task_type = _safe_word(row.get("task_type") or "TASK")
-        completed = int(row.get("completed_steps") or 0)
-        total = int(row.get("total_steps") or 0)
-        lines.append(f"#{run_id} · {task_type} · {status} · {completed}/{total}")
-    return "\n".join(lines)
+    if not requested:
+        return (
+            "🤖 Master AI Status Menu\n"
+            "Jo information chahiye wahi command bhejiye:\n\n"
+            "📰 /master news\n"
+            "💰 /master xauusd\n"
+            "🟢 /master buy\n"
+            "🔴 /master sell\n"
+            "📱 /master status whatsapp\n"
+            "📢 /master status announcement\n"
+            "🤖 /master list ai"
+        )
+
+    labels = {
+        "whatsapp": "WhatsApp Reply Agent",
+        "wa": "WhatsApp Reply Agent",
+        "announcement": "Announcement Agent",
+        "announcements": "Announcement Agent",
+        "telegram": "Telegram Reply Agent",
+        "blog": "AI Blog Agent",
+        "news": "AI Blog / News Agent",
+        "signal": "Signal Agent",
+        "xauusd": "Signal Agent",
+    }
+
+    label = labels.get(requested)
+    if label:
+        return (
+            f"🤖 {label} status\n"
+            "Detailed live status ke liye `/master list ai` bhejiye."
+        )
+
+    return (
+        "🤖 Unknown status option.\n"
+        "Use: whatsapp, announcement, telegram, blog, news, signal, ya xauusd."
+    )
 
 
 def _run_started_text(target: str, progress: OrchestrationProgress) -> str:
