@@ -83,5 +83,17 @@ def generate_master_ai_reply(message: str) -> str:
             answer = _extract_output_text(response.json())
 
             return answer or SAFE_CHAT_ERROR
-    except Exception:
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        request_id = exc.response.headers.get("x-request-id", "unknown")
+        print(
+            f"[master-ai-chat] OpenAI HTTP error status={status_code} "
+            f"request_id={request_id}"
+        )
+        return SAFE_CHAT_ERROR
+    except httpx.RequestError as exc:
+        print(f"[master-ai-chat] OpenAI network error type={type(exc).__name__}")
+        return SAFE_CHAT_ERROR
+    except Exception as exc:
+        print(f"[master-ai-chat] Unexpected error type={type(exc).__name__}")
         return SAFE_CHAT_ERROR
