@@ -30,6 +30,7 @@ from services.master_orchestrator import (
 )
 from services.orchestration_redaction import redact_value
 from services.url_service import public_content_url, public_website_base_url
+from services.whatsapp_service import WhatsAppService
 
 SAFE_TELEGRAM_ERROR = "⚠️ Service temporarily unavailable. Please try again later."
 MASTER_COMMAND = "/master"
@@ -337,6 +338,37 @@ def handle_master_command_text(
                 chat_id=chat_id,
                 status="AI_CHAT_RESPONSE",
             )
+        if command == "test" and str(target or "").strip().lower() in {
+            "whatsapp",
+            "wa",
+        }:
+            try:
+                message_id = WhatsAppService().send_text(
+                    "",
+                    "✅ VenusRealm Green API WhatsApp group test successful.",
+                )
+                response = (
+                    "✅ WhatsApp group test message sent successfully.\n"
+                    f"Message ID: {message_id}"
+                )
+                status = "OK"
+            except Exception as exc:
+                print(
+                    f"[master-whatsapp-test] error={type(exc).__name__}"
+                )
+                response = (
+                    "⚠️ WhatsApp group test failed. "
+                    "Railway logs me latest WhatsApp error check karein."
+                )
+                status = "ERROR"
+
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=response,
+                chat_id=chat_id,
+                status=status,
+            )
+
         if command in {"on", "off", "list_ai"}:
             response = _handle_ai_toggle_command(command, target)
             _log_master_command_to_sheet(
