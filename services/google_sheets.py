@@ -48,11 +48,13 @@ class GoogleSheetsService:
     _ANALYSIS_WORKSHEET = "Sheet1"
     _MAX_ANALYSIS_AGE = timedelta(hours=6)
     _SESSION_HEADER = re.compile(
-        r"^XAUUSD SESSION\s+(\d{4}-\d{2}-\d{2})$",
+        r"^(?:XAUUSD SESSION\s+|DATE:\s*)(\d{4}-\d{2}-\d{2})$",
         re.IGNORECASE,
     )
     _SLOT_LABEL = re.compile(
-        r"^(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$"
+        r"^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?\s*"
+        r"(?:-|TO)\s*(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$",
+        re.IGNORECASE,
     )
 
     def __init__(self) -> None:
@@ -229,11 +231,15 @@ class GoogleSheetsService:
                 live_price = cls._decimal_or_none(normalized[5])
                 if None in (high, low, previous_average, live_price):
                     continue
+                start_hour = int(slot_match.group(1))
+                start_minute = int(slot_match.group(2))
+                start_meridiem = str(slot_match.group(3) or "").upper()
+                if start_meridiem:
+                    start_hour %= 12
+                    if start_meridiem == "PM":
+                        start_hour += 12
                 observed_local = datetime.strptime(
-                    (
-                        f"{session_date} {slot_match.group(1)}:"
-                        f"{slot_match.group(2)}"
-                    ),
+                    f"{session_date} {start_hour:02d}:{start_minute:02d}",
                     "%Y-%m-%d %H:%M",
                 ).replace(tzinfo=india)
                 observed_at = observed_local.astimezone(timezone.utc)
