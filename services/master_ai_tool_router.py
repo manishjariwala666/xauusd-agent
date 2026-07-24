@@ -109,6 +109,7 @@ def execute_master_ai_action(
             input_payload={
                 "master_ai_action": clean_action,
                 "automatic_execution": True,
+                "allow_signal": clean_action == "run_signal_agent",
             },
         )
     except Exception as exc:
