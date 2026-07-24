@@ -163,8 +163,69 @@ def run_telegram_reply_agent(payload: dict[str, Any]) -> str:
 
 
 def run_whatsapp_reply_agent(payload: dict[str, Any]) -> str:
-    """Reply to one WhatsApp user with memory and media-safe persistence."""
+    """Run one approved WhatsApp Reply Agent action."""
+    action = str(payload.get("master_ai_action") or "").strip().lower()
+    if action == "send_client_welcome":
+        return _send_client_welcome(payload)
     return _run_reply("WHATSAPP", payload)
+
+
+def _send_client_welcome(payload: dict[str, Any]) -> str:
+    """Send the approved VenusRealm welcome message to one known client."""
+    client_name = str(payload.get("client_name") or "").strip()
+    if not client_name:
+        raise ValueError("client_name is required.")
+
+    with session_scope() as session:
+        client = (
+            session.execute(
+                text(
+                    """
+                    SELECT id, name, whatsapp
+                    FROM public.users
+                    WHERE LOWER(name) = LOWER(:client_name)
+                      AND whatsapp IS NOT NULL
+                      AND whatsapp <> ''
+                    LIMIT 1
+                    """
+                ),
+                {"client_name": client_name},
+            )
+            .mappings()
+            .first()
+        )
+
+    if not client:
+        raise ValueError("Client ya verified WhatsApp number nahi mila.")
+
+    resolved_name = str(client.get("name") or client_name).strip()
+    recipient = str(client.get("whatsapp") or "").strip()
+    if not recipient:
+        raise ValueError("Client WhatsApp number nahi mila.")
+
+    message = (
+        f"🎉 Welcome to VenusRealm, {resolved_name}! 🎉\n\n"
+        "💰 Crorepati banne ka sapna lekar log yahan judte hain,\n"
+        "aur knowledge aur discipline ke saath apni journey "
+        "aage badhate hain. 🚀\n\n"
+        "VenusRealm community me aapka hardik swagat hai. 🙏\n\n"
+        "Yahan aapko XAUUSD market updates, important announcements "
+        "aur platform guidance milti rahegi.\n\n"
+        "⚠️ Trading me risk hota hai. Koi bhi update guaranteed profit "
+        "ya personal financial advice nahi hai.\n\n"
+        "— VenusRealm Team"
+    )
+
+    message_id = WhatsAppService().send_text(recipient, message)
+
+    return (
+        "✅ Order sent to VWRA\n\n"
+        f"Client: {resolved_name}\n"
+        "Action: send_client_welcome\n"
+        "Status: SENT\n"
+        f"Message reference: {message_id}\n\n"
+        "Delivery confirmation pending."
+    )
 
 
 def _blog_publish_default(payload: dict[str, Any]) -> bool:
