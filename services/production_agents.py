@@ -845,11 +845,22 @@ def _deliver_pending_whatsapp_signals() -> None:
     recipients = _verified_whatsapp_recipients()
     service = WhatsAppService() if rows and recipients else None
     for signal in rows:
+        entry = f"{float(signal['price']):.2f}"
+        stop_loss = (
+            f"{float(signal['stop_loss']):.2f}"
+            if signal["stop_loss"] is not None
+            else "—"
+        )
+        target_price = (
+            f"{float(signal['target_price']):.2f}"
+            if signal["target_price"] is not None
+            else "—"
+        )
         message = (
             f"{signal['symbol']} {signal['signal_type']}\n"
-            f"Entry: {signal['price']}\n"
-            f"SL: {signal['stop_loss'] or '—'}\n"
-            f"TP1: {signal['target_price'] or '—'}\n"
+            f"Entry: {entry}\n"
+            f"SL: {stop_loss}\n"
+            f"TP1: {target_price}\n"
             "Risk warning: returns are not guaranteed."
         )
         failures = []

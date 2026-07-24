@@ -250,7 +250,13 @@ class GoogleSheetsService:
                     "BUY" if live_price >= previous_average else "SELL"
                 )
                 target = high if direction == "BUY" else low
-                stop_loss = low if direction == "BUY" else high
+                stop_loss = previous_average
+                if (
+                    direction == "BUY" and stop_loss >= live_price
+                ) or (
+                    direction == "SELL" and stop_loss <= live_price
+                ):
+                    continue
                 relation = (
                     "above" if direction == "BUY" else "below"
                 )
