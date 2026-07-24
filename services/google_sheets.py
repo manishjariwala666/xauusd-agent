@@ -76,6 +76,7 @@ class GoogleSheetsService:
                     "GOOGLE_SERVICE_ACCOUNT_JSON is invalid JSON."
                 ) from exc
             self._client = gspread.service_account_from_dict(credentials)
+        self._sheet_id = settings.google_sheet_id
         self._sheet_name = settings.google_sheet_name
         self._worksheet_name = settings.google_worksheet_name
 
@@ -85,7 +86,11 @@ class GoogleSheetsService:
         if self._client is not None:
             try:
                 configured_worksheet = (
-                    self._client.open(self._sheet_name)
+                    (
+                        self._client.open_by_key(self._sheet_id)
+                        if self._sheet_id
+                        else self._client.open(self._sheet_name)
+                    )
                     .worksheet(self._worksheet_name)
                 )
                 rows = configured_worksheet.get_all_records(
@@ -156,7 +161,11 @@ class GoogleSheetsService:
     def _analysis_values(self) -> list[list[str]]:
         if self._client is not None:
             return (
-                self._client.open(self._sheet_name)
+                (
+                    self._client.open_by_key(self._sheet_id)
+                    if self._sheet_id
+                    else self._client.open(self._sheet_name)
+                )
                 .worksheet(self._ANALYSIS_WORKSHEET)
                 .get_all_values()
             )
