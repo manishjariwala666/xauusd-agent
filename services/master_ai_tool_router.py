@@ -105,7 +105,6 @@ def execute_master_ai_action(
         progress = runner(
             task_type=task["task_type"],
             title=task["title"],
-            objective=task["objective"],
             source=source,
             input_payload={
                 "master_ai_action": clean_action,
