@@ -376,6 +376,30 @@ def handle_master_command_text(
         if inferred_target and _looks_like_master_natural_command(text):
             text = f"{MASTER_COMMAND} run {inferred_target}"
         else:
+            if _looks_like_signal_request(original_text):
+                tool_result = execute_master_ai_action(
+                    "run_signal_agent",
+                    source="TELEGRAM_MASTER_AI",
+                    runner=runner,
+                )
+                response_lines = [
+                    "🤖 Master AI action",
+                    "Agent: VSA — VenusRealm Signal Agent",
+                    f"Action: {tool_result.action}",
+                    f"Status: {tool_result.status}",
+                    tool_result.message,
+                ]
+                if tool_result.run_id is not None:
+                    response_lines.append(f"Run: #{tool_result.run_id}")
+
+                return MasterTelegramCommandResult(
+                    handled=True,
+                    response_text="\n".join(response_lines),
+                    chat_id=chat_id,
+                    status=tool_result.status,
+                    run_id=tool_result.run_id,
+                )
+
             if _looks_like_signal_text(original_text):
                 return MasterTelegramCommandResult(
                     handled=True,
@@ -925,6 +949,19 @@ def _unknown_master_text_response() -> str:
         "/master run blog\n"
         "/master list ai"
     )
+
+
+def _looks_like_signal_request(text: str) -> bool:
+    normalized = str(text or "").strip().lower()
+    has_signal = any(
+        token in normalized
+        for token in ("signal", "xauusd signal", "gold signal")
+    )
+    has_request = any(
+        token in normalized
+        for token in ("today", "aaj", "current", "latest", "provide", "do", "?")
+    )
+    return has_signal and has_request
 
 
 def _looks_like_signal_text(text: str) -> bool:
