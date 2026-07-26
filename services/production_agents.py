@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -26,6 +27,15 @@ from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
 from services.url_service import public_content_url, public_website_base_url
 from services.whatsapp_service import WhatsAppService
+from services.whatsapp_standing_authorization import (
+    AutomationDecision,
+    AutomationDecisionStatus,
+    WhatsAppStandingAuthorizationService,
+)
+
+
+class WhatsAppAutomationBlocked(RuntimeError):
+    """Safe policy failure that prevents a queued job reporting false success."""
 
 
 def run_blog_agent(payload: dict[str, Any]) -> str:
@@ -216,7 +226,31 @@ def _send_client_welcome(payload: dict[str, Any]) -> str:
         "— VenusRealm Team"
     )
 
-    message_id = WhatsAppService().send_text(recipient, message)
+    channel_identity = _whatsapp_channel_identity(payload)
+    idempotency_key = str(
+        payload.get("delivery_idempotency_key")
+        or (
+            f"whatsapp:{channel_identity}:welcome:{client['id']}:"
+            f"{datetime.now(timezone.utc).date().isoformat()}"
+        )
+    )
+    standing, delivery = _reserve_whatsapp_delivery(
+        channel_identity=channel_identity,
+        client_identity=recipient,
+        action="greeting",
+        idempotency_key=idempotency_key,
+    )
+    if not delivery.allowed:
+        raise WhatsAppAutomationBlocked(_whatsapp_blocked_result(delivery))
+    try:
+        message_id = WhatsAppService().send_text(recipient, message)
+    except Exception as exc:
+        standing.mark_delivery_failed(
+            idempotency_key=idempotency_key,
+            error_category=exc.__class__.__name__,
+        )
+        raise
+    standing.mark_delivery_complete(idempotency_key=idempotency_key)
 
     return (
         "✅ Order sent to VWRA\n\n"
@@ -751,6 +785,38 @@ def _run_reply(channel: str, payload: dict[str, Any]) -> str:
             .mappings()
             .all()
         )
+    standing: WhatsAppStandingAuthorizationService | None = None
+    channel_identity = ""
+    client_identity = str(conversation["external_user_id"])
+    action = str(payload.get("automation_action") or "unknown").strip().lower()
+    idempotency_key = str(
+        payload.get("delivery_idempotency_key") or ""
+    ).strip()
+    if channel == "WHATSAPP":
+        channel_identity = _whatsapp_channel_identity(payload)
+        if not channel_identity or not idempotency_key:
+            raise WhatsAppAutomationBlocked(
+                "BLOCKED: WhatsApp standing authorization context is missing."
+            )
+        try:
+            standing = _whatsapp_authorization_service()
+            initial_decision = standing.evaluate(
+                channel_identity=channel_identity,
+                client_identity=client_identity,
+                action=action,
+            )
+        except Exception as exc:
+            logger.warning(
+                "WhatsApp reply blocked: authorization storage unavailable ({})",
+                exc.__class__.__name__,
+            )
+            raise WhatsAppAutomationBlocked(
+                "BLOCKED: WhatsApp authorization storage is unavailable."
+            )
+        if not initial_decision.allowed:
+            raise WhatsAppAutomationBlocked(
+                _whatsapp_blocked_result(initial_decision)
+            )
     memory = "\n".join(
         f"{row['sender_type']}: {row['body']}" for row in reversed(history)
     )
@@ -770,9 +836,29 @@ def _run_reply(channel: str, payload: dict[str, Any]) -> str:
             str(conversation["external_user_id"]), reply
         )
     else:
-        external_id = WhatsAppService().send_text(
-            str(conversation["external_user_id"]), reply
+        if standing is None:
+            raise WhatsAppAutomationBlocked(
+                "BLOCKED: WhatsApp standing authorization is unavailable."
+            )
+        delivery = standing.begin_delivery_attempt(
+            channel_identity=channel_identity,
+            client_identity=client_identity,
+            action=action,
+            idempotency_key=idempotency_key,
         )
+        if not delivery.allowed:
+            raise WhatsAppAutomationBlocked(
+                _whatsapp_blocked_result(delivery)
+            )
+        try:
+            external_id = WhatsAppService().send_text(client_identity, reply)
+        except Exception as exc:
+            standing.mark_delivery_failed(
+                idempotency_key=idempotency_key,
+                error_category=exc.__class__.__name__,
+            )
+            raise
+        standing.mark_delivery_complete(idempotency_key=idempotency_key)
     with session_scope() as session:
         session.execute(
             text(
@@ -791,16 +877,75 @@ def _run_reply(channel: str, payload: dict[str, Any]) -> str:
     append_message_log(
         channel=channel,
         status="ai_reply",
-        user_id=str(conversation["external_user_id"]),
+        user_id=(
+            _whatsapp_log_reference(str(conversation["external_user_id"]))
+            if channel == "WHATSAPP"
+            else str(conversation["external_user_id"])
+        ),
         phone=(
-            str(conversation["external_user_id"])
+            _whatsapp_log_reference(str(conversation["external_user_id"]))
             if channel == "WHATSAPP"
             else ""
         ),
-        reply=reply[:1000],
+        reply=(
+            "AI reply stored in protected conversation history."
+            if channel == "WHATSAPP"
+            else reply[:1000]
+        ),
         notes=f"conversation_id={conversation_id}",
     )
     return f"{channel.title()} AI reply delivered."
+
+
+def _reserve_whatsapp_delivery(
+    *,
+    channel_identity: str,
+    client_identity: str,
+    action: str,
+    idempotency_key: str,
+) -> tuple[WhatsAppStandingAuthorizationService, AutomationDecision]:
+    if not channel_identity or not idempotency_key:
+        raise ValueError("WhatsApp authorization context is required.")
+    standing = _whatsapp_authorization_service()
+    decision = standing.begin_delivery_attempt(
+        channel_identity=channel_identity,
+        client_identity=client_identity,
+        action=action,
+        idempotency_key=idempotency_key,
+    )
+    return standing, decision
+
+
+def _whatsapp_channel_identity(payload: dict[str, Any]) -> str:
+    explicit = str(payload.get("channel_identity") or "").strip()
+    if explicit:
+        return explicit
+    settings = get_settings()
+    return str(
+        settings.whatsapp_business_account_id
+        or settings.whatsapp_phone_number_id
+        or ""
+    ).strip()
+
+
+def _whatsapp_authorization_service() -> WhatsAppStandingAuthorizationService:
+    from services.whatsapp_standing_authorization_repository import (
+        build_postgres_standing_authorization_service,
+    )
+
+    return build_postgres_standing_authorization_service()
+
+
+def _whatsapp_blocked_result(decision: AutomationDecision) -> str:
+    if decision.status == AutomationDecisionStatus.APPROVAL_REQUIRED:
+        return f"APPROVAL_REQUIRED: {decision.reason}"
+    return f"{decision.status.value}: {decision.reason}"
+
+
+def _whatsapp_log_reference(identity: str) -> str:
+    return "wa_" + hashlib.sha256(
+        str(identity or "").encode("utf-8")
+    ).hexdigest()[:16]
 
 
 def _verified_whatsapp_recipients() -> list[str]:

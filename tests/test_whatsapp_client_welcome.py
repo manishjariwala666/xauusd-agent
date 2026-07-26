@@ -1,4 +1,8 @@
 from services import production_agents
+from services.whatsapp_standing_authorization import (
+    InMemoryStandingAuthorizationRepository,
+    WhatsAppStandingAuthorizationService,
+)
 
 
 class FakeMappings:
@@ -47,6 +51,14 @@ class FakeWhatsAppService:
 
 def test_send_client_welcome_returns_sent_proof(monkeypatch):
     fake_service = FakeWhatsAppService()
+    standing = WhatsAppStandingAuthorizationService(
+        InMemoryStandingAuthorizationRepository(),
+        owner_authorizer=lambda actor_id: actor_id == "owner",
+    )
+    standing.activate(
+        actor_id="owner",
+        channel_identity="verified-business-account",
+    )
 
     monkeypatch.setattr(
         production_agents,
@@ -64,11 +76,18 @@ def test_send_client_welcome_returns_sent_proof(monkeypatch):
         "WhatsAppService",
         lambda: fake_service,
     )
+    monkeypatch.setattr(
+        production_agents,
+        "_whatsapp_authorization_service",
+        lambda: standing,
+    )
 
     result = production_agents.run_whatsapp_reply_agent(
         {
             "master_ai_action": "send_client_welcome",
             "client_name": "Dilipbhai Devmorari",
+            "channel_identity": "verified-business-account",
+            "delivery_idempotency_key": "welcome-test-1",
         }
     )
 
