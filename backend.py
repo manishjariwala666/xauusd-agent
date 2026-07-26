@@ -449,7 +449,11 @@ async def whatsapp_webhook(
     payload: dict[str, Any] = json.loads(raw)
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
-            for message in change.get("value", {}).get("messages", []):
+            value = change.get("value", {})
+            channel_identity = str(
+                value.get("metadata", {}).get("phone_number_id") or ""
+            ).strip()
+            for message in value.get("messages", []):
                 body, media = _whatsapp_content(message)
                 record_inbound_message(
                     channel="WHATSAPP",
@@ -457,6 +461,7 @@ async def whatsapp_webhook(
                     external_message_id=str(message["id"]),
                     body=body,
                     media=media,
+                    channel_identity=channel_identity,
                 )
     return {"status": "accepted"}
 
