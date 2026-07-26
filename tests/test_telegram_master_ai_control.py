@@ -62,7 +62,7 @@ def test_master_command_parser_accepts_numbered_ai_toggles() -> None:
     assert parse_master_command("/master enable agent 6") == ("on", "6")
 
 
-def test_natural_master_ai_sentence_reaches_chat_reply(monkeypatch) -> None:
+def test_natural_master_ai_error_sentence_reaches_read_only_diagnostics(monkeypatch) -> None:
     monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
     calls: list[str] = []
     monkeypatch.setattr(
@@ -74,13 +74,21 @@ def test_natural_master_ai_sentence_reaches_chat_reply(monkeypatch) -> None:
         text="Master ai error door karo",
         telegram_user_id=1001,
         chat_id=55,
+        status_loader=lambda: [
+            {
+                "agent_key": "master_ai",
+                "display_name": "Master AI",
+                "status": "IDLE",
+                "is_enabled": True,
+            }
+        ],
     )
 
     assert is_master_command("Master ai error door karo") is False
     assert parse_master_command("Master ai error door karo") == ("", None)
-    assert result.status == "AI_CHAT_RESPONSE"
-    assert result.response_text == "SAFE_STUB_REPLY"
-    assert calls == ["Master ai error door karo"]
+    assert result.status == "COMPLETED"
+    assert "Master AI: IDLE" in (result.response_text or "")
+    assert calls == []
     assert result.response_text != help_text()
 
 
@@ -141,9 +149,8 @@ def test_master_bot_accepts_natural_blog_text_without_env_flag(monkeypatch) -> N
     assert result.handled is True
     assert result.task_type == "BLOG"
     assert runner.calls[0].input_payload["telegram_target"] == "blog"
-    assert "Latest blog URL" in (result.response_text or "") or "Blog page" in (
-        result.response_text or ""
-    )
+    assert runner.calls[0].input_payload["publish"] is False
+    assert runner.calls[0].input_payload["include_image"] is False
 
 
 def test_telegram_blog_started_text_uses_venusrealm_public_url(monkeypatch) -> None:
