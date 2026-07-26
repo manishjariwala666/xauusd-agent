@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from services.google_sheets_service import append_master_log
 from services.master_ai_chat_service import generate_master_ai_reply
-from services.master_ai_tool_router import execute_master_ai_action
+from services.master_ai_tool_router import execute_master_ai_action, safe_master_reason
 from services.master_ai_agent_registry import find_agent, format_agent_directory
 from services.ai_agent_service import (
     agent_control_help_text,
@@ -340,6 +340,7 @@ def handle_master_command_text(
                 action,
                 source="TELEGRAM_MASTER_AI",
                 runner=runner,
+                supabase=supabase,
             )
 
             response_lines = [
@@ -381,6 +382,7 @@ def handle_master_command_text(
                     "run_signal_agent",
                     source="TELEGRAM_MASTER_AI",
                     runner=runner,
+                    supabase=supabase,
                 )
                 response_lines = [
                     "🤖 Master AI action",
@@ -506,9 +508,17 @@ def handle_master_command_text(
                 )
             run_target = RUN_TARGETS[target]
             context = _command_context(original_text=original_text, target=target)
-            progress = runner(
-                task_type=run_target.task_type,
-                title=run_target.title,
+            action = {
+                "signal": "run_signal_agent",
+                "blog": "run_blog_agent",
+                "image": "run_image_agent",
+                "daily_content": "publish_website",
+            }[target]
+            tool_result = execute_master_ai_action(
+                action,
+                source="TELEGRAM_MASTER_COMMAND",
+                runner=runner,
+                supabase=supabase,
                 input_payload={
                     "objective": _objective_with_context(run_target.objective, context),
                     "telegram_command": f"/master run {target}",
@@ -520,31 +530,43 @@ def handle_master_command_text(
                     "max_attempts": run_target.max_attempts,
                     "risk_level": run_target.risk_level,
                 },
-                requested_by=None,
-                source="TELEGRAM_MASTER_COMMAND",
-                supabase=supabase,
             )
             _record_command_memory_and_event(
-                run_id=progress.run_id,
+                run_id=tool_result.run_id,
                 command=f"/master run {target}",
-                status=progress.status,
+                status=tool_result.status,
                 telegram_user_id=telegram_user_id,
                 target=target,
             )
             _log_master_command_to_sheet(
                 command=f"/master run {target}",
-                status=progress.status,
-                run_id=progress.run_id,
+                status=tool_result.status,
+                run_id=tool_result.run_id,
                 chat_id=chat_id,
                 telegram_user_id=telegram_user_id,
                 notes=f"target={target}",
             )
+            response_lines = [
+                "🤖 Master AI action",
+                f"Action: {tool_result.action}",
+                f"Status: {tool_result.status}",
+                tool_result.message,
+            ]
+            if tool_result.run_id is not None:
+                response_lines.append(f"Run: #{tool_result.run_id}")
+            if target == "blog":
+                url = _latest_blog_public_url()
+                response_lines.append(
+                    f"Latest blog URL: {url}"
+                    if url
+                    else f"Blog page: {_public_site_url()}/blog"
+                )
             return MasterTelegramCommandResult(
                 handled=True,
-                response_text=_run_started_text(target, progress),
+                response_text="\n".join(response_lines),
                 chat_id=chat_id,
-                status=progress.status,
-                run_id=progress.run_id,
+                status=tool_result.status,
+                run_id=tool_result.run_id,
                 task_type=run_target.task_type,
             )
     except Exception:
@@ -568,16 +590,24 @@ def is_master_command(text: str | None) -> bool:
     """Return True for /master commands, including common typo variants."""
     if not text:
         return False
-    first = str(text).strip().split(maxsplit=1)[0].lower()
+    value = str(text).strip()
+    first, _, remainder = value.partition(" ")
+    first = first.lower()
     command = first.split("@", 1)[0]
-    return command in {MASTER_COMMAND, "/mastr", "/mster", "master", "mastr"}
+    if command in {MASTER_COMMAND, "/mastr", "/mster"}:
+        return True
+    if command in {"master", "mastr"}:
+        return _is_recognized_bare_master_phrase(remainder)
+    return False
 
 
 def parse_master_command(text: str) -> tuple[str, str | None]:
     """Parse exact, typo, alias, and natural Master AI command shapes."""
     normalized = _normalize_master_command_text(text)
+    if not is_master_command(normalized):
+        return "", None
     parts = str(normalized or "").strip().split()
-    if not parts or not is_master_command(parts[0]):
+    if not parts:
         return "", None
     if len(parts) == 1:
         return "help", None
@@ -656,9 +686,49 @@ def _normalize_master_command_text(text: str | None) -> str:
         return ""
     first, sep, rest = value.partition(" ")
     command = first.lower().split("@", 1)[0]
-    if command in {"/mastr", "/mster", "master", "mastr"}:
+    if command in {"/mastr", "/mster"}:
+        return f"{MASTER_COMMAND}{sep}{rest}".strip()
+    if command in {"master", "mastr"} and _is_recognized_bare_master_phrase(rest):
         return f"{MASTER_COMMAND}{sep}{rest}".strip()
     return value
+
+
+def _is_recognized_bare_master_phrase(remainder: str | None) -> bool:
+    """Distinguish bare admin commands from conversational text starting with Master."""
+    clean = str(remainder or "").strip().lower()
+    if not clean:
+        return True
+    first_word = clean.split(maxsplit=1)[0]
+    command_words = {
+        "help",
+        "h",
+        "?",
+        "commands",
+        "status",
+        "st",
+        "health",
+        "list",
+        "show",
+        "on",
+        "off",
+        "enable",
+        "disable",
+        "run",
+        "start",
+        "create",
+        "make",
+        "generate",
+        "post",
+        "publish",
+        "do",
+        "execute",
+        "news",
+        "xauusd",
+        "buy",
+        "sell",
+        "test",
+    }
+    return first_word in command_words or first_word in RUN_TARGET_ALIASES
 
 
 def _normalize_run_target(value: str | None) -> str | None:
@@ -913,7 +983,9 @@ def _status_text(target: str | None = None) -> str:
         ]
         last_error = str(agent.get("last_error") or "").strip()
         if last_error:
-            lines.append(f"Last error: {last_error[:300]}")
+            safe_error = safe_master_reason(last_error)
+            if safe_error:
+                lines.append(f"Last error: {safe_error[:300]}")
         return "\n".join(lines)
 
     return (

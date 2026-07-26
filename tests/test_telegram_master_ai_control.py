@@ -49,6 +49,7 @@ def update(text: str, *, user_id: int = 1001, chat_id: int = 1) -> dict:
 def test_master_command_parser_accepts_bot_suffix() -> None:
     assert is_master_command("/master status")
     assert is_master_command("/master@my_bot status")
+    assert is_master_command("master status")
     assert not is_master_command("hello")
     assert parse_master_command("/master run blog") == ("run", "blog")
     assert parse_master_command("/master") == ("help", None)
@@ -59,6 +60,28 @@ def test_master_command_parser_accepts_numbered_ai_toggles() -> None:
     assert parse_master_command("/master on ai 1") == ("on", "1")
     assert parse_master_command("/master off ai 3") == ("off", "3")
     assert parse_master_command("/master enable agent 6") == ("on", "6")
+
+
+def test_natural_master_ai_sentence_reaches_chat_reply(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.generate_master_ai_reply",
+        lambda message: calls.append(message) or "SAFE_STUB_REPLY",
+    )
+
+    result = handle_master_command_text(
+        text="Master ai error door karo",
+        telegram_user_id=1001,
+        chat_id=55,
+    )
+
+    assert is_master_command("Master ai error door karo") is False
+    assert parse_master_command("Master ai error door karo") == ("", None)
+    assert result.status == "AI_CHAT_RESPONSE"
+    assert result.response_text == "SAFE_STUB_REPLY"
+    assert calls == ["Master ai error door karo"]
+    assert result.response_text != help_text()
 
 
 def test_help_command_requires_admin(monkeypatch) -> None:
@@ -168,30 +191,34 @@ def test_master_bot_replies_helpfully_to_unknown_admin_text(monkeypatch) -> None
     )
 
     assert result.handled is True
-    assert result.status == "IGNORED_NON_MASTER_COMMAND"
-    assert "Master AI ready" in (result.response_text or "")
+    assert result.status == "AI_CHAT_RESPONSE"
+    assert result.response_text
     assert runner.calls == []
 
 
 def test_status_command_returns_safe_summary(monkeypatch) -> None:
     monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
-    result = handle_master_command_text(
-        text="/master status",
-        telegram_user_id=1001,
-        chat_id=55,
-        status_loader=lambda limit: [
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.list_ai_agents",
+        lambda: [
             {
-                "run_id": 5,
-                "task_type": "BLOG",
-                "status": "RUNNING",
-                "completed_steps": 1,
-                "total_steps": 3,
-                "safe_error": "/secret/path/token traceback",
+                "agent_key": "ai_blog_agent",
+                "display_name": "AI Blog Agent",
+                "is_enabled": True,
+                "status": "ERROR",
+                "queue_size": 0,
+                "last_run_at": None,
+                "last_error": "/secret/path/token traceback",
             }
         ],
     )
-    assert "#5" in (result.response_text or "")
-    assert "BLOG" in (result.response_text or "")
+    result = handle_master_command_text(
+        text="/master status blog",
+        telegram_user_id=1001,
+        chat_id=55,
+    )
+    assert "AI Blog Agent status" in (result.response_text or "")
+    assert "Internal agent configuration failed." in (result.response_text or "")
     assert "secret" not in (result.response_text or "").lower()
     assert "traceback" not in (result.response_text or "").lower()
 
@@ -208,7 +235,8 @@ def test_service_exception_returns_fixed_telegram_error(monkeypatch) -> None:
         chat_id=55,
         runner=boom,
     )
-    assert result.response_text == SAFE_TELEGRAM_ERROR
+    assert result.status == "ERROR"
+    assert "Internal agent configuration failed." in (result.response_text or "")
     assert "/app" not in result.response_text
     assert "token" not in result.response_text.lower()
     assert "traceback" not in result.response_text.lower()

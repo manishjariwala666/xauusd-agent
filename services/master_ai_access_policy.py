@@ -21,6 +21,11 @@ class MasterAIActionPolicy:
 
 POLICIES: dict[str, MasterAIActionPolicy] = {
     # Read-only intelligence
+    "list_registered_agents": MasterAIActionPolicy(
+        "list_registered_agents",
+        ApprovalLevel.AUTOMATIC,
+        "List registered VenusRealm agents without exposing internal configuration.",
+    ),
     "read_system_health": MasterAIActionPolicy(
         "read_system_health",
         ApprovalLevel.AUTOMATIC,
@@ -40,18 +45,18 @@ POLICIES: dict[str, MasterAIActionPolicy] = {
     # Safe operational commands
     "run_signal_agent": MasterAIActionPolicy(
         "run_signal_agent",
-        ApprovalLevel.AUTOMATIC,
-        "Run the existing Signal Agent without changing its calculation.",
+        ApprovalLevel.OWNER_APPROVAL,
+        "Run the Signal Agent, which may publish or deliver a real signal.",
     ),
     "run_whatsapp_reply_agent": MasterAIActionPolicy(
         "run_whatsapp_reply_agent",
-        ApprovalLevel.AUTOMATIC,
-        "Run the existing WhatsApp Reply Agent.",
+        ApprovalLevel.OWNER_APPROVAL,
+        "Run the WhatsApp Reply Agent, which may send a real client message.",
     ),
     "run_telegram_reply_agent": MasterAIActionPolicy(
         "run_telegram_reply_agent",
-        ApprovalLevel.AUTOMATIC,
-        "Run the existing Telegram Reply Agent.",
+        ApprovalLevel.OWNER_APPROVAL,
+        "Run the Telegram Reply Agent, which may send a real client message.",
     ),
     "run_blog_agent": MasterAIActionPolicy(
         "run_blog_agent",
@@ -70,8 +75,8 @@ POLICIES: dict[str, MasterAIActionPolicy] = {
     ),
     "send_health_report": MasterAIActionPolicy(
         "send_health_report",
-        ApprovalLevel.AUTOMATIC,
-        "Send the owner a private system health report.",
+        ApprovalLevel.OWNER_APPROVAL,
+        "Send the owner a private system health report through an external channel.",
     ),
 
     # Consequential operations
