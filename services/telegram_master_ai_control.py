@@ -13,6 +13,11 @@ from __future__ import annotations
 
 from services.google_sheets_service import append_master_log
 from services.master_ai_chat_service import generate_master_ai_reply
+from services.master_ai_intent_resolver import (
+    IntentRisk,
+    MasterAIIntentProposal,
+    resolve_master_ai_intent,
+)
 from services.master_ai_tool_router import execute_master_ai_action, safe_master_reason
 from services.master_ai_agent_registry import find_agent, format_agent_directory
 from services.ai_agent_service import (
@@ -285,6 +290,17 @@ def handle_master_command_text(
         )
 
     if not is_master_command(text):
+        intent = resolve_master_ai_intent(original_text)
+        if intent.status != "NO_ACTION":
+            return _handle_natural_agent_intent(
+                proposal=intent,
+                telegram_user_id=telegram_user_id,
+                chat_id=chat_id,
+                supabase=supabase,
+                runner=runner,
+                status_loader=status_loader,
+            )
+
         normalized_order = original_text.lower()
 
         if any(
@@ -584,6 +600,151 @@ def handle_master_command_text(
         chat_id=chat_id,
         status="INVALID_COMMAND",
     )
+
+
+def _handle_natural_agent_intent(
+    *,
+    proposal: MasterAIIntentProposal,
+    telegram_user_id: int | str | None,
+    chat_id: int | str | None,
+    supabase: Any | None,
+    runner: Runner,
+    status_loader: StatusLoader,
+) -> MasterTelegramCommandResult:
+    """Audit and execute one deterministic natural-language proposal."""
+    action = proposal.action or "unresolved"
+    risk = proposal.risk.value if proposal.risk else "UNRESOLVED"
+
+    if proposal.status == "CLARIFICATION_REQUIRED":
+        _log_master_command_to_sheet(
+            command="natural:clarification",
+            status=proposal.status,
+            chat_id=chat_id,
+            telegram_user_id=telegram_user_id,
+            notes="risk=UNRESOLVED",
+        )
+        return MasterTelegramCommandResult(
+            handled=True,
+            response_text=(
+                "🤖 Master AI clarification required\n"
+                f"Reason: {proposal.reason}\n"
+                "Koi agent execute nahi hua."
+            ),
+            chat_id=chat_id,
+            status=proposal.status,
+        )
+
+    if proposal.status in {"APPROVAL_REQUIRED", "BLOCKED"}:
+        result_status = (
+            "FORBIDDEN" if proposal.status == "BLOCKED" else "APPROVAL_REQUIRED"
+        )
+        _log_master_command_to_sheet(
+            command=f"natural:{action}",
+            status=result_status,
+            chat_id=chat_id,
+            telegram_user_id=telegram_user_id,
+            notes=f"risk={risk}",
+        )
+        message = (
+            "Action execute nahi hua. Explicit owner approval record required hai."
+            if result_status == "APPROVAL_REQUIRED"
+            else "Action permanently blocked hai."
+        )
+        return MasterTelegramCommandResult(
+            handled=True,
+            response_text=_natural_proposal_text(
+                proposal,
+                status=result_status,
+                message=message,
+            ),
+            chat_id=chat_id,
+            status=result_status,
+        )
+
+    if proposal.risk not in {IntentRisk.SAFE, IntentRisk.LOW_RISK}:
+        return MasterTelegramCommandResult(
+            handled=True,
+            response_text="🤖 Unsafe or unresolved action blocked.",
+            chat_id=chat_id,
+            status="UNKNOWN_ACTION",
+        )
+
+    parameters = dict(proposal.parameters)
+    retry_action = parameters.pop("retry_action", None)
+    tool_result = execute_master_ai_action(
+        action,
+        source="TELEGRAM_MASTER_AI_NATURAL",
+        runner=runner,
+        input_payload=parameters or None,
+        status_loader=status_loader,
+        retry_action=retry_action,
+        supabase=supabase,
+    )
+    _log_master_command_to_sheet(
+        command=f"natural:{action}",
+        status=tool_result.status,
+        run_id=tool_result.run_id,
+        chat_id=chat_id,
+        telegram_user_id=telegram_user_id,
+        notes=f"risk={risk}",
+    )
+    if tool_result.run_id is not None:
+        _record_command_memory_and_event(
+            run_id=tool_result.run_id,
+            command=f"natural:{action}",
+            status=tool_result.status,
+            telegram_user_id=telegram_user_id,
+            target=proposal.agent_key or action,
+        )
+
+    return MasterTelegramCommandResult(
+        handled=True,
+        response_text=_natural_proposal_text(
+            proposal,
+            status=tool_result.status,
+            message=tool_result.message,
+            run_id=tool_result.run_id,
+        ),
+        chat_id=chat_id,
+        status=tool_result.status,
+        run_id=tool_result.run_id,
+        task_type={
+            "run_blog_agent": "BLOG",
+            "run_image_agent": "IMAGE",
+            "run_signal_agent": "SIGNAL",
+        }.get(action),
+    )
+
+
+def _natural_proposal_text(
+    proposal: MasterAIIntentProposal,
+    *,
+    status: str,
+    message: str,
+    run_id: int | None = None,
+) -> str:
+    agent_label = proposal.agent_key or "Master AI"
+    registered_agent = find_agent(proposal.agent_key)
+    if registered_agent is not None:
+        agent_label = registered_agent.official_name.removeprefix("Venus ")
+    executed = status not in {
+        "APPROVAL_REQUIRED",
+        "CLARIFICATION_REQUIRED",
+        "FORBIDDEN",
+    }
+    lines = [
+        "🤖 Master AI proposal",
+        f"Action: {proposal.action or 'unresolved'}",
+        f"Agent: {agent_label}",
+        f"Risk: {proposal.risk.value if proposal.risk else 'UNRESOLVED'}",
+        f"Reason: {proposal.reason}",
+        f"Status: {status}",
+        f"Executed: {'YES' if executed else 'NO'}",
+        message,
+    ]
+    if run_id is not None:
+        lines.append(f"Run: #{run_id}")
+    return "\n".join(lines)
 
 
 def is_master_command(text: str | None) -> bool:
