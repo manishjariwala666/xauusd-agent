@@ -53,9 +53,21 @@ class WhatsAppService:
     def send_text(self, recipient: str, message: str) -> str:
         """Send one WhatsApp text message using Green API or Meta Cloud API."""
         if self._use_green_api:
+            normalized_recipient = recipient.strip()
+            if normalized_recipient.endswith("@c.us"):
+                normalized_recipient = normalized_recipient[:-5]
+            if normalized_recipient.startswith("+"):
+                normalized_recipient = normalized_recipient[1:]
+            normalized_recipient = normalized_recipient.replace(" ", "")
+
+            if not normalized_recipient.isdigit():
+                raise ValueError(
+                    "Green API recipient must contain digits only."
+                )
+
             return self._send(
                 {
-                    "chatId": self._green_api_chat_id,
+                    "chatId": f"{normalized_recipient}@c.us",
                     "message": message[:4096],
                 }
             )
