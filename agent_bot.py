@@ -13,6 +13,7 @@ from config import get_settings
 from services.google_sheets import GoogleSheetsService
 from services.market_data import MarketDataService, MarketPrice
 from services.telegram_service import TelegramService
+from services.production_agents import deliver_pending_whatsapp_signals
 
 
 def run_pipeline_once(
@@ -58,6 +59,9 @@ def run_pipeline_once(
     # This persistent database state prevents duplicate messages on restart.
     sent_count = telegram.broadcast_pending_signals()
     logger.debug("Supabase Telegram poll completed: sent={}", sent_count)
+
+    deliver_pending_whatsapp_signals()
+    logger.debug("Supabase WhatsApp poll completed")
 
 
 def automation_loop(stop_event: Event) -> None:

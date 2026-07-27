@@ -971,6 +971,11 @@ def _verified_whatsapp_recipients() -> list[str]:
         return [str(value) for value in values]
 
 
+def deliver_pending_whatsapp_signals() -> None:
+    """Deliver pending BUY/SELL signals to configured WhatsApp recipients."""
+    _deliver_pending_whatsapp_signals()
+
+
 def _deliver_pending_whatsapp_signals() -> None:
     with session_scope() as session:
         rows = (
