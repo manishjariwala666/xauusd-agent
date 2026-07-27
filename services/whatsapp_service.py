@@ -53,21 +53,35 @@ class WhatsAppService:
     def send_text(self, recipient: str, message: str) -> str:
         """Send one WhatsApp text message using Green API or Meta Cloud API."""
         if self._use_green_api:
-            normalized_recipient = recipient.strip()
-            if normalized_recipient.endswith("@c.us"):
-                normalized_recipient = normalized_recipient[:-5]
-            if normalized_recipient.startswith("+"):
-                normalized_recipient = normalized_recipient[1:]
-            normalized_recipient = normalized_recipient.replace(" ", "")
+            normalized_recipient = recipient.strip().replace(" ", "")
 
-            if not normalized_recipient.isdigit():
-                raise ValueError(
-                    "Green API recipient must contain digits only."
-                )
+            if normalized_recipient.endswith("@g.us"):
+                group_id = normalized_recipient[:-5]
+                parts = group_id.split("-", 1)
+                if (
+                    len(parts) != 2
+                    or not parts[0].isdigit()
+                    or not parts[1].isdigit()
+                ):
+                    raise ValueError(
+                        "Green API group recipient has an invalid format."
+                    )
+                chat_id = normalized_recipient
+            else:
+                if normalized_recipient.endswith("@c.us"):
+                    normalized_recipient = normalized_recipient[:-5]
+                if normalized_recipient.startswith("+"):
+                    normalized_recipient = normalized_recipient[1:]
+
+                if not normalized_recipient.isdigit():
+                    raise ValueError(
+                        "Green API individual recipient must contain digits only."
+                    )
+                chat_id = f"{normalized_recipient}@c.us"
 
             return self._send(
                 {
-                    "chatId": f"{normalized_recipient}@c.us",
+                    "chatId": chat_id,
                     "message": message[:4096],
                 }
             )
