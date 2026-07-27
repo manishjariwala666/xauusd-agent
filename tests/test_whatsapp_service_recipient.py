@@ -86,3 +86,26 @@ def test_green_api_invalid_group_recipient_is_rejected():
         match="group recipient has an invalid format",
     ):
         service.send_text("invalid-group@g.us", "Test")
+
+
+def test_green_api_digits_only_group_recipient_is_preserved(monkeypatch):
+    service = whatsapp_module.WhatsAppService.__new__(
+        whatsapp_module.WhatsAppService
+    )
+    service._use_green_api = True
+
+    captured = {}
+
+    def fake_send(payload):
+        captured.update(payload)
+        return "legacy-group-message-id"
+
+    monkeypatch.setattr(service, "_send", fake_send)
+
+    result = service.send_text(
+        "120363000000000000@g.us",
+        "Legacy group test",
+    )
+
+    assert result == "legacy-group-message-id"
+    assert captured["chatId"] == "120363000000000000@g.us"
