@@ -13,7 +13,15 @@ from config import get_settings
 from services.google_sheets import GoogleSheetsService
 from services.market_data import MarketDataService, MarketPrice
 from services.telegram_service import TelegramService
-from services.production_agents import deliver_pending_whatsapp_signals
+
+
+def deliver_pending_whatsapp_signals() -> None:
+    """Import WhatsApp delivery lazily to avoid a circular module import."""
+    from services.production_agents import (
+        deliver_pending_whatsapp_signals as deliver,
+    )
+
+    deliver()
 
 
 def run_pipeline_once(
