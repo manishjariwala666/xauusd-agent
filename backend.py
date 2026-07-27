@@ -32,6 +32,7 @@ from services.admin_leads_api import admin as admin_leads_router, public as publ
 from services.admin_signals_service import list_public_signals
 from services.conversation_service import record_inbound_message
 from services.content_service import list_categories, list_content
+from services.mt5_h1_api import router as mt5_h1_router
 from services.migration_service import (
     apply_pending_migrations,
     required_schema_is_ready,
@@ -126,6 +127,8 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+app.include_router(mt5_h1_router)
+
 app.add_middleware(GZipMiddleware, minimum_size=1_000)
 app.include_router(admin_auth_router)
 app.include_router(admin_content_router)
