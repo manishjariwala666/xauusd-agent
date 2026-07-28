@@ -30,6 +30,8 @@ from dataclasses import dataclass
 from os import getenv
 from typing import Any, Callable, Iterable, Literal
 
+from loguru import logger
+
 from services.master_orchestrator import (
     OrchestrationProgress,
     create_and_start_master_task,
@@ -1263,9 +1265,25 @@ def _extract_message(update: dict[str, Any]) -> dict[str, Any] | None:
 
 def _is_authorized_admin(telegram_user_id: int | str | None) -> bool:
     if telegram_user_id is None:
+        logger.warning(
+            "Master Telegram authorization failed: incoming user ID missing"
+        )
         return False
+
+    incoming = str(telegram_user_id).strip()
     allowed = _allowed_admin_user_ids()
-    return str(telegram_user_id).strip() in allowed if allowed else False
+    authorized = incoming in allowed if allowed else False
+
+    if not authorized:
+        logger.warning(
+            "Master Telegram authorization failed: incoming_last4={} "
+            "allowed_last4={} allowed_count={}",
+            incoming[-4:] if incoming else "none",
+            sorted(value[-4:] for value in allowed),
+            len(allowed),
+        )
+
+    return authorized
 
 
 def _allowed_admin_user_ids() -> set[str]:
