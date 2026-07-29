@@ -27,6 +27,7 @@ from services.market_data import MarketDataService
 from services.telegram_service import TelegramService
 from services.url_service import public_content_url, public_website_base_url
 from services.whatsapp_service import WhatsAppService
+from services.signal_message_formatter import format_signal_message
 from services.whatsapp_standing_authorization import (
     AutomationDecision,
     AutomationDecisionStatus,
@@ -274,6 +275,176 @@ def _blog_publish_default(payload: dict[str, Any]) -> bool:
     return status.strip().lower() != "draft"
 
 
+def _monitor_stop_loss_hits(
+    *,
+    market_data: MarketDataService,
+    telegram: TelegramService,
+) -> int:
+    """Close SL-hit signals and notify Telegram and WhatsApp once."""
+    from services.signal_target_monitor import (
+        format_stop_loss_hit_message,
+        loss_points,
+        stop_loss_is_hit,
+    )
+
+    now = datetime.now(timezone.utc)
+    if now.weekday() >= 5:
+        logger.info("Stop Loss monitoring paused for the weekend")
+        return 0
+
+    quote = market_data.fetch_current_price()
+    if quote is None:
+        logger.warning("Stop Loss monitoring skipped: market price unavailable")
+        return 0
+
+    with session_scope() as session:
+        rows = (
+            session.execute(
+                text(
+                    """
+                    SELECT *
+                    FROM public.market_signals
+                    WHERE signal_type IN ('BUY', 'SELL')
+                      AND stop_loss IS NOT NULL
+                      AND signal_time >= NOW() - INTERVAL '6 hours'
+                      AND telegram_sent_at IS NOT NULL
+                      AND whatsapp_sent_at IS NOT NULL
+                      AND COALESCE(lifecycle_status, 'DRAFT') NOT IN (
+                          'STOPPED',
+                          'CLOSED',
+                          'TARGET_HIT',
+                          'CANCELLED',
+                          'EXPIRED',
+                          'TRASHED'
+                      )
+                    ORDER BY signal_time DESC
+                    LIMIT 1
+                    """
+                )
+            )
+            .mappings()
+            .all()
+        )
+
+    settings = get_settings()
+    recipients = _verified_whatsapp_recipients()
+    stopped = 0
+
+    for raw_signal in rows:
+        signal = dict(raw_signal)
+
+        if not stop_loss_is_hit(signal, quote.price):
+            continue
+
+        points = loss_points(signal)
+
+        # Atomic lifecycle claim prevents duplicate SL alerts.
+        with session_scope() as session:
+            claimed = (
+                session.execute(
+                    text(
+                        """
+                        UPDATE public.market_signals
+                        SET lifecycle_status = 'STOPPED',
+                            publication_status = 'PUBLISHED',
+                            outcome = 'STOP_LOSS_HIT',
+                            result_points = :result_points,
+                            closed_at = COALESCE(closed_at, NOW()),
+                            updated_at = NOW()
+                        WHERE id = :id
+                          AND COALESCE(lifecycle_status, 'DRAFT') NOT IN (
+                              'STOPPED',
+                              'CLOSED',
+                              'TARGET_HIT',
+                              'CANCELLED',
+                              'EXPIRED',
+                              'TRASHED'
+                          )
+                        RETURNING *
+                        """
+                    ),
+                    {
+                        "id": signal["id"],
+                        "result_points": -float(points),
+                    },
+                )
+                .mappings()
+                .first()
+            )
+
+        if claimed is None:
+            continue
+
+        claimed_signal = dict(claimed)
+        message = format_stop_loss_hit_message(claimed_signal)
+
+        telegram_error = None
+        telegram_sent = False
+        try:
+            telegram.send_text(settings.telegram_chat_id, message)
+            telegram_sent = True
+        except Exception as exc:
+            telegram_error = str(exc)[:2000]
+            logger.exception(
+                "Stop Loss Telegram delivery failed: signal_id={}",
+                signal["id"],
+            )
+
+        whatsapp_errors: list[str] = []
+        whatsapp_sent = False
+        service = WhatsAppService() if recipients else None
+
+        for recipient in recipients:
+            try:
+                assert service is not None
+                service.send_text(recipient, message)
+                whatsapp_sent = True
+            except Exception as exc:
+                whatsapp_errors.append(str(exc))
+                logger.exception(
+                    "Stop Loss WhatsApp delivery failed: signal_id={}",
+                    signal["id"],
+                )
+
+        with session_scope() as session:
+            session.execute(
+                text(
+                    """
+                    UPDATE public.market_signals
+                    SET stop_loss_telegram_sent_at =
+                            CASE WHEN :telegram_sent THEN NOW() END,
+                        stop_loss_telegram_error = :telegram_error,
+                        stop_loss_whatsapp_sent_at =
+                            CASE WHEN :whatsapp_sent THEN NOW() END,
+                        stop_loss_whatsapp_error = :whatsapp_error,
+                        updated_at = NOW()
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "id": signal["id"],
+                    "telegram_sent": telegram_sent,
+                    "telegram_error": telegram_error,
+                    "whatsapp_sent": whatsapp_sent,
+                    "whatsapp_error": (
+                        "; ".join(whatsapp_errors)[:2000]
+                        if whatsapp_errors
+                        else None
+                    ),
+                },
+            )
+
+        stopped += 1
+        logger.info(
+            "Stop Loss signal closed: id={} direction={} current_price={}",
+            signal["id"],
+            signal["signal_type"],
+            quote.price,
+        )
+
+    return stopped
+
+
 def run_signal_agent(payload: dict[str, Any]) -> str:
     """Process a real market signal and deliver pending channel messages."""
     settings = get_settings()
@@ -283,11 +454,21 @@ def run_signal_agent(payload: dict[str, Any]) -> str:
         sheets = GoogleSheetsService()
     except Exception:
         logger.exception("Google Sheets unavailable to Signal Agent")
+    market_data = MarketDataService(supabase)
+    telegram = TelegramService(supabase)
+
     run_pipeline_once(
         sheets=sheets,
-        market_data=MarketDataService(supabase),
-        telegram=TelegramService(supabase),
+        market_data=market_data,
+        telegram=telegram,
     )
+    stopped = _monitor_stop_loss_hits(
+        market_data=market_data,
+        telegram=telegram,
+    )
+    if stopped:
+        logger.info("Stop Loss monitoring completed: stopped={}", stopped)
+
     _publish_pending_website_signals()
     _deliver_pending_whatsapp_signals()
     return "Signal pipeline completed across configured channels."
@@ -977,6 +1158,11 @@ def deliver_pending_whatsapp_signals() -> None:
 
 
 def _deliver_pending_whatsapp_signals() -> None:
+    now = datetime.now(timezone.utc)
+    if now.weekday() >= 5:
+        logger.info("WhatsApp signal delivery paused for the weekend")
+        return
+
     with session_scope() as session:
         rows = (
             session.execute(
@@ -985,6 +1171,8 @@ def _deliver_pending_whatsapp_signals() -> None:
                     SELECT * FROM public.market_signals
                     WHERE signal_type IN ('BUY', 'SELL')
                       AND whatsapp_sent_at IS NULL
+                      AND signal_time >= NOW() - INTERVAL '6 hours'
+                      AND signal_time <= NOW() + INTERVAL '5 minutes'
                     ORDER BY signal_time LIMIT 20
                     """
                 )
@@ -995,24 +1183,7 @@ def _deliver_pending_whatsapp_signals() -> None:
     recipients = _verified_whatsapp_recipients()
     service = WhatsAppService() if rows and recipients else None
     for signal in rows:
-        entry = f"{float(signal['price']):.2f}"
-        stop_loss = (
-            f"{float(signal['stop_loss']):.2f}"
-            if signal["stop_loss"] is not None
-            else "—"
-        )
-        target_price = (
-            f"{float(signal['target_price']):.2f}"
-            if signal["target_price"] is not None
-            else "—"
-        )
-        message = (
-            f"{signal['symbol']} {signal['signal_type']}\n"
-            f"Entry: {entry}\n"
-            f"SL: {stop_loss}\n"
-            f"TP1: {target_price}\n"
-            "Risk warning: returns are not guaranteed."
-        )
+        message = format_signal_message(dict(signal))
         failures = []
         for recipient in recipients:
             try:

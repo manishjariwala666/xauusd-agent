@@ -58,11 +58,15 @@ class WhatsAppService:
             if normalized_recipient.endswith("@g.us"):
                 group_id = normalized_recipient[:-5]
                 parts = group_id.split("-", 1)
-                if (
-                    len(parts) != 2
-                    or not parts[0].isdigit()
-                    or not parts[1].isdigit()
-                ):
+                valid_group = (
+                    group_id.isdigit()
+                    or (
+                        len(parts) == 2
+                        and parts[0].isdigit()
+                        and parts[1].isdigit()
+                    )
+                )
+                if not valid_group:
                     raise ValueError(
                         "Green API group recipient has an invalid format."
                     )

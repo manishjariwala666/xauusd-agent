@@ -32,6 +32,7 @@ class SheetSignal:
     reference_price: Decimal | None = None
     observed_at: datetime | None = None
     source: str = "GOOGLE_SHEET"
+    targets: tuple[Decimal, ...] = ()
 
 
 class GoogleSheetsConfigurationError(RuntimeError):
@@ -218,52 +219,256 @@ class GoogleSheetsService:
                 if position + 1 < len(session_indexes)
                 else len(values)
             )
-            for row in values[start_index + 1 : end_index]:
+            session_rows = values[start_index + 1 : end_index]
+            target_tables: dict[
+                str,
+                dict[str, list[Decimal]],
+            ] = {
+                "default": {"BUY": [], "SELL": []},
+                "morning": {"BUY": [], "SELL": []},
+                "evening": {"BUY": [], "SELL": []},
+            }
+            target_section = "default"
+            explicit_target_labels = False
+            unlabeled_block_count = 0
+
+            for target_row in session_rows:
+                cells = [str(cell).strip() for cell in target_row]
+                joined = " ".join(cells).strip().lower()
+
+                if "morning targets" in joined:
+                    target_section = "morning"
+                    explicit_target_labels = True
+                    continue
+                if "evening targets" in joined:
+                    target_section = "evening"
+                    explicit_target_labels = True
+                    continue
+
+                if len(cells) < 10:
+                    continue
+
+                is_target_header = (
+                    cells[7].strip().lower() == "target"
+                    and cells[8].strip().lower() == "buy level"
+                    and cells[9].strip().lower() == "sell level"
+                )
+                if is_target_header:
+                    if not explicit_target_labels:
+                        unlabeled_block_count += 1
+                        target_section = (
+                            "morning"
+                            if unlabeled_block_count == 1
+                            else "evening"
+                        )
+                    continue
+
+                target_match = re.fullmatch(
+                    r"target\s*([1-6])",
+                    cells[7],
+                    re.IGNORECASE,
+                )
+                if not target_match:
+                    continue
+
+                target_number = int(target_match.group(1))
+                buy_level = cls._decimal_or_none(cells[8])
+                sell_level = cls._decimal_or_none(cells[9])
+
+                for direction, value in (
+                    ("BUY", buy_level),
+                    ("SELL", sell_level),
+                ):
+                    targets = target_tables[target_section][direction]
+                    while len(targets) < target_number:
+                        targets.append(Decimal("0"))
+                    if value is not None:
+                        targets[target_number - 1] = value
+
+            for table in target_tables.values():
+                table["BUY"] = [
+                    value for value in table["BUY"] if value > 0
+                ]
+                table["SELL"] = [
+                    value for value in table["SELL"] if value > 0
+                ]
+
+            # Preserve compatibility when only one unlabelled table exists.
+            for direction in ("BUY", "SELL"):
+                if (
+                    not target_tables["default"][direction]
+                    and target_tables["morning"][direction]
+                ):
+                    target_tables["default"][direction] = list(
+                        target_tables["morning"][direction]
+                    )
+
+            previous_row: tuple[
+                Decimal,
+                Decimal,
+                Decimal,
+            ] | None = None
+
+            for row in session_rows:
                 normalized = [str(cell).strip() for cell in row]
                 if len(normalized) < 6:
                     continue
+
                 slot_match = cls._SLOT_LABEL.match(normalized[0])
                 if not slot_match:
                     continue
+
                 high = cls._decimal_or_none(normalized[1])
                 low = cls._decimal_or_none(normalized[2])
-                previous_average = cls._decimal_or_none(normalized[3])
+                current_average = cls._decimal_or_none(normalized[4])
                 live_price = cls._decimal_or_none(normalized[5])
-                if None in (high, low, previous_average, live_price):
+
+                if None in (
+                    high,
+                    low,
+                    current_average,
+                    live_price,
+                ):
                     continue
+
                 start_hour = int(slot_match.group(1))
                 start_minute = int(slot_match.group(2))
-                start_meridiem = str(slot_match.group(3) or "").upper()
+                start_meridiem = str(
+                    slot_match.group(3) or ""
+                ).upper()
+
                 if start_meridiem:
                     start_hour %= 12
                     if start_meridiem == "PM":
                         start_hour += 12
+
                 observed_local = datetime.strptime(
-                    f"{session_date} {start_hour:02d}:{start_minute:02d}",
+                    (
+                        f"{session_date} "
+                        f"{start_hour:02d}:{start_minute:02d}"
+                    ),
                     "%Y-%m-%d %H:%M",
                 ).replace(tzinfo=india)
+
                 observed_at = observed_local.astimezone(timezone.utc)
+                local_minutes = (
+                    observed_local.hour * 60
+                    + observed_local.minute
+                )
+
+                if 210 <= local_minutes <= 870:
+                    target_session = "morning"
+                elif local_minutes >= 930 or local_minutes <= 150:
+                    target_session = "evening"
+                else:
+                    previous_row = (
+                        high,
+                        low,
+                        current_average,
+                    )
+                    continue
+
                 age = normalized_now - observed_at
                 if age < timedelta(minutes=-5) or age > max_age:
+                    previous_row = (
+                        high,
+                        low,
+                        current_average,
+                    )
                     continue
-                direction = (
-                    "BUY" if live_price >= previous_average else "SELL"
+
+                if previous_row is None:
+                    previous_row = (
+                        high,
+                        low,
+                        current_average,
+                    )
+                    continue
+
+                previous_high, previous_low, previous_avg = (
+                    previous_row
                 )
-                target = high if direction == "BUY" else low
-                stop_loss = previous_average
+
+                lower_low_buy = (
+                    low < previous_low
+                    and current_average < previous_avg
+                )
+                higher_high_sell = (
+                    high > previous_high
+                    and current_average > previous_avg
+                )
+
+                previous_row = (
+                    high,
+                    low,
+                    current_average,
+                )
+
+                if lower_low_buy:
+                    direction = "BUY"
+                    entry_price = current_average
+                    stop_loss = previous_low
+                    setup_name = "lower low + lower average"
+                elif higher_high_sell:
+                    direction = "SELL"
+                    entry_price = current_average
+                    stop_loss = previous_high
+                    setup_name = "higher high + higher average"
+                else:
+                    continue
+
                 if (
-                    direction == "BUY" and stop_loss >= live_price
+                    direction == "BUY"
+                    and stop_loss >= entry_price
                 ) or (
-                    direction == "SELL" and stop_loss <= live_price
+                    direction == "SELL"
+                    and stop_loss <= entry_price
                 ):
                     continue
-                relation = (
-                    "above" if direction == "BUY" else "below"
+
+                selected_table = target_tables[target_session]
+                if not selected_table[direction]:
+                    selected_table = target_tables["default"]
+
+                raw_targets = selected_table[direction]
+
+                if direction == "BUY":
+                    directional_targets = tuple(
+                        value
+                        for value in raw_targets
+                        if value > entry_price
+                    )
+                else:
+                    directional_targets = tuple(
+                        value
+                        for value in raw_targets
+                        if value < entry_price
+                    )
+
+                target = (
+                    directional_targets[0]
+                    if directional_targets
+                    else (
+                        high
+                        if direction == "BUY"
+                        else low
+                    )
                 )
+
+                if (
+                    direction == "BUY"
+                    and target <= entry_price
+                ) or (
+                    direction == "SELL"
+                    and target >= entry_price
+                ):
+                    continue
+
                 label = (
-                    f"{session_date} {normalized[0]} · CMP {relation} "
-                    "previous average"
+                    f"{session_date} {normalized[0]} · "
+                    f"{setup_name}"
                 )
+
                 candidates.append(
                     (
                         observed_at,
@@ -279,11 +484,13 @@ class GoogleSheetsService:
                                 stop_loss,
                                 label,
                             ),
-                            reference_price=live_price,
+                            reference_price=entry_price,
                             observed_at=observed_at,
                             source=(
-                                f"GOOGLE_SHEET:{cls._ANALYSIS_WORKSHEET}"
+                                f"GOOGLE_SHEET:"
+                                f"{cls._ANALYSIS_WORKSHEET}"
                             ),
+                            targets=directional_targets,
                         ),
                     )
                 )
