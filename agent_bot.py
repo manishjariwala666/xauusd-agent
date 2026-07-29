@@ -60,6 +60,7 @@ def run_pipeline_once(
                     stop_loss=sheet_signal.stop_loss,
                     sheet_label=sheet_signal.label,
                     external_key=sheet_signal.external_key,
+                    targets=getattr(sheet_signal, "targets", ()),
                 )
 
     # TelegramService queries only BUY/SELL rows where telegram_sent_at is

@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE public.market_signals
+    ADD COLUMN IF NOT EXISTS target_5 NUMERIC(18, 6),
+    ADD COLUMN IF NOT EXISTS target_6 NUMERIC(18, 6);
+
+COMMIT;
