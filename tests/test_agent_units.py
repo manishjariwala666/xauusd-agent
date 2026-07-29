@@ -885,3 +885,68 @@ def test_real_evening_rows_do_not_sell_the_lower_low_row() -> None:
     assert signal.stop_loss == Decimal("4034.21")
     assert "higher high + higher average" in signal.label
     assert signal.reference_price != Decimal("4026.10")
+
+
+def test_same_session_direction_uses_one_stable_external_key() -> None:
+    base = [
+        ["XAUUSD SESSION 2026-07-29"],
+        ["Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP"],
+        ["03:30 AM TO 04:30 AM", "4040", "4030", "4035", "4034", "4033"],
+        ["04:30 AM TO 05:30 AM", "4041", "4028", "4034", "4032", "4031"],
+    ]
+
+    first = GoogleSheetsService.parse_latest_analysis_signal(
+        base,
+        now=datetime(2026, 7, 29, 0, 15, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    changed_row = [
+        *base,
+        ["05:30 AM TO 06:30 AM", "4042", "4025", "4032", "4030", "4029"],
+    ]
+
+    second = GoogleSheetsService.parse_latest_analysis_signal(
+        changed_row,
+        now=datetime(2026, 7, 29, 1, 15, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert first is not None
+    assert second is not None
+    assert first.direction == "BUY"
+    assert second.direction == "BUY"
+    assert first.external_key == "gsheet-session:2026-07-29:morning:BUY"
+    assert second.external_key == first.external_key
+
+
+def test_morning_and_evening_use_different_signal_lock_keys() -> None:
+    morning_values = [
+        ["XAUUSD SESSION 2026-07-29"],
+        ["Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP"],
+        ["03:30 AM TO 04:30 AM", "4040", "4030", "4035", "4034", "4033"],
+        ["04:30 AM TO 05:30 AM", "4041", "4028", "4034", "4032", "4031"],
+    ]
+    evening_values = [
+        ["XAUUSD SESSION 2026-07-29"],
+        ["Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP"],
+        ["03:30 PM TO 04:30 PM", "4040", "4030", "4035", "4034", "4033"],
+        ["04:30 PM TO 05:30 PM", "4041", "4028", "4034", "4032", "4031"],
+    ]
+
+    morning = GoogleSheetsService.parse_latest_analysis_signal(
+        morning_values,
+        now=datetime(2026, 7, 29, 0, 15, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+    evening = GoogleSheetsService.parse_latest_analysis_signal(
+        evening_values,
+        now=datetime(2026, 7, 29, 12, 15, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert morning is not None
+    assert evening is not None
+    assert morning.external_key == "gsheet-session:2026-07-29:morning:BUY"
+    assert evening.external_key == "gsheet-session:2026-07-29:evening:BUY"
+    assert morning.external_key != evening.external_key

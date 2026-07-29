@@ -477,12 +477,9 @@ class GoogleSheetsService:
                             target_price=target,
                             stop_loss=stop_loss,
                             label=label,
-                            external_key=cls._build_external_key(
-                                start_index,
-                                direction,
-                                target,
-                                stop_loss,
-                                label,
+                            external_key=(
+                                f"gsheet-session:{session_date}:"
+                                f"{target_session}:{direction}"
                             ),
                             reference_price=entry_price,
                             observed_at=observed_at,
