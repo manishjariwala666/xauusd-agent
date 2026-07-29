@@ -48,6 +48,11 @@ POLICIES: dict[str, MasterAIActionPolicy] = {
         ApprovalLevel.OWNER_APPROVAL,
         "Run the Signal Agent, which may publish or deliver a real signal.",
     ),
+    "disable_signal_agent": MasterAIActionPolicy(
+        "disable_signal_agent",
+        ApprovalLevel.OWNER_APPROVAL,
+        "Disable or stop the Signal Agent only after explicit owner approval.",
+    ),
     "run_whatsapp_reply_agent": MasterAIActionPolicy(
         "run_whatsapp_reply_agent",
         ApprovalLevel.OWNER_APPROVAL,

@@ -31,7 +31,7 @@ class MasterAIIntentProposal:
 _ACTION_WORDS = {
     "banao", "chalao", "create", "delete", "deploy", "diagnose",
     "execute", "generate", "karo", "migrate", "publish", "retry",
-    "run", "send", "start",
+    "run", "send", "start", "stop", "disable", "off", "bandh",
 }
 
 
@@ -61,6 +61,17 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
             "delete_production_data",
             reason="Production deletion is permanently blocked.",
         )
+    if _is_signal_stop_request(text):
+        return _proposal(
+            "disable_signal_agent",
+            agent_key="signal_agent",
+            risk=IntentRisk.HIGH,
+            reason=(
+                "Stopping or disabling the Signal Agent changes live operational "
+                "state and requires explicit owner approval."
+            ),
+        )
+
     if _is_signal_delivery(text):
         return _proposal(
             "publish_signal",
@@ -243,6 +254,22 @@ def _is_agent_list_request(text: str) -> bool:
     return _contains_any(
         text,
         ("agent list", "agents list", "sab agent batao", "sabhi agent batao"),
+    )
+
+
+def _is_signal_stop_request(text: str) -> bool:
+    return "signal" in text and _contains_any(
+        text,
+        (
+            "signal band karo",
+            "signal bandh karo",
+            "signal stop karo",
+            "stop signal",
+            "disable signal",
+            "signal disable karo",
+            "signal agent off",
+            "signal off karo",
+        ),
     )
 
 

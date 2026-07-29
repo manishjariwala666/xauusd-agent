@@ -324,3 +324,41 @@ def test_unrelated_conversation_still_reaches_normal_ai_chat(monkeypatch) -> Non
     assert result.status == "AI_CHAT_RESPONSE"
     assert result.response_text == "SAFE_CHAT_REPLY"
     assert chat_calls == ["Aaj ka din kaisa raha?"]
+
+
+@pytest.mark.parametrize(
+    "message",
+    (
+        "Signal band karo",
+        "Signal bandh karo",
+        "Signal stop karo",
+        "Disable signal",
+        "Signal Agent off karo",
+    ),
+)
+def test_signal_stop_requests_require_owner_approval_without_execution(
+    monkeypatch,
+    message: str,
+) -> None:
+    _authorize(monkeypatch)
+    runner_calls: list[dict] = []
+    chat_calls: list[str] = []
+
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.generate_master_ai_reply",
+        lambda prompt: chat_calls.append(prompt) or "GENERIC_CHAT_REPLY",
+    )
+
+    result = handle_master_command_text(
+        text=message,
+        telegram_user_id=1001,
+        chat_id=55,
+        runner=lambda **kwargs: runner_calls.append(kwargs),
+    )
+
+    assert result.status == "APPROVAL_REQUIRED"
+    assert "Action: disable_signal_agent" in (result.response_text or "")
+    assert "Risk: HIGH" in (result.response_text or "")
+    assert "Executed: NO" in (result.response_text or "")
+    assert runner_calls == []
+    assert chat_calls == []
