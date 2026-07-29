@@ -840,3 +840,48 @@ def test_unlabelled_double_table_keeps_first_block_for_morning() -> None:
         Decimal("4067.17"),
         Decimal("4076.66"),
     )
+
+
+def test_real_evening_rows_do_not_sell_the_lower_low_row() -> None:
+    values = [
+        ["XAUUSD SESSION 2026-07-29"],
+        [
+            "Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP", "",
+            "Target", "BUY Level", "SELL Level",
+        ],
+        [
+            "01:30 PM TO 02:30 PM",
+            "4044.23", "4035.79", "4044.33", "4040.01", "4037.92", "",
+            "Target 1", "4029.21", "4034.84",
+        ],
+        [
+            "02:30 PM TO 03:30 PM",
+            "4038.27", "4031.24", "4040.01", "4034.76", "4033.11", "",
+            "Target 2", "4038.70", "4025.35",
+        ],
+        [
+            "03:30 PM TO 04:30 PM",
+            "4034.21", "4025.93", "4034.76", "4030.07", "4027.02", "",
+            "Target 3", "4048.19", "4015.86",
+        ],
+        [
+            "04:30 PM TO 05:30 PM",
+            "4035.80", "4025.44", "4030.07", "4030.62", "4031.44", "",
+            "Target 4", "4057.68", "4006.37",
+        ],
+        ["", "", "", "", "", "", "", "Target 5", "4067.17", "3996.88"],
+        ["", "", "", "", "", "", "", "Target 6", "4076.66", "3987.39"],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 7, 29, 12, 0, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is not None
+    assert signal.direction == "SELL"
+    assert signal.reference_price == Decimal("4030.62")
+    assert signal.stop_loss == Decimal("4034.21")
+    assert "higher high + higher average" in signal.label
+    assert signal.reference_price != Decimal("4026.10")
