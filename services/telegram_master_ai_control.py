@@ -19,6 +19,10 @@ from services.master_ai_intent_resolver import (
     resolve_master_ai_intent,
 )
 from services.master_ai_tool_router import execute_master_ai_action, safe_master_reason
+from services.master_ai_signal_reader import (
+    MasterAISignalSnapshot,
+    get_today_signal_snapshot,
+)
 from services.master_ai_agent_registry import find_agent, format_agent_directory
 from services.ai_agent_service import (
     agent_control_help_text,
@@ -671,6 +675,30 @@ def _handle_natural_agent_intent(
             status="UNKNOWN_ACTION",
         )
 
+    if action == "read_signal_status":
+        try:
+            snapshot = get_today_signal_snapshot()
+            message = _format_signal_snapshot(snapshot)
+            result_status = "COMPLETED"
+        except Exception as exc:
+            reason = safe_master_reason(exc) or "Current signal snapshot unavailable."
+            message = f"⚠️ Signal status unavailable. Reason: {reason}"
+            result_status = "ERROR"
+
+        _log_master_command_to_sheet(
+            command="natural:read_signal_status",
+            status=result_status,
+            chat_id=chat_id,
+            telegram_user_id=telegram_user_id,
+            notes="risk=SAFE; read_only=true",
+        )
+        return MasterTelegramCommandResult(
+            handled=True,
+            response_text=message,
+            chat_id=chat_id,
+            status=result_status,
+        )
+
     parameters = dict(proposal.parameters)
     retry_action = parameters.pop("retry_action", None)
     tool_result = execute_master_ai_action(
@@ -1310,6 +1338,41 @@ def _allowed_admin_user_ids() -> set[str]:
 
     return {value.strip() for value in values if value and value.strip()}
 
+
+
+def _format_signal_snapshot(
+    snapshot: MasterAISignalSnapshot | None,
+) -> str:
+    """Format a read-only Sheet snapshot without creating or publishing signals."""
+    if snapshot is None:
+        return (
+            "📊 XAUUSD signal status\n"
+            "Aaj ka valid Sheet snapshot abhi available nahi hai.\n"
+            "Koi signal create, execute ya publish nahi hua."
+        )
+
+    def value(item: object) -> str:
+        return str(item) if item is not None else "N/A"
+
+    buy_targets = ", ".join(map(str, snapshot.buy_targets)) or "N/A"
+    sell_targets = ", ".join(map(str, snapshot.sell_targets)) or "N/A"
+
+    return "\n".join(
+        (
+            "📊 XAUUSD — Read-only signal status",
+            f"Date: {snapshot.signal_date.isoformat()}",
+            f"Latest slot: {snapshot.latest_slot or 'N/A'}",
+            f"Live CMP: {value(snapshot.live_cmp)}",
+            f"Day High: {value(snapshot.day_high)}",
+            f"Day Low: {value(snapshot.day_low)}",
+            f"Buy Base: {value(snapshot.buy_base)}",
+            f"Sell Base: {value(snapshot.sell_base)}",
+            f"Buy Targets: {buy_targets}",
+            f"Sell Targets: {sell_targets}",
+            f"Mode: {snapshot.mode or 'N/A'}",
+            "Read-only: koi signal create, execute ya publish nahi hua.",
+        )
+    )
 
 def _record_command_memory_and_event(
     *,

@@ -231,13 +231,41 @@ def test_error_diagnosis_resolves_to_safe_read_only_action() -> None:
         "signal batao",
     ),
 )
-def test_natural_signal_question_requires_approval_without_execution(
+def test_natural_signal_question_returns_read_only_snapshot(
     monkeypatch,
     message: str,
 ) -> None:
+    from datetime import date
+    from decimal import Decimal
+    from services.master_ai_signal_reader import MasterAISignalSnapshot
+
     _authorize(monkeypatch)
     runner_calls: list[dict] = []
     chat_calls: list[str] = []
+
+    snapshot = MasterAISignalSnapshot(
+        signal_date=date(2026, 7, 29),
+        open_price=Decimal("4028.68"),
+        high_price=Decimal("4047.76"),
+        low_price=Decimal("4009.79"),
+        close_price=Decimal("4031.44"),
+        day_high=Decimal("4047.76"),
+        day_low=Decimal("4009.79"),
+        step=Decimal("9.49"),
+        range_value=Decimal("37.97"),
+        buy_base=Decimal("4019.72"),
+        sell_base=Decimal("4044.33"),
+        mode="Aggressive (0.25)",
+        latest_slot="04:30 PM TO 05:30 PM",
+        live_cmp=Decimal("4031.44"),
+        buy_targets=(Decimal("4029.21"), Decimal("4038.70")),
+        sell_targets=(Decimal("4034.84"), Decimal("4025.35")),
+    )
+
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.get_today_signal_snapshot",
+        lambda: snapshot,
+    )
     monkeypatch.setattr(
         "services.telegram_master_ai_control.generate_master_ai_reply",
         lambda prompt: chat_calls.append(prompt) or "GENERIC_CHAT_REPLY",
@@ -250,13 +278,33 @@ def test_natural_signal_question_requires_approval_without_execution(
         runner=lambda **kwargs: runner_calls.append(kwargs),
     )
 
-    assert result.status == "APPROVAL_REQUIRED"
-    assert "Agent: Signal Agent" in (result.response_text or "")
-    assert "Risk: HIGH" in (result.response_text or "")
-    assert "Status: APPROVAL_REQUIRED" in (result.response_text or "")
-    assert "Executed: NO" in (result.response_text or "")
+    assert result.status == "COMPLETED"
+    assert "Read-only signal status" in (result.response_text or "")
+    assert "Live CMP: 4031.44" in (result.response_text or "")
+    assert "Buy Targets: 4029.21, 4038.70" in (result.response_text or "")
+    assert "Sell Targets: 4034.84, 4025.35" in (result.response_text or "")
+    assert "koi signal create, execute ya publish nahi hua" in (
+        result.response_text or ""
+    )
     assert runner_calls == []
     assert chat_calls == []
+
+
+def test_signal_run_request_still_requires_owner_approval(monkeypatch) -> None:
+    _authorize(monkeypatch)
+    runner_calls: list[dict] = []
+
+    result = handle_master_command_text(
+        text="Signal Agent chalao",
+        telegram_user_id=1001,
+        chat_id=55,
+        runner=lambda **kwargs: runner_calls.append(kwargs),
+    )
+
+    assert result.status == "APPROVAL_REQUIRED"
+    assert "Action: run_signal_agent" in (result.response_text or "")
+    assert "Executed: NO" in (result.response_text or "")
+    assert runner_calls == []
 
 
 def test_unrelated_conversation_still_reaches_normal_ai_chat(monkeypatch) -> None:

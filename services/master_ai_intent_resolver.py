@@ -70,13 +70,10 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
         )
     if _is_signal_information_request(text):
         return _proposal(
-            "run_signal_agent",
+            "read_signal_status",
             agent_key="signal_agent",
-            risk=IntentRisk.HIGH,
-            reason=(
-                "Current signal request may generate or deliver a real market "
-                "signal and requires explicit owner approval."
-            ),
+            risk=IntentRisk.SAFE,
+            reason="Read-only current XAUUSD Sheet snapshot requested.",
         )
     if _is_content_publish(text):
         return _proposal(
