@@ -309,6 +309,10 @@ def test_signal_run_request_still_requires_owner_approval(monkeypatch) -> None:
 
 def test_unrelated_conversation_still_reaches_normal_ai_chat(monkeypatch) -> None:
     _authorize(monkeypatch)
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control._MASTER_CHAT_MEMORY",
+        {},
+    )
     chat_calls: list[str] = []
     monkeypatch.setattr(
         "services.telegram_master_ai_control.generate_master_ai_reply",

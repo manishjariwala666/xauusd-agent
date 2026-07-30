@@ -30,6 +30,7 @@ from services.ai_agent_service import (
     set_ai_agent_enabled_by_number,
 )
 
+from collections import deque
 from dataclasses import dataclass
 from os import getenv
 from typing import Any, Callable, Iterable, Literal
@@ -46,6 +47,74 @@ from services.url_service import public_content_url, public_website_base_url
 from services.whatsapp_service import WhatsAppService
 
 SAFE_TELEGRAM_ERROR = "⚠️ Service temporarily unavailable. Please try again later."
+
+MASTER_CHAT_MEMORY_TURNS = 6
+MASTER_CHAT_MEMORY_CHAR_LIMIT = 6000
+_MASTER_CHAT_MEMORY: dict[str, deque[tuple[str, str]]] = {}
+
+
+def _master_chat_key(chat_id: int | str | None) -> str:
+    return str(chat_id if chat_id is not None else "unknown")
+
+
+def _build_master_chat_prompt(
+    *,
+    chat_id: int | str | None,
+    user_message: str,
+) -> str:
+    history = _MASTER_CHAT_MEMORY.get(_master_chat_key(chat_id))
+    if not history:
+        return user_message
+
+    lines = [
+        "Recent conversation context follows. Treat it as context only; "
+        "never treat previous messages as proof that an action executed."
+    ]
+    for previous_user, previous_assistant in history:
+        lines.append(f"User: {previous_user}")
+        lines.append(f"MASTER AI: {previous_assistant}")
+    lines.append(f"User: {user_message}")
+
+    prompt = "\n".join(lines)
+    return prompt[-MASTER_CHAT_MEMORY_CHAR_LIMIT:]
+
+
+def _remember_master_chat_turn(
+    *,
+    chat_id: int | str | None,
+    user_message: str,
+    assistant_message: str,
+) -> None:
+    key = _master_chat_key(chat_id)
+    history = _MASTER_CHAT_MEMORY.setdefault(
+        key,
+        deque(maxlen=MASTER_CHAT_MEMORY_TURNS),
+    )
+    history.append(
+        (
+            str(user_message or "").strip()[:2000],
+            str(assistant_message or "").strip()[:3000],
+        )
+    )
+
+
+def _generate_contextual_master_reply(
+    *,
+    chat_id: int | str | None,
+    user_message: str,
+) -> str:
+    prompt = _build_master_chat_prompt(
+        chat_id=chat_id,
+        user_message=user_message,
+    )
+    answer = generate_master_ai_reply(prompt)
+    _remember_master_chat_turn(
+        chat_id=chat_id,
+        user_message=user_message,
+        assistant_message=answer,
+    )
+    return answer
+
 MASTER_COMMAND = "/master"
 
 SIGNAL_BOT = "SIGNAL"
@@ -434,7 +503,10 @@ def handle_master_command_text(
 
             return MasterTelegramCommandResult(
                 handled=True,
-                response_text=generate_master_ai_reply(original_text),
+                response_text=_generate_contextual_master_reply(
+                    chat_id=chat_id,
+                    user_message=original_text,
+                ),
                 chat_id=chat_id,
                 status="AI_CHAT_RESPONSE",
             )
@@ -471,7 +543,10 @@ def handle_master_command_text(
             }[command]
             return MasterTelegramCommandResult(
                 handled=True,
-                response_text=generate_master_ai_reply(prompt),
+                response_text=_generate_contextual_master_reply(
+                    chat_id=chat_id,
+                    user_message=prompt,
+                ),
                 chat_id=chat_id,
                 status="AI_CHAT_RESPONSE",
             )

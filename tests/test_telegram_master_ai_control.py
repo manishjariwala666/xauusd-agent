@@ -292,3 +292,94 @@ def test_signal_bot_does_not_replace_reply_agent_except_master_suppression(monke
     assert handled.handled is True
     assert handled.status == "IGNORED_WRONG_BOT"
     assert sent == []
+
+
+
+def test_master_ai_chat_memory_keeps_recent_same_chat_context(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    prompts: list[str] = []
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.generate_master_ai_reply",
+        lambda prompt: prompts.append(prompt) or f"reply-{len(prompts)}",
+    )
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control._MASTER_CHAT_MEMORY",
+        {},
+    )
+
+    first = handle_master_command_text(
+        text="Mera naam Manish hai.",
+        telegram_user_id=1001,
+        chat_id=501,
+    )
+    second = handle_master_command_text(
+        text="Mera naam kya hai?",
+        telegram_user_id=1001,
+        chat_id=501,
+    )
+
+    assert first.status == "AI_CHAT_RESPONSE"
+    assert second.status == "AI_CHAT_RESPONSE"
+    assert prompts[0] == "Mera naam Manish hai."
+    assert "User: Mera naam Manish hai." in prompts[1]
+    assert "MASTER AI: reply-1" in prompts[1]
+    assert prompts[1].endswith("User: Mera naam kya hai?")
+
+
+def test_master_ai_chat_memory_is_isolated_per_chat(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    prompts: list[str] = []
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.generate_master_ai_reply",
+        lambda prompt: prompts.append(prompt) or "SAFE_REPLY",
+    )
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control._MASTER_CHAT_MEMORY",
+        {},
+    )
+
+    handle_master_command_text(
+        text="Private project detail alpha.",
+        telegram_user_id=1001,
+        chat_id=601,
+    )
+    handle_master_command_text(
+        text="Hello from another chat.",
+        telegram_user_id=1001,
+        chat_id=602,
+    )
+
+    assert prompts[1] == "Hello from another chat."
+    assert "alpha" not in prompts[1]
+
+
+def test_master_ai_chat_memory_never_bypasses_signal_approval(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    chat_calls: list[str] = []
+    runner_calls: list[dict] = []
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.generate_master_ai_reply",
+        lambda prompt: chat_calls.append(prompt) or "SAFE_REPLY",
+    )
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control._MASTER_CHAT_MEMORY",
+        {},
+    )
+
+    handle_master_command_text(
+        text="Mera naam Manish hai.",
+        telegram_user_id=1001,
+        chat_id=701,
+    )
+    result = handle_master_command_text(
+        text="Signal band karo",
+        telegram_user_id=1001,
+        chat_id=701,
+        runner=lambda **kwargs: runner_calls.append(kwargs),
+    )
+
+    assert result.status == "APPROVAL_REQUIRED"
+    assert "Action: disable_signal_agent" in (result.response_text or "")
+    assert "Executed: NO" in (result.response_text or "")
+    assert len(chat_calls) == 1
+    assert runner_calls == []
