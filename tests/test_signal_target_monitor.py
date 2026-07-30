@@ -44,7 +44,8 @@ def test_target_hit_message_format() -> None:
         "XAUUSD BUY\n"
         "Entry: 4077.75\n"
         "Target: 4079.47\n"
-        "Profit: +1.72 points 🟢"
+        "Profit: +1.72 points 🟢\n\n"
+        "🎉 Enjoy Profit! 🥳💚"
     )
 
 

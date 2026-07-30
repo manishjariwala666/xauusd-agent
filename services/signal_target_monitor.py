@@ -52,7 +52,8 @@ def format_target_hit_message(signal: dict[str, Any]) -> str:
         f"{symbol} {direction}\n"
         f"Entry: {entry:.2f}\n"
         f"Target: {target:.2f}\n"
-        f"Profit: +{points:.2f} points 🟢"
+        f"Profit: +{points:.2f} points 🟢\n\n"
+        "🎉 Enjoy Profit! 🥳💚"
     )
 
 

@@ -275,6 +275,229 @@ def _blog_publish_default(payload: dict[str, Any]) -> bool:
     return status.strip().lower() != "draft"
 
 
+
+def _monitor_target_hits(
+    *,
+    market_data: MarketDataService,
+    telegram: TelegramService,
+) -> int:
+    """Detect target-hit signals and notify Telegram and WhatsApp once."""
+    from services.signal_target_monitor import (
+        format_target_hit_message,
+        profit_points,
+        target_is_hit,
+    )
+
+    now = datetime.now(timezone.utc)
+    if now.weekday() >= 5:
+        logger.info("Target monitoring paused for the weekend")
+        return 0
+
+    quote = market_data.fetch_current_price()
+    if quote is None:
+        logger.warning("Target monitoring skipped: market price unavailable")
+        return 0
+
+    with session_scope() as session:
+        rows = (
+            session.execute(
+                text(
+                    """
+                    SELECT *
+                    FROM public.market_signals
+                    WHERE signal_type IN ('BUY', 'SELL')
+                      AND target_price IS NOT NULL
+                      AND signal_time >= NOW() - INTERVAL '6 hours'
+                      AND whatsapp_sent_at IS NOT NULL
+                      AND (
+                          target_hit_telegram_sent_at IS NULL
+                          OR target_hit_whatsapp_sent_at IS NULL
+                      )
+                      AND COALESCE(lifecycle_status, 'DRAFT') NOT IN (
+                          'STOPPED',
+                          'CLOSED',
+                          'CANCELLED',
+                          'EXPIRED',
+                          'TRASHED'
+                      )
+                    ORDER BY signal_time DESC
+                    """
+                )
+            )
+            .mappings()
+            .all()
+        )
+
+    recipients = _verified_whatsapp_recipients()
+    notified = 0
+
+    for raw_signal in rows:
+        signal = dict(raw_signal)
+
+        # A row with target_hit_price already set represents a previously
+        # claimed notification whose WhatsApp delivery can be retried.
+        if signal.get("target_hit_price") is None:
+            if not target_is_hit(signal, quote.price):
+                continue
+
+            points = profit_points(signal)
+
+            # Atomic target claim prevents duplicate first-time alerts.
+            with session_scope() as session:
+                claimed = (
+                    session.execute(
+                        text(
+                            """
+                            UPDATE public.market_signals
+                            SET lifecycle_status = 'TARGET_HIT',
+                                publication_status = 'PUBLISHED',
+                                outcome = 'TARGET_HIT',
+                                result_points = :result_points,
+                                target_hit_price = :target_hit_price,
+                                updated_at = NOW()
+                            WHERE id = :id
+                              AND target_hit_price IS NULL
+                              AND target_hit_whatsapp_sent_at IS NULL
+                              AND COALESCE(lifecycle_status, 'DRAFT') NOT IN (
+                                  'STOPPED',
+                                  'CLOSED',
+                                  'CANCELLED',
+                                  'EXPIRED',
+                                  'TRASHED'
+                              )
+                            RETURNING *
+                            """
+                        ),
+                        {
+                            "id": signal["id"],
+                            "result_points": float(points),
+                            "target_hit_price": float(quote.price),
+                        },
+                    )
+                    .mappings()
+                    .first()
+                )
+
+            if claimed is None:
+                continue
+
+            signal = dict(claimed)
+
+        message = format_target_hit_message(signal)
+
+        telegram_error = None
+        telegram_sent = False
+        telegram_already_sent = (
+            signal.get("target_hit_telegram_sent_at") is not None
+        )
+
+        if not telegram_already_sent:
+            try:
+                telegram.send_text(
+                    get_settings().telegram_chat_id,
+                    message,
+                )
+                telegram_sent = True
+            except Exception as exc:
+                telegram_error = str(exc)[:2000]
+                logger.exception(
+                    "Target Hit Telegram delivery failed: signal_id={}",
+                    signal["id"],
+                )
+
+        whatsapp_errors: list[str] = []
+        whatsapp_sent = False
+        whatsapp_already_sent = (
+            signal.get("target_hit_whatsapp_sent_at") is not None
+        )
+        service = (
+            WhatsAppService()
+            if recipients and not whatsapp_already_sent
+            else None
+        )
+
+        if not recipients and not whatsapp_already_sent:
+            whatsapp_errors.append(
+                "No verified WhatsApp recipients configured."
+            )
+
+        if not whatsapp_already_sent:
+            for recipient in recipients:
+                try:
+                    assert service is not None
+                    service.send_text(recipient, message)
+                    whatsapp_sent = True
+                except Exception as exc:
+                    whatsapp_errors.append(str(exc))
+                    logger.exception(
+                        "Target Hit WhatsApp delivery failed: signal_id={}",
+                        signal["id"],
+                    )
+
+        with session_scope() as session:
+            session.execute(
+                text(
+                    """
+                    UPDATE public.market_signals
+                    SET target_hit_telegram_sent_at =
+                            CASE
+                                WHEN :telegram_sent
+                                THEN COALESCE(
+                                    target_hit_telegram_sent_at,
+                                    NOW()
+                                )
+                                ELSE target_hit_telegram_sent_at
+                            END,
+                        target_hit_telegram_error =
+                            CASE
+                                WHEN target_hit_telegram_sent_at IS NOT NULL
+                                THEN target_hit_telegram_error
+                                ELSE :telegram_error
+                            END,
+                        target_hit_whatsapp_sent_at =
+                            CASE
+                                WHEN :whatsapp_sent
+                                THEN COALESCE(
+                                    target_hit_whatsapp_sent_at,
+                                    NOW()
+                                )
+                                ELSE target_hit_whatsapp_sent_at
+                            END,
+                        target_hit_whatsapp_error =
+                            CASE
+                                WHEN target_hit_whatsapp_sent_at IS NOT NULL
+                                THEN target_hit_whatsapp_error
+                                ELSE :whatsapp_error
+                            END,
+                        updated_at = NOW()
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "id": signal["id"],
+                    "telegram_sent": telegram_sent,
+                    "telegram_error": telegram_error,
+                    "whatsapp_sent": whatsapp_sent,
+                    "whatsapp_error": (
+                        "; ".join(whatsapp_errors)[:2000]
+                        if whatsapp_errors
+                        else None
+                    ),
+                },
+            )
+
+        if telegram_sent or whatsapp_sent:
+            notified += 1
+            logger.info(
+                "Target Hit WhatsApp delivered: id={} direction={} "
+                "current_price={}",
+                signal["id"],
+                signal["signal_type"],
+                quote.price,
+            )
+
+    return notified
+
 def _monitor_stop_loss_hits(
     *,
     market_data: MarketDataService,
@@ -462,6 +685,16 @@ def run_signal_agent(payload: dict[str, Any]) -> str:
         market_data=market_data,
         telegram=telegram,
     )
+    targets_notified = _monitor_target_hits(
+        market_data=market_data,
+        telegram=telegram,
+    )
+    if targets_notified:
+        logger.info(
+            "Target monitoring completed: notified={}",
+            targets_notified,
+        )
+
     stopped = _monitor_stop_loss_hits(
         market_data=market_data,
         telegram=telegram,
