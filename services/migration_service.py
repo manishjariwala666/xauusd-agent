@@ -35,6 +35,7 @@ _AUTOMATIC_MIGRATIONS = (
     "018_signals_admin.sql",
     "019_announcements_verified_results.sql",
     "020_automation_service_leads.sql",
+    "023_signal_target_hit_telegram.sql",
 )
 LATEST_REQUIRED_MIGRATION = _AUTOMATIC_MIGRATIONS[-1]
 MIGRATION_ALLOWLIST_ENV = "MIGRATION_ALLOWLIST"

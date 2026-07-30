@@ -32,6 +32,7 @@ EXPECTED_MIGRATIONS = (
     "018_signals_admin.sql",
     "019_announcements_verified_results.sql",
     "020_automation_service_leads.sql",
+    "023_signal_target_hit_telegram.sql",
 )
 
 
@@ -198,4 +199,4 @@ def test_required_schema_uses_latest_record_only() -> None:
     assert not migration_service.required_schema_is_ready(incomplete)
     complete = Session(True)
     assert migration_service.required_schema_is_ready(complete)
-    assert complete.parameters["name"] == "020_automation_service_leads.sql"
+    assert complete.parameters["name"] == "023_signal_target_hit_telegram.sql"
