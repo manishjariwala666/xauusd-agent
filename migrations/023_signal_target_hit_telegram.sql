@@ -3,6 +3,9 @@
 BEGIN;
 
 ALTER TABLE public.market_signals
+    ADD COLUMN IF NOT EXISTS target_hit_whatsapp_sent_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS target_hit_whatsapp_error TEXT,
+    ADD COLUMN IF NOT EXISTS target_hit_price NUMERIC(18, 6),
     ADD COLUMN IF NOT EXISTS target_hit_telegram_sent_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS target_hit_telegram_error TEXT;
 
