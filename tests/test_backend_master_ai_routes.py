@@ -156,3 +156,19 @@ def test_public_content_rejects_admin_or_unknown_types() -> None:
     response = client.get("/public/content?content_type=MASTER_AI_EVENT")
 
     assert response.status_code == 400
+
+
+def test_admin_agents_routes_are_registered(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "services.admin_agents_api._identity",
+        lambda authorization, secret: object(),
+    )
+    client = TestClient(app)
+
+    listing = client.get("/admin/agents")
+    detail = client.get("/admin/agents/report_agent")
+
+    assert listing.status_code == 200
+    assert listing.json()["count"] == 12
+    assert detail.status_code == 200
+    assert detail.json()["item"]["agent_key"] == "report_agent"
