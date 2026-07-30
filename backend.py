@@ -105,10 +105,18 @@ def _public_content_snapshot(*, force: bool = False) -> list[dict[str, Any]]:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Start the API even when optional startup tasks are temporarily degraded."""
-    try:
-        apply_pending_migrations()
-    except Exception:
-        logger.exception("Startup migrations failed; API will remain online.")
+    if os.getenv("SKIP_STARTUP_MIGRATIONS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        logger.info("Startup migrations skipped by configuration.")
+    else:
+        try:
+            apply_pending_migrations()
+        except Exception:
+            logger.exception("Startup migrations failed; API will remain online.")
     try:
         # Warm the schema cache once so public detail requests stay within the
         # frontend's strict two-second network budget.
