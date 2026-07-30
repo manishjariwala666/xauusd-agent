@@ -12,6 +12,7 @@ warnings.filterwarnings(
 
 from services.google_sheets import GoogleSheetsService
 from services.production_agents import (
+    _blog_heading_count,
     _fallback_blog_payload,
     _master_optional_agent,
     _seo_issues,
@@ -56,7 +57,16 @@ def test_blog_fallback_payload_is_publish_safe() -> None:
     assert payload["meta_description"]
     assert "Risk disclaimer" in payload["body_markdown"]
     assert isinstance(payload["faq"], list)
+    assert len(payload["faq"]) >= 6
     assert isinstance(payload["schema_jsonld"], dict)
+    assert 1200 <= len(payload["body_markdown"].split()) <= 1900
+    assert _blog_heading_count(payload["body_markdown"], 1) == 1
+    assert payload["body_markdown"].count("## ") >= 6
+    assert "### " in payload["body_markdown"]
+    assert "#### " in payload["body_markdown"]
+    assert "##### " in payload["body_markdown"]
+    assert "<details>" in payload["body_markdown"]
+    assert payload["keyword_volume"] == "Unknown - verification required"
 
 
 def test_master_ai_blog_publish_default_uses_payload_override(monkeypatch) -> None:
@@ -67,7 +77,10 @@ def test_master_ai_blog_publish_default_uses_payload_override(monkeypatch) -> No
         lambda _: "draft",
     )
 
-    assert _blog_publish_default({"publish": True})
+    assert _blog_publish_default(
+        {"publish": True, "owner_approved_publish": True}
+    )
+    assert not _blog_publish_default({"publish": True})
     assert not _blog_publish_default({"publish": False})
     assert not _blog_publish_default({})
 

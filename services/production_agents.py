@@ -39,62 +39,111 @@ class WhatsAppAutomationBlocked(RuntimeError):
     """Safe policy failure that prevents a queued job reporting false success."""
 
 
-def run_blog_agent(payload: dict[str, Any]) -> str:
-    """Generate one SEO blog record and persist it safely.
 
-    The blog workflow must remain durable even when the configured AI provider
-    is temporarily unavailable or quota-limited. In that case, deterministic
-    fallback content is saved instead of failing the whole agent run.
-    """
+def run_blog_agent(payload: dict[str, Any]) -> str:
+    """Generate one validated long-form SEO/GEO blog draft."""
     topic = str(payload.get("topic") or "").strip()
     if not topic:
         topic = "Current XAUUSD market structure and disciplined risk control"
-    instruction = (
-        "You are a financial content editor. Produce factual educational "
-        "content, never promise returns, and include a risk disclaimer. "
-        "Return JSON keys: title, meta_title, meta_description, "
-        "focus_keyword, slug, excerpt, body_markdown, internal_links "
-        "(array), faq (array of question/answer objects), schema_jsonld "
-        "(object), image_prompt."
+
+    location = str(payload.get("location") or "").strip()
+    target_keyword = str(payload.get("target_keyword") or topic).strip()
+    target_audience = str(
+        payload.get("target_audience")
+        or "readers seeking practical financial education"
+    ).strip()
+
+    fallback = _fallback_blog_payload(
+        topic,
+        location=location,
+        target_keyword=target_keyword,
+        target_audience=target_audience,
     )
+
+    system_instruction = (
+        "You are the VenusRealm senior SEO and GEO content editor. "
+        "Create factual, original, educational content. Never fabricate facts, "
+        "keyword volume, competition, performance, profit, price data or sources. "
+        "If verified keyword metrics are unavailable, write "
+        "'Unknown - verification required'. Financial content must include a "
+        "risk disclaimer. Return one valid JSON object with keys: title, "
+        "alternate_titles, meta_title, meta_description, focus_keyword, "
+        "secondary_keywords, search_intent, keyword_volume, keyword_competition, "
+        "research_brief, slug, excerpt, body_markdown, internal_links, faq, "
+        "schema_jsonld, image_research_brief, image_prompt, image_alt_text. "
+        "body_markdown must contain 1200 to 1600 meaningful words, exactly one H1, "
+        "at least six H2 headings, and supporting H3, H4 and H5 headings. "
+        "Use six to eight FAQs and include accordion-ready <details> and "
+        "<summary> markup. Include actionable guidance, natural keywords, "
+        "internal links, relevant GEO context and a local CTA only when location "
+        "is genuinely relevant. Do not publish automatically."
+    )
+
+    user_instruction = (
+        f"Topic: {topic}\n"
+        f"Target keyword: {target_keyword}\n"
+        f"Location: {location or 'Global / not specified'}\n"
+        f"Target audience: {target_audience}\n"
+        "Prepare the complete SEO and GEO article draft."
+    )
+
     try:
         generated = AIProvider().generate_json(
-            system_instruction=instruction,
-            user_instruction=f"Create a detailed SEO article about: {topic}",
+            system_instruction=system_instruction,
+            user_instruction=user_instruction,
         )
     except Exception as exc:
         logger.warning(
             "AI blog provider failed; using deterministic fallback: {}",
             exc.__class__.__name__,
         )
-        generated = _fallback_blog_payload(topic)
+        generated = fallback
+
     required = {
         "title",
+        "alternate_titles",
         "meta_title",
         "meta_description",
         "focus_keyword",
+        "secondary_keywords",
+        "search_intent",
+        "keyword_volume",
+        "keyword_competition",
+        "research_brief",
         "slug",
         "excerpt",
         "body_markdown",
+        "internal_links",
         "faq",
         "schema_jsonld",
+        "image_research_brief",
+        "image_prompt",
+        "image_alt_text",
     }
-    missing = sorted(required - generated.keys())
-    if missing:
-        logger.warning(
-            "AI blog response missing keys {}; using fallback payload.",
-            ", ".join(missing),
-        )
-    fallback = _fallback_blog_payload(topic)
+
     for key in required:
         if not generated.get(key):
             generated[key] = fallback[key]
-    if not generated.get("internal_links"):
-        generated["internal_links"] = fallback["internal_links"]
-    if not generated.get("image_prompt"):
-        generated["image_prompt"] = fallback["image_prompt"]
+
+    if not _valid_long_form_blog(generated):
+        logger.warning(
+            "Generated blog failed long-form validation; using safe fallback."
+        )
+        generated = fallback
+
+    generated["faq"] = _normalize_blog_faq(
+        generated.get("faq"),
+        fallback["faq"],
+    )
+    generated["schema_jsonld"] = _build_blog_schema(
+        title=str(generated["title"]),
+        focus_keyword=str(generated["focus_keyword"]),
+        faq=generated["faq"],
+    )
+
     slug = _slugify(str(generated["slug"] or generated["title"]))
     publish = _blog_publish_default(payload)
+
     with session_scope() as session:
         slug = _unique_slug(session, slug)
         category_id = session.execute(
@@ -103,12 +152,11 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
                 "WHERE slug = 'ai-blog' LIMIT 1"
             )
         ).scalar_one_or_none()
+
     public_url = public_content_url(
-        {
-            "content_type": "AI_BLOG",
-            "slug": slug,
-        }
+        {"content_type": "AI_BLOG", "slug": slug}
     )
+
     content_id = save_content(
         content_type="AI_BLOG",
         title=str(generated["title"])[:250],
@@ -124,7 +172,7 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         status="published" if publish else "draft",
         created_by=None,
         meta_title=str(generated["meta_title"])[:255],
-        meta_description=str(generated["meta_description"])[:320],
+        meta_description=str(generated["meta_description"])[:160],
         focus_keyword=str(generated["focus_keyword"])[:160],
         internal_links=generated.get("internal_links") or [],
         faq=generated["faq"],
@@ -133,40 +181,39 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
             "og:type": "article",
             "og:url": public_url,
             "og:title": str(generated["meta_title"]),
-            "og:description": str(generated["meta_description"]),
+            "og:description": str(generated["meta_description"])[:160],
         },
         twitter_card={
             "twitter:card": "summary_large_image",
             "twitter:title": str(generated["meta_title"]),
-            "twitter:description": str(generated["meta_description"]),
+            "twitter:description": str(generated["meta_description"])[:160],
         },
-        image_prompt=str(generated.get("image_prompt") or "")[:2000],
+        image_prompt=str(generated["image_prompt"])[:2000],
     )
+
     image_result = "Image generation skipped."
-    include_image = bool(payload.get("include_image", publish))
-    if include_image:
+    if bool(payload.get("include_image", False)):
         try:
             image_result = run_image_agent(
                 {
                     "content_id": int(content_id),
-                    "prompt": str(
-                        generated.get("image_prompt")
-                        or f"Professional financial editorial image for {topic}"
-                    ),
+                    "prompt": str(generated["image_prompt"]),
                 }
             )
         except Exception as exc:
             logger.warning(
-                "Blog image generation skipped after content save: {}",
+                "Blog image generation skipped after save: {}",
                 exc.__class__.__name__,
             )
-            image_result = "Image generation skipped; blog content saved."
+            image_result = "Image generation skipped; draft saved."
+
+    word_count = _blog_word_count(str(generated["body_markdown"]))
+
     return (
         f"SEO blog #{content_id} saved as "
-        f"{'published' if publish else 'draft'}. "
+        f"{'published' if publish else 'draft'} with {word_count} words. "
         f"Public URL: {public_url}. {image_result}"
     )
-
 
 def run_telegram_reply_agent(payload: dict[str, Any]) -> str:
     """Reply to one Telegram user with memory and human takeover controls."""
@@ -263,18 +310,13 @@ def _send_client_welcome(payload: dict[str, Any]) -> str:
     )
 
 
+
 def _blog_publish_default(payload: dict[str, Any]) -> bool:
-    """Resolve Master AI blog publish behavior from payload or settings."""
-    if "publish" in payload:
-        return bool(payload.get("publish"))
-    try:
-        status = get_site_setting("master_ai_blog_default_status")
-    except Exception:
-        logger.exception("Unable to load Master AI blog default status")
-        status = ""
-    return status.strip().lower() != "draft"
-
-
+    """Publish only with explicit owner-approved publication permission."""
+    return bool(
+        payload.get("publish") is True
+        and payload.get("owner_approved_publish") is True
+    )
 
 def _monitor_target_hits(
     *,
@@ -1596,6 +1638,99 @@ def _write_seo_files() -> None:
             )
 
 
+
+def _blog_word_count(body: str) -> int:
+    """Count readable words in Markdown and HTML content."""
+    return len(re.findall(r"\b[\w'-]+\b", body))
+
+
+def _blog_heading_count(body: str, level: int) -> int:
+    marker = "#" * level
+    return len(re.findall(rf"(?m)^{re.escape(marker)}\s+\S", body))
+
+
+def _normalize_blog_faq(
+    value: Any,
+    fallback: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Return six to eight valid FAQ entries."""
+    result: list[dict[str, str]] = []
+
+    if isinstance(value, list):
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+
+            question = str(item.get("question") or "").strip()
+            answer = str(item.get("answer") or "").strip()
+
+            if question and answer:
+                result.append(
+                    {
+                        "question": question[:300],
+                        "answer": answer[:2000],
+                    }
+                )
+
+    if len(result) < 6:
+        result = list(fallback)
+
+    return result[:8]
+
+
+def _build_blog_schema(
+    *,
+    title: str,
+    focus_keyword: str,
+    faq: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Build Article and FAQPage structured data."""
+    return {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Article",
+                "headline": title,
+                "about": focus_keyword,
+            },
+            {
+                "@type": "FAQPage",
+                "mainEntity": [
+                    {
+                        "@type": "Question",
+                        "name": item["question"],
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": item["answer"],
+                        },
+                    }
+                    for item in faq
+                ],
+            },
+        ],
+    }
+
+
+def _valid_long_form_blog(generated: dict[str, Any]) -> bool:
+    """Reject short or structurally incomplete articles."""
+    body = str(generated.get("body_markdown") or "")
+    faq = generated.get("faq")
+
+    return bool(
+        1200 <= _blog_word_count(body) <= 1900
+        and _blog_heading_count(body, 1) == 1
+        and _blog_heading_count(body, 2) >= 6
+        and _blog_heading_count(body, 3) >= 1
+        and _blog_heading_count(body, 4) >= 1
+        and _blog_heading_count(body, 5) >= 1
+        and isinstance(faq, list)
+        and 6 <= len(faq) <= 8
+        and "<details>" in body
+        and "<summary>" in body
+        and "Risk disclaimer" in body
+    )
+
+
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return slug[:180] or f"post-{int(datetime.now().timestamp())}"
@@ -1625,91 +1760,306 @@ def _unique_slug(session: Any, base_slug: str) -> str:
     return candidate
 
 
-def _fallback_blog_payload(topic: str) -> dict[str, Any]:
-    """Build deterministic publish-safe blog content without external AI."""
+
+def _fallback_blog_payload(
+    topic: str,
+    *,
+    location: str = "",
+    target_keyword: str = "",
+    target_audience: str = "",
+) -> dict[str, Any]:
+    """Build deterministic long-form SEO/GEO content without external AI."""
     safe_topic = re.sub(r"\s+", " ", topic).strip()
     if not safe_topic:
         safe_topic = "XAUUSD market structure"
-    title = f"{safe_topic.title()}: Practical XAUUSD Market Guide"
-    focus_keyword = "XAUUSD market analysis"
-    slug = _slugify(safe_topic)
-    body = f"""# {title}
 
-XAUUSD traders often need a calm, structured view of the United States market
-session before making buy or sell decisions. This guide explains a practical
-framework for reading price action, trend context, risk levels, and target
-zones without relying on promises or emotional entries.
+    safe_location = re.sub(r"\s+", " ", location).strip()
+    focus_keyword = (
+        re.sub(r"\s+", " ", target_keyword).strip()
+        or "XAUUSD market analysis"
+    )
+    audience = (
+        re.sub(r"\s+", " ", target_audience).strip()
+        or "readers seeking practical financial education"
+    )
 
-## Market context
+    geo_suffix = f" in {safe_location}" if safe_location else ""
+    title = f"{safe_topic.title()}{geo_suffix}: Complete Practical Guide"
 
-Gold can react quickly around United States economic data, dollar strength,
-bond yields, and liquidity changes. A responsible workflow starts with the
-current trend, nearby support and resistance, and a clear invalidation level.
-When price is above an important average or previous resistance, traders may
-look for controlled bullish continuation. When price rejects resistance and
-breaks local structure, traders may prepare for a bearish move.
+    faq = [
+        {
+            "question": f"What is the correct way to study {safe_topic}?",
+            "answer": (
+                "Start with the reader's real question, collect reliable evidence, "
+                "compare sources and separate verified facts from interpretation."
+            ),
+        },
+        {
+            "question": "How should keyword volume be reported?",
+            "answer": (
+                "Use figures only from a verified keyword platform. When reliable "
+                "data is unavailable, mark it as unknown instead of estimating."
+            ),
+        },
+        {
+            "question": "Why is GEO or local context useful?",
+            "answer": (
+                "It connects the article with genuine local needs, language, "
+                "search behaviour and location-specific concerns."
+            ),
+        },
+        {
+            "question": "Should financial articles include risk management?",
+            "answer": (
+                "Yes. They should discuss risk limits, invalidation and the "
+                "possibility of loss without promising returns."
+            ),
+        },
+        {
+            "question": "Why are structured headings important?",
+            "answer": (
+                "A clear H1 to H5 structure helps readers and search engines "
+                "understand the subject and navigate detailed content."
+            ),
+        },
+        {
+            "question": "Can the Blog AI publish automatically?",
+            "answer": (
+                "No. It saves a draft first. Publication requires explicit owner "
+                "approval in addition to a publish request."
+            ),
+        },
+    ]
 
-## Buy and sell planning
+    intro_location = (
+        f"For readers in {safe_location}, local timing, customer behaviour and "
+        "regional relevance should be considered. "
+        if safe_location
+        else ""
+    )
 
-A buy plan should identify the entry area, stop-loss zone, first target, and
-the reason the trade is valid. A sell plan should do the same in the opposite
-direction. The goal is not to predict every candle; the goal is to trade only
-when the setup, risk, and market timing agree.
+    body_parts = [
+        f"# {title}",
+        (
+            f"{safe_topic} deserves more than a short AI paragraph. Readers often "
+            "face scattered information, repeated keywords and claims that do not "
+            "explain what to do next. "
+            f"{intro_location}This guide is designed for {audience}. It presents "
+            "a practical method for research, SEO planning, local relevance, "
+            "quality control and responsible decision-making."
+        ),
+    ]
 
-## Risk control
+    sections = [
+        (
+            "Understanding the Reader's Real Problem",
+            "Begin with the exact question the reader wants answered. A useful "
+            "article identifies confusion, risk, missing information and the "
+            "decision the reader must make. Avoid writing only for a keyword. "
+            "Write for the person behind the search.",
+        ),
+        (
+            "Current and Local Context",
+            "Check why the subject matters now. Use trusted news, official data, "
+            "industry updates and current business context. Location references "
+            "must be relevant. Repeating a city name without useful local insight "
+            "creates weak content and keyword stuffing.",
+        ),
+        (
+            "Keyword and Search Intent Research",
+            f"The primary keyword is {focus_keyword}. Use it naturally in the "
+            "title, opening section, relevant heading, metadata and image alt text. "
+            "Identify informational, commercial, transactional or navigational "
+            "intent before drafting the article.",
+        ),
+        (
+            "Competition and Search Volume Review",
+            "Search volume and competition must come from an approved research "
+            "platform such as Google Keyword Planner, Ahrefs or Semrush. The AI "
+            "must not invent these figures. Record the source, location, date and "
+            "whether the metric represents monthly searches or difficulty.",
+        ),
+        (
+            "Actionable Step-by-Step Content",
+            "Turn research into clear actions. Explain the objective, required "
+            "inputs, sequence, checkpoints, risks and expected result. Readers "
+            "should understand what to do, why it matters and what common mistake "
+            "to avoid.",
+        ),
+        (
+            "Internal Links and Image Planning",
+            "Internal links should lead to genuinely related education, signals, "
+            "services, results or contact pages. The image brief should describe "
+            "the topic clearly and avoid fake chart values, broker logos, profit "
+            "claims or irrelevant decorative images.",
+        ),
+        (
+            "Quality and Accuracy Review",
+            "Proofread the article, validate the heading structure, review factual "
+            "claims and confirm that keywords sound natural. Check metadata, links, "
+            "FAQ answers, image alt text and mobile readability before saving.",
+        ),
+        (
+            "Local Call to Action and Approval",
+            "Use a local call to action only when a verified location or business "
+            "service exists. Do not invent an office address or phone number. Save "
+            "the completed content as a draft and wait for explicit owner approval.",
+        ),
+    ]
 
-Use position sizing that fits your account and avoid adding risk after a trade
-has already moved against the plan. News periods can create spreads, slippage,
-and fast reversals, so every signal should be treated as educational market
-analysis rather than guaranteed income.
+    for heading, paragraph in sections:
+        body_parts.extend(
+            [
+                f"## {heading}",
+                paragraph,
+                "### Practical application",
+                (
+                    f"For {safe_topic}, write down the evidence, intended reader, "
+                    "primary decision and next safe action. Confirm each important "
+                    "claim before treating it as publish-ready."
+                ),
+            ]
+        )
 
-## Summary
+    body_parts.extend(
+        [
+            "#### SEO and GEO quality checklist",
+            (
+                "Confirm title quality, opening hook, location relevance, keyword "
+                "placement, heading order, internal links, metadata, FAQ usefulness, "
+                "image accessibility and the accuracy of every measurable claim."
+            ),
+            "##### Mandatory owner approval gate",
+            (
+                "The final article must remain a draft until the owner explicitly "
+                "approves publication. A normal publish flag alone is not sufficient."
+            ),
+            "## Complete Pre-Publication Checklist",
+        ]
+    )
 
-For {safe_topic}, the strongest approach is to combine live price, support and
-resistance, target planning, and disciplined risk control. This keeps the
-decision process clear even when the market becomes volatile.
+    checklist = [
+        "reader intent",
+        "topic relevance",
+        "source credibility",
+        "publication dates",
+        "local context",
+        "primary keyword",
+        "secondary keywords",
+        "search intent",
+        "search volume source",
+        "competition source",
+        "H1 title",
+        "introduction hook",
+        "H2 structure",
+        "supporting H3 headings",
+        "actionable instructions",
+        "internal links",
+        "image research brief",
+        "image alt text",
+        "meta title",
+        "meta description",
+        "FAQ answers",
+        "FAQ schema",
+        "risk disclaimer",
+        "local CTA",
+        "owner approval",
+    ]
 
-Risk disclaimer: This content is educational only. Trading gold, forex, and
-derivatives involves risk, and losses are possible.
-"""
+    for number, item in enumerate(checklist, 1):
+        body_parts.append(
+            f"{number}. **Review {item}:** Verify this item independently and "
+            f"record whether it is confirmed, missing or requires human review. "
+            f"For {safe_topic}, avoid unsupported precision. Strong content is "
+            "clear, useful, traceable and honest about unknown information."
+        )
+
+    body_parts.append("## Frequently Asked Questions")
+
+    for item in faq:
+        body_parts.extend(
+            [
+                "<details>",
+                f"<summary>{item['question']}</summary>",
+                "",
+                item["answer"],
+                "",
+                "</details>",
+            ]
+        )
+
+    body_parts.extend(
+        [
+            "## Conclusion",
+            (
+                f"A trustworthy article about {safe_topic} combines current "
+                "research, useful SEO structure, relevant GEO context, actionable "
+                "steps and transparent limitations. The purpose is to help readers "
+                "make better-informed decisions without exaggerated claims."
+            ),
+            (
+                "Risk disclaimer: This content is educational only. Trading gold, "
+                "forex and derivatives involves substantial risk, and losses are "
+                "possible. Nothing in this article guarantees profit or constitutes "
+                "personal financial advice."
+            ),
+        ]
+    )
+
+    body = "\n\n".join(body_parts)
+
     return {
         "title": title,
+        "alternate_titles": [
+            f"{safe_topic.title()}{geo_suffix}: Expert Guide",
+            f"How to Understand {safe_topic.title()}{geo_suffix}",
+            f"{safe_topic.title()}: Research and Strategy Guide",
+            f"Complete {focus_keyword.title()} Guide",
+            f"{safe_topic.title()}: SEO and GEO Checklist",
+            f"{safe_topic.title()}{geo_suffix}: What to Know",
+        ],
         "meta_title": title[:60],
         "meta_description": (
-            "Learn a practical XAUUSD market framework for trend, buy/sell "
-            "planning, targets, and disciplined risk control."
-        ),
+            f"Explore {focus_keyword}{geo_suffix} with practical steps, FAQs, "
+            "research guidance and responsible risk controls."
+        )[:160],
         "focus_keyword": focus_keyword,
-        "slug": slug,
+        "secondary_keywords": [
+            f"{focus_keyword} guide",
+            f"{safe_topic} research",
+            f"{safe_topic} strategy",
+            f"{safe_topic} FAQ",
+        ],
+        "search_intent": "Informational and educational",
+        "keyword_volume": "Unknown - verification required",
+        "keyword_competition": "Unknown - verification required",
+        "research_brief": (
+            "Verify current relevance using trusted news, official information "
+            "and an approved keyword platform before publication."
+        ),
+        "slug": _slugify(f"{safe_topic} {safe_location}".strip()),
         "excerpt": (
-            "A practical XAUUSD guide covering market context, buy/sell "
-            "planning, target zones, and risk control."
+            f"A detailed guide to {safe_topic}, covering research, SEO structure, "
+            "GEO context, actionable planning, FAQs and responsible risk controls."
         ),
         "body_markdown": body,
-        "internal_links": ["/", "/?section=signals", "/?section=education"],
-        "faq": [
-            {
-                "question": "Is this XAUUSD blog financial advice?",
-                "answer": (
-                    "No. It is educational market analysis and does not "
-                    "guarantee profit."
-                ),
-            },
-            {
-                "question": "Should traders use stop-loss levels?",
-                "answer": (
-                    "Yes. Every plan should include risk control before entry."
-                ),
-            },
-        ],
-        "schema_jsonld": {
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": title,
-            "about": focus_keyword,
-        },
-        "image_prompt": (
-            "Professional editorial image of gold market analysis charts, "
-            "clean financial newsroom style, no text overlays."
+        "internal_links": ["/", "/signals", "/blog", "/contact"],
+        "faq": faq,
+        "schema_jsonld": _build_blog_schema(
+            title=title,
+            focus_keyword=focus_keyword,
+            faq=faq,
         ),
+        "image_research_brief": (
+            "Use a relevant editorial visual concept. Avoid fake prices, "
+            "performance claims, broker logos and misleading charts."
+        ),
+        "image_prompt": (
+            f"Professional 16:9 editorial visual for {safe_topic}{geo_suffix}, "
+            "modern financial education style, realistic context, no logos, "
+            "no readable marketing text and no fabricated chart values."
+        ),
+        "image_alt_text": (
+            f"{focus_keyword}{geo_suffix} educational guide image"
+        )[:160],
     }
