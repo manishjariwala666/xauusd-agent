@@ -118,3 +118,270 @@ button,a,input,select,textarea { outline-offset:2px; }
 .local-qa-notice p { margin: 6px 0 0; color: #d9c99e; font-size: .65rem; line-height: 1.4; }
 .local-qa-badge { display: inline-flex; min-height: 30px; align-items: center; padding: 5px 10px; border: 1px solid #d49009; border-radius: 999px; background: #fff6d8; color: #7b5100; font-size: .68rem; font-weight: 900; letter-spacing: .045em; white-space: nowrap; }
 @media (max-width: 700px) { .local-qa-badge { font-size: .6rem; padding-inline: 8px; } }
+
+/* Agent Dashboard */
+.agents-heading {
+  max-width: 860px;
+}
+
+.agent-kpi-grid {
+  margin-bottom: 20px;
+}
+
+.agents-readonly-notice {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  margin-bottom: 22px;
+  padding: 14px 16px;
+}
+
+.agents-readonly-notice strong {
+  color: #1d4ed8;
+  display: block;
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+
+.agents-readonly-notice p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.agents-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.agent-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .045);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 19px;
+}
+
+.agent-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.agent-card-header small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.agent-card-header h2 {
+  font-size: 21px;
+  letter-spacing: -.025em;
+  margin: 3px 0;
+}
+
+.agent-card-header p,
+.agent-purpose {
+  color: var(--muted);
+  margin: 0;
+}
+
+.agent-card-header p {
+  font-size: 12px;
+}
+
+.agent-purpose {
+  font-size: 13px;
+  line-height: 1.55;
+  margin-top: 15px;
+}
+
+.agent-card-badges {
+  align-items: flex-end;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-risk,
+.agent-brain {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.agent-risk-read-only {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.agent-risk-low {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.agent-risk-high {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.agent-risk-critical {
+  background: #fef2f2;
+  color: #b42318;
+}
+
+.agent-risk-unknown {
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.agent-brain-ready {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.agent-brain-missing {
+  background: #fef2f2;
+  color: #b42318;
+}
+
+.agent-summary {
+  background: #f8fafc;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 16px 0;
+  padding: 12px;
+}
+
+.agent-summary div {
+  min-width: 0;
+}
+
+.agent-summary dt {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.agent-summary dd {
+  font-size: 11px;
+  font-weight: 700;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-action-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.agent-action-group {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px;
+}
+
+.agent-action-group h3 {
+  font-size: 11px;
+  margin: 0 0 8px;
+}
+
+.agent-action-group ul {
+  display: grid;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agent-action-group li,
+.agent-action-group p {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-action-group li::before {
+  content: "•";
+  margin-right: 5px;
+}
+
+.agent-card-footer {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 15px;
+}
+
+.agent-card-footer span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.agent-card-footer button {
+  background: #f2f4f7;
+  border: 0;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
+@media (max-width: 1100px) {
+  .agents-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .agent-card {
+    padding: 15px;
+  }
+
+  .agent-card-header {
+    flex-direction: column;
+  }
+
+  .agent-card-badges {
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .agent-summary,
+  .agent-action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-card-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .agent-card-footer button {
+    width: 100%;
+  }
+}

@@ -9,9 +9,10 @@ const primary = [
   ["Pages", "/admin/pages", "□"], ["Categories", "/admin/categories", "◇"],
   ["Media", "/admin/media", "▧"], ["SEO", "/admin/seo", "⌁"],
   ["Signals", "/admin/signals", "↗"], ["Announcements", "/admin/announcements", "◉"],
-  ["Verified Results", "/admin/results", "✓"], ["Leads", "/admin/leads", "✦"]
+  ["Verified Results", "/admin/results", "✓"], ["Leads", "/admin/leads", "✦"],
+  ["Agents", "/admin/agents", "✣"]
 ] as const;
-const future = [["Social", "◎"], ["Agents", "✣"], ["Logs", "≡"], ["Settings", "⚙"]] as const;
+const future = [["Social", "◎"], ["Logs", "≡"], ["Settings", "⚙"]] as const;
 
 export function AdminNavigation() {
   const pathname = usePathname();
