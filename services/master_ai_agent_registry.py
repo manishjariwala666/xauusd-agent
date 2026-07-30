@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable
+
+from services.agent_brain_contracts import get_agent_brain
 
 
 @dataclass(frozen=True)
@@ -162,3 +164,54 @@ def format_agent_directory(
         )
 
     return "\n".join(lines)
+
+
+def get_agent_dashboard_record(agent: RegisteredAgent) -> dict[str, Any]:
+    """Return safe registry and brain metadata for dashboards and APIs."""
+    brain = get_agent_brain(agent.agent_key)
+
+    record: dict[str, Any] = {
+        "agent_key": agent.agent_key,
+        "short_name": agent.short_name,
+        "official_name": agent.official_name,
+        "description": agent.description,
+        "aliases": list(agent.aliases),
+        "run_action": agent.run_action,
+        "brain_configured": brain is not None,
+    }
+
+    if brain is None:
+        record.update(
+            {
+                "purpose": agent.description,
+                "default_risk": "UNKNOWN",
+                "automatic_actions": [],
+                "approval_required_actions": [],
+                "forbidden_actions": [],
+                "output_schema": [],
+            }
+        )
+        return record
+
+    record.update(
+        {
+            "purpose": brain.purpose,
+            "default_risk": brain.default_risk.value,
+            "automatic_actions": list(brain.automatic_actions),
+            "approval_required_actions": list(
+                brain.approval_required_actions
+            ),
+            "forbidden_actions": list(brain.forbidden_actions),
+            "output_schema": list(brain.output_schema),
+        }
+    )
+    return record
+
+
+def list_agent_dashboard_records() -> list[dict[str, Any]]:
+    """Return all registered agents as safe dashboard-ready records."""
+    return [
+        get_agent_dashboard_record(agent)
+        for agent in list_registered_agents()
+    ]
+

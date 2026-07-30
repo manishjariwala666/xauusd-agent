@@ -91,3 +91,47 @@ def test_read_only_agents_default_to_read_only_risk() -> None:
 
 def test_unknown_agent_has_no_brain_contract() -> None:
     assert get_agent_brain("unknown_agent") is None
+
+
+from services.master_ai_agent_registry import (
+    get_agent_dashboard_record,
+    list_agent_dashboard_records,
+)
+
+
+def test_dashboard_records_cover_all_registered_agents() -> None:
+    records = list_agent_dashboard_records()
+
+    assert len(records) == len(list_registered_agents())
+    assert {record["agent_key"] for record in records} == set(AGENT_BRAINS)
+
+
+def test_dashboard_record_exposes_safe_brain_metadata() -> None:
+    signal_agent = next(
+        agent
+        for agent in list_registered_agents()
+        if agent.agent_key == "signal_agent"
+    )
+
+    record = get_agent_dashboard_record(signal_agent)
+
+    assert record["agent_key"] == "signal_agent"
+    assert record["brain_configured"] is True
+    assert record["default_risk"] == "HIGH"
+    assert "manual_signal_run" in record["approval_required_actions"]
+    assert "execute_trade" in record["forbidden_actions"]
+    assert "signal_id" in record["output_schema"]
+
+
+def test_dashboard_records_do_not_expose_sensitive_configuration() -> None:
+    forbidden_fields = {
+        "token",
+        "secret",
+        "password",
+        "credential",
+        "database_url",
+        "api_key",
+    }
+
+    for record in list_agent_dashboard_records():
+        assert forbidden_fields.isdisjoint(record)
