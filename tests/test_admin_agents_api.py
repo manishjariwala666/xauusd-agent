@@ -23,6 +23,24 @@ def test_agent_list_returns_safe_read_only_records(monkeypatch) -> None:
         "services.admin_agents_api._identity",
         lambda authorization, secret: object(),
     )
+    monkeypatch.setattr(
+        "services.admin_agents_api.list_ai_agents",
+        lambda: [
+            {
+                "agent_key": "signal_agent",
+                "is_enabled": False,
+                "status": "IDLE",
+                "last_run_at": "2026-07-31T06:00:00+00:00",
+                "last_error": "",
+                "schedule_minutes": 15,
+                "next_scheduled_run_at": None,
+                "success_count": 8,
+                "failure_count": 1,
+                "queue_size": 0,
+                "last_duration_ms": 245,
+            }
+        ],
+    )
 
     response = _client().get("/admin/agents")
 
@@ -43,6 +61,23 @@ def test_agent_list_returns_safe_read_only_records(monkeypatch) -> None:
     assert signal["brain_configured"] is True
     assert signal["default_risk"] == "HIGH"
     assert "execute_trade" in signal["forbidden_actions"]
+    assert signal["is_configured"] is True
+    assert signal["is_enabled"] is False
+    assert signal["status"] == "IDLE"
+    assert signal["schedule_minutes"] == 15
+    assert signal["success_count"] == 8
+    assert signal["failure_count"] == 1
+    assert signal["queue_size"] == 0
+    assert signal["last_duration_ms"] == 245
+
+    report = next(
+        item
+        for item in payload["items"]
+        if item["agent_key"] == "report_agent"
+    )
+    assert report["is_configured"] is False
+    assert report["is_enabled"] is None
+    assert report["status"] == "NOT_CONFIGURED"
 
 
 def test_agent_detail_returns_one_registered_agent(monkeypatch) -> None:
@@ -82,6 +117,10 @@ def test_agent_api_does_not_expose_sensitive_field_names(monkeypatch) -> None:
     monkeypatch.setattr(
         "services.admin_agents_api._identity",
         lambda authorization, secret: object(),
+    )
+    monkeypatch.setattr(
+        "services.admin_agents_api.list_ai_agents",
+        lambda: [],
     )
 
     payload = _client().get("/admin/agents").json()

@@ -12,6 +12,7 @@ from services.admin_auth_api import (
     _require_identity,
 )
 from services.admin_auth_service import AdminIdentity
+from services.ai_agent_service import list_ai_agents
 from services.master_ai_agent_registry import (
     get_agent_dashboard_record,
     list_agent_dashboard_records,
@@ -42,6 +43,31 @@ def admin_agent_list(
     response.headers["Cache-Control"] = "private, no-store"
 
     items = list_agent_dashboard_records()
+    live_by_key = {
+        str(item.get("agent_key") or ""): item
+        for item in list_ai_agents()
+    }
+
+    for item in items:
+        live = live_by_key.get(item["agent_key"], {})
+        item.update(
+            {
+                "is_configured": bool(live),
+                "is_enabled": live.get("is_enabled"),
+                "status": live.get("status") or "NOT_CONFIGURED",
+                "last_run_at": live.get("last_run_at"),
+                "last_error": str(live.get("last_error") or "")[:500],
+                "schedule_minutes": live.get("schedule_minutes"),
+                "next_scheduled_run_at": live.get(
+                    "next_scheduled_run_at"
+                ),
+                "success_count": int(live.get("success_count") or 0),
+                "failure_count": int(live.get("failure_count") or 0),
+                "queue_size": int(live.get("queue_size") or 0),
+                "last_duration_ms": live.get("last_duration_ms"),
+            }
+        )
+
     return {
         "items": items,
         "count": len(items),

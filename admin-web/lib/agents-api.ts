@@ -23,6 +23,17 @@ export type AgentDashboardRecord = {
   approval_required_actions: string[];
   forbidden_actions: string[];
   output_schema: string[];
+  is_configured: boolean;
+  is_enabled: boolean | null;
+  status: string;
+  last_run_at: string | null;
+  last_error: string;
+  schedule_minutes: number | null;
+  next_scheduled_run_at: string | null;
+  success_count: number;
+  failure_count: number;
+  queue_size: number;
+  last_duration_ms: number | null;
 };
 
 export type AgentsDashboardPayload = {

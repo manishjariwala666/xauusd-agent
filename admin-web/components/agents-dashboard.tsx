@@ -68,6 +68,46 @@ function AgentCard({ agent }: { agent: AgentDashboardRecord }) {
 
       <dl className="agent-summary">
         <div>
+          <dt>Live status</dt>
+          <dd>{humanize(agent.status)}</dd>
+        </div>
+        <div>
+          <dt>Enabled</dt>
+          <dd>
+            {agent.is_enabled === null
+              ? "Not configured"
+              : agent.is_enabled
+                ? "Yes"
+                : "No"}
+          </dd>
+        </div>
+        <div>
+          <dt>Queue</dt>
+          <dd>{agent.queue_size}</dd>
+        </div>
+        <div>
+          <dt>Success / failure</dt>
+          <dd>
+            {agent.success_count} / {agent.failure_count}
+          </dd>
+        </div>
+        <div>
+          <dt>Last run</dt>
+          <dd>{agent.last_run_at || "Never"}</dd>
+        </div>
+        <div>
+          <dt>Next scheduled run</dt>
+          <dd>{agent.next_scheduled_run_at || "Not scheduled"}</dd>
+        </div>
+        <div>
+          <dt>Last duration</dt>
+          <dd>
+            {agent.last_duration_ms === null
+              ? "Unknown"
+              : `${agent.last_duration_ms} ms`}
+          </dd>
+        </div>
+        <div>
           <dt>Direct run</dt>
           <dd>
             {agent.run_action
@@ -75,19 +115,14 @@ function AgentCard({ agent }: { agent: AgentDashboardRecord }) {
               : "Not registered"}
           </dd>
         </div>
-        <div>
-          <dt>Aliases</dt>
-          <dd>
-            {agent.aliases.length
-              ? agent.aliases.join(", ")
-              : "None"}
-          </dd>
-        </div>
-        <div>
-          <dt>Output fields</dt>
-          <dd>{agent.output_schema.length}</dd>
-        </div>
       </dl>
+
+      {agent.last_error ? (
+        <section className="agent-action-group">
+          <h3>Last safe error</h3>
+          <p>{agent.last_error}</p>
+        </section>
+      ) : null}
 
       <div className="agent-action-grid">
         <ActionList

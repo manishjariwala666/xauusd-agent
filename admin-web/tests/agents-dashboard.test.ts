@@ -36,6 +36,18 @@ describe("Agents Dashboard", () => {
     expect(dashboard).not.toContain("fetch(\"/api/admin/agents/run");
   });
 
+  it("shows read-only live operational agent fields", () => {
+    const dashboard = read("components/agents-dashboard.tsx");
+    const api = read("../services/admin_agents_api.py");
+
+    expect(api).toContain("list_ai_agents");
+    expect(api).toContain('"queue_size"');
+    expect(dashboard).toContain("Live status");
+    expect(dashboard).toContain("Success / failure");
+    expect(dashboard).toContain("Next scheduled run");
+    expect(dashboard).toContain("Last safe error");
+  });
+
   it("contains responsive mobile dashboard styles", () => {
     const styles = read("app/globals.css");
 
