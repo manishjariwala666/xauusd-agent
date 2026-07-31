@@ -182,7 +182,8 @@ def test_telegram_blog_started_text_uses_venusrealm_public_url(monkeypatch) -> N
 
     text = _run_started_text("blog", progress)
 
-    assert "Latest blog URL: https://venusrealm.net/blog?post=xauusd-usa-market" in text
+    assert "Blog workflow: DRAFT ONLY." in text
+    assert "Latest blog URL:" not in text
     assert "xauusd-buy-sell-signal.streamlit.app" not in text
     assert "streamlit.app" not in text
     assert "xauusd-agent-web-production.up.railway.app" not in text

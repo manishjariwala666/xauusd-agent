@@ -652,11 +652,9 @@ def handle_master_command_text(
             if tool_result.run_id is not None:
                 response_lines.append(f"Run: #{tool_result.run_id}")
             if target == "blog":
-                url = _latest_blog_public_url()
                 response_lines.append(
-                    f"Latest blog URL: {url}"
-                    if url
-                    else f"Blog page: {_public_site_url()}/blog"
+                    "Blog workflow: DRAFT ONLY. "
+                    "Review and approve it in VenusRealm Admin before publishing."
                 )
             return MasterTelegramCommandResult(
                 handled=True,
@@ -1269,11 +1267,10 @@ def _run_started_text(target: str, progress: OrchestrationProgress) -> str:
         f"Progress: {progress.completed_steps}/{progress.total_steps}"
     )
     if target == "blog":
-        url = _latest_blog_public_url()
-        if url:
-            text += f"\nLatest blog URL: {url}"
-        else:
-            text += f"\nBlog page: {_public_site_url()}/blog"
+        text += (
+            "\nBlog workflow: DRAFT ONLY. "
+            "Review and approve it in VenusRealm Admin before publishing."
+        )
     return text
 
 
