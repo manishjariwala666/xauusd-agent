@@ -20,6 +20,12 @@ describe("Phase 1 security controls", () => {
     expect(isProtectedAdminPath("/admin/forbidden")).toBe(false);
   });
 
+  it("does not trust a stale session cookie on the public login route", () => {
+    const proxy = source("proxy.ts");
+    expect(proxy).not.toContain('pathname === "/admin/login" && hasSession');
+    expect(proxy).not.toContain('new URL("/admin/dashboard", request.url)');
+  });
+
   it("uses short-lived Secure HttpOnly SameSite cookies", () => {
     expect(sessionCookieOptions()).toMatchObject({
       httpOnly: true,

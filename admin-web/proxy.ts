@@ -8,9 +8,6 @@ export function proxy(request: NextRequest) {
   if (isProtectedAdminPath(pathname) && !hasSession) {
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
-  if (pathname === "/admin/login" && hasSession) {
-    return NextResponse.redirect(new URL("/admin/dashboard", request.url));
-  }
   return NextResponse.next();
 }
 
