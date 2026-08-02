@@ -6,7 +6,9 @@ import {
   createEmptyDocument,
 } from "@/lib/editor-v2/document-store";
 import {
+  cmsApiDetailToDocument,
   cmsDocumentToApiPayload,
+  type CmsApiContentDetail,
 } from "@/lib/editor-v2/converters";
 import type {
   CmsDocument,
@@ -16,6 +18,14 @@ import { DocumentCanvas } from "./document-canvas";
 import { DocumentPreview } from "./document-preview";
 
 const LOCAL_DRAFT_KEY = "venusrealm-custom-cms-v2-draft";
+
+type SavedDraftItem = {
+  id: number;
+  title: string;
+  slug: string;
+  status: string;
+  updated_at: string | null;
+};
 
 function slugify(value: string): string {
   return value
@@ -33,6 +43,96 @@ export function StudioWorkspace() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [saveMessage, setSaveMessage] = useState("Loading draft…");
   const [saving, setSaving] = useState(false);
+  const [drafts, setDrafts] = useState<SavedDraftItem[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [openingDraftId, setOpeningDraftId] =
+    useState<number | null>(null);
+
+  async function loadSavedDrafts() {
+    setDraftsLoading(true);
+
+    try {
+      const response = await fetch(
+        "/api/admin/content/posts?status=draft&page=1&page_size=50&sort=updated_desc",
+        { cache: "no-store" },
+      );
+
+      const result = await response.json() as {
+        items?: SavedDraftItem[];
+        detail?: string;
+        message?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(
+          result.detail ||
+          result.message ||
+          "Saved drafts could not be loaded.",
+        );
+      }
+
+      setDrafts(Array.isArray(result.items) ? result.items : []);
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Saved drafts could not be loaded.",
+      );
+    } finally {
+      setDraftsLoading(false);
+    }
+  }
+
+  async function openSavedDraft(draftId: number) {
+    if (openingDraftId !== null) return;
+
+    setOpeningDraftId(draftId);
+    setSaveMessage(`Opening draft #${draftId}…`);
+
+    try {
+      const response = await fetch(
+        `/api/admin/content/posts/${draftId}`,
+        { cache: "no-store" },
+      );
+
+      const result = await response.json() as
+        CmsApiContentDetail & {
+          detail?: string;
+          message?: string;
+        };
+
+      if (!response.ok || !result.id) {
+        throw new Error(
+          result.detail ||
+          result.message ||
+          "Draft could not be opened.",
+        );
+      }
+
+      const loadedDocument = cmsApiDetailToDocument(result);
+
+      window.localStorage.setItem(
+        LOCAL_DRAFT_KEY,
+        JSON.stringify(loadedDocument),
+      );
+
+      setSlugEdited(true);
+      setDocument(loadedDocument);
+      setSaveMessage(`Draft #${draftId} opened`);
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Draft could not be opened.",
+      );
+    } finally {
+      setOpeningDraftId(null);
+    }
+  }
+
+  useEffect(() => {
+    void loadSavedDrafts();
+  }, []);
 
   useEffect(() => {
     try {
@@ -141,6 +241,7 @@ export function StudioWorkspace() {
       );
 
       setDocument(savedDocument);
+      void loadSavedDrafts();
       setSaveMessage(
         document.id
           ? `Draft #${result.id} updated`
@@ -231,6 +332,55 @@ export function StudioWorkspace() {
       </header>
 
       <section className="studio-v2-document-fields">
+        <div className="studio-v2-document-status">
+          <div>
+            <strong>Saved database drafts</strong>
+            <span>
+              {draftsLoading
+                ? " Loading…"
+                : ` ${drafts.length} available`}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => void loadSavedDrafts()}
+            disabled={draftsLoading}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {drafts.length > 0 ? (
+          <div className="studio-v2-draft-list">
+            {drafts.map(draft => (
+              <button
+                type="button"
+                key={draft.id}
+                className="studio-v2-draft-item"
+                onClick={() => void openSavedDraft(draft.id)}
+                disabled={openingDraftId !== null}
+              >
+                <strong>
+                  {draft.title || `Untitled draft #${draft.id}`}
+                </strong>
+                <span>
+                  #{draft.id} · {draft.slug || "no-slug"}
+                </span>
+                <small>
+                  {openingDraftId === draft.id
+                    ? "Opening…"
+                    : draft.updated_at
+                      ? new Date(
+                          draft.updated_at,
+                        ).toLocaleString()
+                      : "No update date"}
+                </small>
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="studio-v2-document-status">
           <span>{saveMessage}</span>
           <strong>{document.status}</strong>
