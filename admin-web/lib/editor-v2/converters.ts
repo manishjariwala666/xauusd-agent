@@ -154,3 +154,108 @@ export function cmsDocumentToApiPayload(
     published_at: null,
   };
 }
+
+export type CmsApiContentDetail = {
+  id: number;
+  title?: string | null;
+  slug?: string | null;
+  excerpt?: string | null;
+  body?: string | null;
+  category_id?: number | null;
+  featured_media_id?: number | null;
+  status?: string | null;
+  scheduled_at?: string | null;
+  published_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+function extractStructuredDocument(
+  body: string,
+): CmsDocument | null {
+  const match = body.match(
+    /<!--venusrealm-cms-v2:([^]*?)-->/,
+  );
+
+  if (!match?.[1]) return null;
+
+  try {
+    return JSON.parse(
+      decodeURIComponent(match[1]),
+    ) as CmsDocument;
+  } catch {
+    return null;
+  }
+}
+
+export function cmsApiDetailToDocument(
+  content: CmsApiContentDetail,
+): CmsDocument {
+  const body = String(content.body || "");
+  const structured = extractStructuredDocument(body);
+
+  if (structured) {
+    return {
+      ...structured,
+      id: content.id,
+      title: String(content.title || structured.title || ""),
+      slug: String(content.slug || structured.slug || ""),
+      excerpt: String(content.excerpt || structured.excerpt || ""),
+      categoryId:
+        content.category_id ?? structured.categoryId ?? null,
+      featuredMediaId:
+        content.featured_media_id ??
+        structured.featuredMediaId ??
+        null,
+      status:
+        content.status === "published"
+          ? "published"
+          : content.status === "scheduled"
+            ? "scheduled"
+            : content.status === "trash"
+              ? "trash"
+              : "draft",
+      scheduledAt:
+        content.scheduled_at ?? structured.scheduledAt ?? null,
+      publishedAt:
+        content.published_at ?? structured.publishedAt ?? null,
+      createdAt:
+        content.created_at ?? structured.createdAt ?? null,
+      updatedAt:
+        content.updated_at ?? structured.updatedAt ?? null,
+    };
+  }
+
+  const document = {
+    id: content.id,
+    title: String(content.title || ""),
+    slug: String(content.slug || ""),
+    excerpt: String(content.excerpt || ""),
+    status: "draft" as const,
+    categoryId: content.category_id ?? null,
+    tags: [],
+    featuredMediaId: content.featured_media_id ?? null,
+    blocks: [
+      {
+        id: `legacy-${content.id}`,
+        type: "paragraph" as const,
+        html: body,
+      },
+    ],
+    seo: {
+      metaTitle: "",
+      metaDescription: "",
+      focusKeyword: "",
+      canonicalUrl: "",
+      robotsIndex: false,
+      robotsFollow: false,
+      schemaJsonLd: null,
+    },
+    scheduledAt: content.scheduled_at ?? null,
+    publishedAt: content.published_at ?? null,
+    createdAt: content.created_at ?? null,
+    updatedAt: content.updated_at ?? null,
+  };
+
+  return document;
+}
