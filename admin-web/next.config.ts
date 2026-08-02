@@ -14,7 +14,7 @@ const securityHeaders = [
       "form-action 'self'",
       "frame-ancestors 'none'",
       "object-src 'none'",
-      "img-src 'self' data:",
+      "img-src 'self' data: http://127.0.0.1:8001 http://localhost:8001:",
       "font-src 'self'",
       "style-src 'self' 'unsafe-inline'",
       "script-src 'self' 'unsafe-inline'",
@@ -24,6 +24,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   poweredByHeader: false,
   reactStrictMode: true,
   async headers() {

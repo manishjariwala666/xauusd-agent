@@ -1,0 +1,146 @@
+"use client";
+
+import type { CmsBlock } from "@/lib/editor-v2/document-types";
+
+import { AccordionBlockEditor } from "./accordion-block-editor";
+import { BlockControls } from "./block-controls";
+import { ButtonBlockEditor } from "./button-block-editor";
+import { CodeBlockEditor } from "./code-block-editor";
+import { DividerBlockEditor } from "./divider-block-editor";
+import { GalleryBlockEditor } from "./gallery-block-editor";
+import { HeadingBlockEditor } from "./heading-block-editor";
+import { ImageBlockEditor } from "./image-block-editor";
+import { ParagraphBlockEditor } from "./paragraph-block-editor";
+import { QuoteBlockEditor } from "./quote-block-editor";
+import { TableBlockEditor } from "./table-block-editor";
+import { YouTubeBlockEditor } from "./youtube-block-editor";
+
+type Props = {
+  block: CmsBlock;
+  index: number;
+  total: number;
+  disabled?: boolean;
+  onChange: (block: CmsBlock) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onDuplicate: () => void;
+  onRemove: () => void;
+};
+
+export function BlockRenderer({
+  block,
+  index,
+  total,
+  disabled = false,
+  onChange,
+  onMoveUp,
+  onMoveDown,
+  onDuplicate,
+  onRemove,
+}: Props) {
+  let editorContent;
+
+  switch (block.type) {
+    case "paragraph":
+      editorContent = (
+        <ParagraphBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+    case "heading":
+      editorContent = (
+        <HeadingBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+    case "gallery":
+      editorContent = (
+        <GalleryBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+
+    case "image":
+      editorContent = (
+        <ImageBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+    case "table":
+      editorContent = (
+        <TableBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+    case "quote":
+      editorContent = (
+        <QuoteBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+    case "code":
+      editorContent = (
+        <CodeBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+    case "button":
+      editorContent = (
+        <ButtonBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+    case "divider":
+      editorContent = (
+        <DividerBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+    case "accordion":
+      editorContent = (
+        <AccordionBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+    case "youtube":
+      editorContent = (
+        <YouTubeBlockEditor block={block} disabled={disabled} onChange={onChange} />
+      );
+      break;
+
+    default:
+      editorContent = (
+        <div className="editor-v2-block-placeholder">
+          <strong>Unsupported block</strong>
+          <p>This block is waiting for its editor module.</p>
+        </div>
+      );
+  }
+
+  return (
+    <section
+      className="editor-v2-block"
+      data-block-id={block.id}
+      data-block-type={block.type}
+    >
+      <header className="editor-v2-block-header">
+        <div>
+          <strong>{block.type}</strong>
+          <small>Block {index + 1}</small>
+        </div>
+
+        <BlockControls
+          disabled={disabled}
+          canMoveUp={index > 0}
+          canMoveDown={index < total - 1}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onDuplicate={onDuplicate}
+          onRemove={onRemove}
+        />
+      </header>
+
+      <div className="editor-v2-block-body">{editorContent}</div>
+    </section>
+  );
+}

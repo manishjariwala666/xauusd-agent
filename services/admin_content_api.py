@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import logging
+import re
 from typing import Annotated, Any, Callable
 
 from fastapi import APIRouter, Header, HTTPException, Query, Response
@@ -16,7 +17,14 @@ from services.admin_auth_api import (
     _require_identity,
 )
 from services.admin_auth_service import AdminIdentity
+from services.ai_provider import AIProvider
+from services.production_agents import run_blog_agent
+from services.ai_content_studio_service import (
+    build_repair_preview,
+    extract_pdf_source,
+)
 from services.admin_content_service import (
+    apply_admin_content_repair,
     ContentNotFoundError,
     DuplicateSlugError,
     disable_admin_category,
@@ -44,6 +52,61 @@ class ContentPayload(BaseModel):
     status: str = Field(default="draft", pattern="^(draft|published)$")
     scheduled_at: datetime | None = None
     published_at: datetime | None = None
+
+
+class AIBlogPlanPayload(BaseModel):
+    topic: str = Field(min_length=3, max_length=500)
+    target_keyword: str = Field(default="", max_length=240)
+    target_audience: str = Field(default="", max_length=240)
+    location: str = Field(default="", max_length=160)
+
+
+class AIBlogDraftPayload(AIBlogPlanPayload):
+    selected_title: str = Field(min_length=3, max_length=240)
+    content_type: str = Field(
+        default="complete_guide",
+        pattern="^(complete_guide|news_analysis|how_to)$",
+    )
+    content_length: str = Field(
+        default="standard",
+        pattern="^(short|standard|long)$",
+    )
+    include_comparison_table: bool = True
+    include_faq: bool = True
+    include_schema: bool = True
+    include_internal_links: bool = True
+    include_risk_disclaimer: bool = True
+    outline: list[str] = Field(default_factory=list, max_length=20)
+
+
+class AIPdfDraftPayload(BaseModel):
+    filename: str = Field(min_length=5, max_length=240)
+    pdf_base64: str = Field(min_length=8, max_length=7_500_000)
+    target_keyword: str = Field(default="", max_length=240)
+    target_audience: str = Field(default="", max_length=240)
+    location: str = Field(default="", max_length=160)
+    content_length: str = Field(default="standard", pattern="^(short|standard|long)$")
+    include_comparison_table: bool = False
+    include_faq: bool = True
+    include_schema: bool = True
+    include_internal_links: bool = True
+    include_risk_disclaimer: bool = True
+
+
+class AIRepairPreviewPayload(BaseModel):
+    options: list[str] = Field(min_length=1, max_length=7)
+
+
+class AIRepairApplyPayload(BaseModel):
+    title: str = Field(min_length=1, max_length=240)
+    slug: str = Field(min_length=1, max_length=160)
+    excerpt: str = Field(default="", max_length=2_000)
+    body: str = Field(default="", max_length=200_000)
+    meta_title: str = Field(default="", max_length=255)
+    meta_description: str = Field(default="", max_length=500)
+    focus_keyword: str = Field(default="", max_length=160)
+    faq: list[dict[str, str]] = Field(default_factory=list, max_length=8)
+    schema_jsonld: dict[str, Any] = Field(default_factory=dict)
 
 
 class CategoryPayload(BaseModel):
@@ -160,6 +223,205 @@ def posts_create(payload: ContentPayload,
                    bff_secret=x_admin_bff_key, request_id=x_request_id)
 
 
+@router.post("/posts/plan-ai-draft")
+def posts_plan_ai_draft(
+    payload: AIBlogPlanPayload,
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    _admin_identity(authorization, x_admin_bff_key)
+
+    topic = " ".join(payload.topic.split())
+    keyword = " ".join(payload.target_keyword.split()) or topic
+    audience = (
+        " ".join(payload.target_audience.split())
+        or "readers seeking practical educational guidance"
+    )
+    location = " ".join(payload.location.split())
+
+    fallback = {
+        "recommended_title": f"{topic}: Complete Practical Guide",
+        "title_options": [
+            f"{topic}: Complete Practical Guide",
+            f"{topic}: Expert Analysis, Risks and Outlook",
+            f"How to Understand {topic}: Step-by-Step Guide",
+            f"{topic} Explained for Beginners",
+            f"{topic}: Key Facts, Comparison and FAQs",
+        ],
+        "focus_keyword": keyword,
+        "secondary_keywords": [
+            f"{keyword} guide",
+            f"{keyword} analysis",
+            f"{keyword} comparison",
+            f"{keyword} FAQ",
+        ],
+        "search_intent": "Informational and educational",
+        "recommended_content_type": "complete_guide",
+        "recommended_length": "standard",
+        "outline": [
+            "Introduction and reader intent",
+            f"What is {topic}?",
+            f"Why does {topic} matter?",
+            "Important factors and evidence",
+            "Comparison table",
+            "Risks and limitations",
+            "Practical steps",
+            "Frequently asked questions",
+            "Conclusion and disclaimer",
+        ],
+        "draft_created": False,
+    }
+
+    try:
+        generated = AIProvider().generate_json(
+            system_instruction=(
+                "You are the VenusRealm AI content strategist. Return one JSON "
+                "object only. Create exactly five distinct natural title options "
+                "and a concise article outline. Never invent keyword volume, "
+                "competition scores, prices, returns or sources. Required keys: "
+                "recommended_title, title_options, focus_keyword, "
+                "secondary_keywords, search_intent, recommended_content_type, "
+                "recommended_length, outline."
+            ),
+            user_instruction=(
+                f"Topic: {topic}\n"
+                f"Focus keyword: {keyword}\n"
+                f"Audience: {audience}\n"
+                f"Location: {location or 'Global'}\n"
+                "Create a review-ready plan only. Do not save a post."
+            ),
+        )
+    except Exception:
+        generated = fallback
+
+    titles = generated.get("title_options")
+    if not isinstance(titles, list):
+        titles = fallback["title_options"]
+
+    clean_titles: list[str] = []
+    seen_titles: set[str] = set()
+    for item in [*titles, *fallback["title_options"]]:
+        clean_title = " ".join(str(item).split())[:240]
+        title_key = clean_title.casefold()
+        if not clean_title or title_key in seen_titles:
+            continue
+        clean_titles.append(clean_title)
+        seen_titles.add(title_key)
+        if len(clean_titles) == 5:
+            break
+
+    outline = generated.get("outline")
+    if not isinstance(outline, list) or len(outline) < 5:
+        outline = fallback["outline"]
+
+    valid_types = {"complete_guide", "news_analysis", "how_to"}
+    recommended_type = str(
+        generated.get("recommended_content_type") or "complete_guide"
+    )
+    if recommended_type not in valid_types:
+        recommended_type = "complete_guide"
+    recommended_length = str(generated.get("recommended_length") or "standard")
+    if recommended_length not in {"short", "standard", "long"}:
+        recommended_length = "standard"
+
+    return {
+        **fallback,
+        **{
+            key: value
+            for key, value in generated.items()
+            if value not in (None, "", [])
+        },
+        "title_options": clean_titles,
+        "recommended_title": (
+            str(generated.get("recommended_title") or clean_titles[0])[:240]
+            if str(generated.get("recommended_title") or "") in clean_titles
+            else clean_titles[0]
+        ),
+        "recommended_content_type": recommended_type,
+        "recommended_length": recommended_length,
+        "outline": [
+            " ".join(str(item).split())
+            for item in outline
+            if str(item).strip()
+        ],
+        "draft_created": False,
+    }
+
+
+@router.post("/posts/generate-ai-draft", status_code=201)
+def posts_generate_ai_draft(
+    payload: AIBlogDraftPayload,
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    _admin_identity(authorization, x_admin_bff_key)
+
+    def generate() -> dict[str, Any]:
+        result = run_blog_agent({
+            **payload.model_dump(),
+            "publish": False,
+            "include_image": False,
+            "master_ai_action": "run_blog_agent",
+        })
+
+        match = re.search(r"SEO blog #(\d+) saved as draft", result)
+        if not match:
+            raise RuntimeError(
+                "AI Blog Agent did not return a draft identifier."
+            )
+
+        return {
+            "id": int(match.group(1)),
+            "status": "draft",
+            "message": result,
+        }
+
+    return _safe_call(generate)
+
+
+@router.post("/posts/generate-pdf-draft", status_code=201)
+def posts_generate_pdf_draft(
+    payload: AIPdfDraftPayload,
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    _admin_identity(authorization, x_admin_bff_key)
+
+    def generate() -> dict[str, Any]:
+        source_text, page_count = extract_pdf_source(payload.pdf_base64)
+        clean_name = payload.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
+        clean_name = " ".join(clean_name.split())[:180] or "Uploaded document"
+        result = run_blog_agent({
+            "topic": f"Summary and practical guide: {clean_name}",
+            "selected_title": f"{clean_name}: Source-Based Summary and Guide",
+            "target_keyword": payload.target_keyword or clean_name,
+            "target_audience": payload.target_audience,
+            "location": payload.location,
+            "content_type": "complete_guide",
+            "content_length": payload.content_length,
+            "include_comparison_table": payload.include_comparison_table,
+            "include_faq": payload.include_faq,
+            "include_schema": payload.include_schema,
+            "include_internal_links": payload.include_internal_links,
+            "include_risk_disclaimer": payload.include_risk_disclaimer,
+            "source_material": source_text,
+            "publish": False,
+            "include_image": False,
+            "master_ai_action": "run_blog_agent",
+        })
+        match = re.search(r"SEO blog #(\d+) saved as draft", result)
+        if not match:
+            raise RuntimeError("PDF draft generator did not return a draft identifier.")
+        return {
+            "id": int(match.group(1)),
+            "status": "draft",
+            "source_pages": page_count,
+            "message": "PDF source processed and one review draft created.",
+        }
+
+    return _safe_call(generate)
+
+
 @router.get("/posts/{content_id}")
 def posts_detail(content_id: int, response: Response,
                  authorization: Annotated[str | None, Header()] = None,
@@ -176,6 +438,41 @@ def posts_update(content_id: int, payload: ContentPayload,
     return _update(kind="posts", content_id=content_id, payload=payload,
                    authorization=authorization, bff_secret=x_admin_bff_key,
                    request_id=x_request_id)
+
+
+@router.post("/posts/{content_id}/repair-preview")
+def posts_repair_preview(
+    content_id: int,
+    payload: AIRepairPreviewPayload,
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    _admin_identity(authorization, x_admin_bff_key)
+    return _safe_call(
+        lambda: build_repair_preview(
+            get_admin_content(kind="posts", content_id=content_id),
+            set(payload.options),
+        )
+    )
+
+
+@router.post("/posts/{content_id}/repair-apply")
+def posts_repair_apply(
+    content_id: int,
+    payload: AIRepairApplyPayload,
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
+    x_request_id: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    identity = _admin_identity(authorization, x_admin_bff_key)
+    return _safe_call(
+        lambda: apply_admin_content_repair(
+            content_id=content_id,
+            actor_id=identity.user_id,
+            request_id=_request_id(x_request_id),
+            **payload.model_dump(),
+        )
+    )
 
 
 @router.post("/posts/{content_id}/{action}")

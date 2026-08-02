@@ -296,6 +296,91 @@ def save_admin_content(
     return get_admin_content(kind=kind, content_id=int(saved_id))
 
 
+def apply_admin_content_repair(
+    *,
+    content_id: int,
+    actor_id: int,
+    title: str,
+    slug: str,
+    excerpt: str,
+    body: str,
+    meta_title: str,
+    meta_description: str,
+    focus_keyword: str,
+    faq: list[dict[str, str]],
+    schema_jsonld: dict[str, Any],
+    request_id: str,
+) -> dict[str, Any]:
+    """Apply a reviewed repair to one post without changing its lifecycle state."""
+    normalized_title = str(title or "").strip()
+    if not normalized_title:
+        raise ValueError("Title is required.")
+    normalized_slug = normalize_slug(slug or normalized_title)
+    with session_scope() as session:
+        _assert_unique_slug(session, normalized_slug, int(content_id))
+        saved_id = session.execute(
+            text(
+                """
+                UPDATE public.content_items SET
+                    title = :title, slug = :slug, excerpt = :excerpt,
+                    body = :body, updated_at = NOW()
+                WHERE id = :content_id
+                  AND content_type = ANY(:types)
+                  AND deleted_at IS NULL
+                RETURNING id
+                """
+            ),
+            {
+                "content_id": int(content_id),
+                "types": list(POST_TYPES),
+                "title": normalized_title[:240],
+                "slug": normalized_slug,
+                "excerpt": str(excerpt or "").strip()[:2_000],
+                "body": str(body or "").strip(),
+            },
+        ).scalar_one_or_none()
+        if saved_id is None:
+            raise ContentNotFoundError("Content record was not found.")
+        session.execute(
+            text(
+                """
+                INSERT INTO public.content_seo (
+                    content_id, slug, meta_title, meta_description,
+                    focus_keyword, faq, schema_jsonld
+                ) VALUES (
+                    :content_id, :slug, :meta_title, :meta_description,
+                    :focus_keyword, CAST(:faq AS JSONB), CAST(:schema AS JSONB)
+                )
+                ON CONFLICT (content_id) DO UPDATE SET
+                    slug = EXCLUDED.slug,
+                    meta_title = EXCLUDED.meta_title,
+                    meta_description = EXCLUDED.meta_description,
+                    focus_keyword = EXCLUDED.focus_keyword,
+                    faq = EXCLUDED.faq,
+                    schema_jsonld = EXCLUDED.schema_jsonld,
+                    updated_at = NOW()
+                """
+            ),
+            {
+                "content_id": int(content_id),
+                "slug": normalized_slug,
+                "meta_title": str(meta_title or normalized_title)[:255],
+                "meta_description": str(meta_description or "")[:500],
+                "focus_keyword": str(focus_keyword or "")[:160],
+                "faq": json.dumps(faq),
+                "schema": json.dumps(schema_jsonld),
+            },
+        )
+        _audit(
+            session,
+            actor_id=actor_id,
+            event="CONTENT_AI_REPAIR_APPLIED",
+            request_id=request_id,
+            details={"content_id": int(content_id), "status_preserved": True},
+        )
+    return get_admin_content(kind="posts", content_id=int(content_id))
+
+
 def duplicate_admin_content(
     *, content_id: int, actor_id: int, request_id: str,
 ) -> dict[str, Any]:

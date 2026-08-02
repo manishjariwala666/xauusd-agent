@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from services.admin_auth_api import router as admin_auth_router
 from services.admin_content_api import router as admin_content_router
+from services.admin_media_api import router as admin_media_router
 
 
 def _staging_enabled() -> bool:
@@ -29,6 +32,18 @@ app = FastAPI(
 )
 app.include_router(admin_auth_router)
 app.include_router(admin_content_router)
+app.include_router(admin_media_router)
+
+_media_root = Path(
+    os.getenv("ADMIN_MEDIA_LOCAL_ROOT", "/tmp/xauusd-admin-media")
+).resolve()
+_media_root.mkdir(parents=True, exist_ok=True)
+
+app.mount(
+    "/media-local",
+    StaticFiles(directory=str(_media_root)),
+    name="admin-media-local",
+)
 
 
 @app.middleware("http")
