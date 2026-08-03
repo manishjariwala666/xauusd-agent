@@ -150,6 +150,14 @@ export type CmsRelatedPosts = {
   items: CmsRelatedPost[];
 };
 
+export type CmsTocDepth = 2 | 3 | 4 | 5 | 6;
+
+export type CmsTocSettings = {
+  enabled: boolean;
+  title: string;
+  maxDepth: CmsTocDepth;
+};
+
 export type CmsDocument = {
   id: number | null;
   title: string;
@@ -163,6 +171,7 @@ export type CmsDocument = {
   seo: CmsSeoData;
   socialSharing: CmsSocialSharing;
   relatedPosts: CmsRelatedPosts;
+  toc: CmsTocSettings;
   scheduledAt: string | null;
   publishedAt: string | null;
   createdAt: string | null;

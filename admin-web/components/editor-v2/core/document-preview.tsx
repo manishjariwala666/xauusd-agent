@@ -83,49 +83,326 @@ function sanitizePreviewHtml(value: string): string {
     );
 }
 
+
+type TocHeading = {
+  id: string;
+  level: 2 | 3 | 4 | 5 | 6;
+  text: string;
+};
+
+type TocNode = TocHeading & {
+  children: TocNode[];
+};
+
+function stripHtmlText(value: string): string {
+  return normalizePreviewHtml(value)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function slugifyHeading(value: string): string {
+  return stripHtmlText(value)
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 120) || "section";
+}
+
+function extractExplicitHeadingId(
+  attributes: string,
+): string | null {
+  const match = attributes.match(
+    /\bid\s*=\s*(["'])([^"']+)\1/i,
+  );
+
+  const candidate = match?.[2]?.trim();
+
+  if (
+    !candidate ||
+    !/^[A-Za-z][A-Za-z0-9_:.-]*$/.test(candidate)
+  ) {
+    return null;
+  }
+
+  return candidate;
+}
+
+function collectTocHeadings(
+  document: CmsDocument,
+): TocHeading[] {
+  const headings: Array<{
+    level: 2 | 3 | 4 | 5 | 6;
+    text: string;
+    preferredId?: string | null;
+  }> = [];
+
+  for (const block of document.blocks) {
+    if (
+      block.type === "heading" &&
+      block.level >= 2 &&
+      block.level <= document.toc.maxDepth
+    ) {
+      const text = block.text.trim();
+
+      if (text) {
+        headings.push({
+          level: block.level as 2 | 3 | 4 | 5 | 6,
+          text,
+        });
+      }
+
+      continue;
+    }
+
+    if (
+      block.type === "code" &&
+      (
+        block.language === "html" ||
+        looksLikeHtml(block.code)
+      )
+    ) {
+      const pattern =
+        /<h([2-6])\b([^>]*)>([\s\S]*?)<\/h\1>/gi;
+
+      let match: RegExpExecArray | null;
+
+      while ((match = pattern.exec(block.code)) !== null) {
+        const level = Number(match[1]) as
+          | 2 | 3 | 4 | 5 | 6;
+
+        if (level > document.toc.maxDepth) continue;
+
+        const label = stripHtmlText(match[3]);
+
+        if (!label) continue;
+
+        headings.push({
+          level,
+          text: label,
+          preferredId: extractExplicitHeadingId(match[2]),
+        });
+      }
+    }
+  }
+
+  const used = new Set<string>();
+
+  return headings.map(heading => {
+    const base =
+      heading.preferredId || slugifyHeading(heading.text);
+
+    let id = base;
+    let suffix = 2;
+
+    while (used.has(id)) {
+      id = `${base}-${suffix}`;
+      suffix += 1;
+    }
+
+    used.add(id);
+
+    return {
+      id,
+      level: heading.level,
+      text: heading.text,
+    };
+  });
+}
+
+function buildTocTree(headings: TocHeading[]): TocNode[] {
+  const roots: TocNode[] = [];
+  const stack: TocNode[] = [];
+
+  for (const heading of headings) {
+    const node: TocNode = {
+      ...heading,
+      children: [],
+    };
+
+    while (
+      stack.length &&
+      stack[stack.length - 1].level >= node.level
+    ) {
+      stack.pop();
+    }
+
+    if (stack.length) {
+      stack[stack.length - 1].children.push(node);
+    } else {
+      roots.push(node);
+    }
+
+    stack.push(node);
+  }
+
+  return roots;
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function applyHeadingIdsToImportedHtml(
+  html: string,
+  headings: TocHeading[],
+  cursor: { value: number },
+  maxDepth: number,
+): string {
+  return normalizePreviewHtml(html).replace(
+    /<h([2-6])\b([^>]*)>([\s\S]*?)<\/h\1>/gi,
+    (full, rawLevel: string, attributes: string, inner: string) => {
+      const level = Number(rawLevel);
+
+      if (level > maxDepth) return full;
+
+      const heading = headings[cursor.value];
+
+      if (!heading) return full;
+
+      cursor.value += 1;
+
+      const cleanAttributes = attributes.replace(
+        /\s+id\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i,
+        "",
+      );
+
+      return `<h${level}${cleanAttributes} id="${escapeHtmlAttribute(
+        heading.id,
+      )}">${inner}</h${level}>`;
+    },
+  );
+}
+
+function tocTreeToHtml(nodes: TocNode[]): string {
+  if (!nodes.length) return "";
+
+  return [
+    "<ol>",
+    ...nodes.map(node =>
+      [
+        "<li>",
+        `<a href="#${escapeHtmlAttribute(node.id)}">${escapeHtmlAttribute(node.text)}</a>`,
+        tocTreeToHtml(node.children),
+        "</li>",
+      ].join(""),
+    ),
+    "</ol>",
+  ].join("");
+}
+
+function renderSourceToc(
+  document: CmsDocument,
+  headings: TocHeading[],
+): string {
+  if (!document.toc.enabled || !headings.length) {
+    return "";
+  }
+
+  return [
+    '<nav aria-label="Table of contents">',
+    `<h2>${escapeHtmlAttribute(
+      document.toc.title || "Table of Contents",
+    )}</h2>`,
+    tocTreeToHtml(buildTocTree(headings)),
+    "</nav>",
+  ].join("\n");
+}
+
 function documentSourceHtml(document: CmsDocument): string {
-  return document.blocks
+  const headings = collectTocHeadings(document);
+  const cursor = { value: 0 };
+
+  const renderedBlocks = document.blocks
     .map(block => {
       switch (block.type) {
         case "paragraph":
         case "table":
           return normalizePreviewHtml(block.html);
 
-        case "heading":
-          return `<h${block.level}>${block.text}</h${block.level}>`;
+        case "heading": {
+          if (
+            block.level >= 2 &&
+            block.level <= document.toc.maxDepth
+          ) {
+            const heading = headings[cursor.value];
+
+            if (heading) {
+              cursor.value += 1;
+
+              return `<h${block.level} id="${escapeHtmlAttribute(
+                heading.id,
+              )}">${escapeHtmlAttribute(
+                block.text,
+              )}</h${block.level}>`;
+            }
+          }
+
+          return `<h${block.level}>${escapeHtmlAttribute(
+            block.text,
+          )}</h${block.level}>`;
+        }
 
         case "quote":
           return `<blockquote>${normalizePreviewHtml(block.html)}</blockquote>`;
 
         case "image":
           return block.src
-            ? `<img src="${block.src}" alt="${block.alt}" />`
+            ? `<img src="${escapeHtmlAttribute(
+                block.src,
+              )}" alt="${escapeHtmlAttribute(block.alt)}" />`
             : "";
 
         case "divider":
           return "<hr />";
 
         case "button":
-          return `<a href="${block.url}">${block.label}</a>`;
+          return `<a href="${escapeHtmlAttribute(
+            block.url,
+          )}">${escapeHtmlAttribute(block.label)}</a>`;
 
         case "code":
           return (
             block.language === "html" ||
             looksLikeHtml(block.code)
           )
-            ? normalizePreviewHtml(block.code)
-            : `<pre><code>${block.code}</code></pre>`;
+            ? applyHeadingIdsToImportedHtml(
+                block.code,
+                headings,
+                cursor,
+                document.toc.maxDepth,
+              )
+            : `<pre><code>${escapeHtmlAttribute(
+                block.code,
+              )}</code></pre>`;
 
         case "accordion":
           return block.items
             .map(
               item =>
-                `<details><summary>${item.title}</summary>${normalizePreviewHtml(item.html)}</details>`,
+                `<details><summary>${escapeHtmlAttribute(
+                  item.title,
+                )}</summary>${normalizePreviewHtml(
+                  item.html,
+                )}</details>`,
             )
             .join("\n");
 
         case "youtube":
-          return `<a href="${block.url}">${block.title || block.url}</a>`;
+          return `<a href="${escapeHtmlAttribute(
+            block.url,
+          )}">${escapeHtmlAttribute(
+            block.title || block.url,
+          )}</a>`;
 
         case "gallery":
           return `<!-- Gallery: ${block.mediaIds.length} images -->`;
@@ -133,9 +410,24 @@ function documentSourceHtml(document: CmsDocument): string {
     })
     .filter(Boolean)
     .join("\n\n");
+
+  return [
+    renderSourceToc(document, headings),
+    renderedBlocks,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
-function PreviewBlock({ block }: { block: CmsBlock }) {
+function PreviewBlock({
+  block,
+  headingId,
+  importedHtml,
+}: {
+  block: CmsBlock;
+  headingId?: string;
+  importedHtml?: string;
+}) {
   switch (block.type) {
     case "paragraph":
       return (
@@ -151,7 +443,11 @@ function PreviewBlock({ block }: { block: CmsBlock }) {
       const HeadingTag =
         `h${block.level}` as keyof React.JSX.IntrinsicElements;
 
-      return <HeadingTag>{block.text || "Untitled heading"}</HeadingTag>;
+      return (
+        <HeadingTag id={headingId}>
+          {block.text || "Untitled heading"}
+        </HeadingTag>
+      );
     }
 
     case "image":
@@ -201,7 +497,9 @@ function PreviewBlock({ block }: { block: CmsBlock }) {
           <div
             className="studio-v2-preview-richtext studio-v2-preview-custom-html"
             dangerouslySetInnerHTML={{
-              __html: sanitizePreviewHtml(block.code),
+              __html:
+                importedHtml ??
+                sanitizePreviewHtml(block.code),
             }}
           />
         );
@@ -257,12 +555,61 @@ function PreviewBlock({ block }: { block: CmsBlock }) {
   }
 }
 
+
+function TocList({
+  nodes,
+  onNavigate,
+}: {
+  nodes: TocNode[];
+  onNavigate: (id: string) => void;
+}) {
+  if (!nodes.length) return null;
+
+  return (
+    <ol>
+      {nodes.map(node => (
+        <li key={node.id}>
+          <a
+            href={`#${node.id}`}
+            onClick={event => {
+              event.preventDefault();
+              onNavigate(node.id);
+            }}
+          >
+            {node.text}
+          </a>
+
+          {node.children.length ? (
+            <TocList
+              nodes={node.children}
+              onNavigate={onNavigate}
+            />
+          ) : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function DocumentPreview({
   document,
   onClose,
 }: DocumentPreviewProps) {
   const [mode, setMode] = useState<"visual" | "source">("visual");
+  const headings = collectTocHeadings(document);
+  const tocTree = buildTocTree(headings);
   const sourceHtml = documentSourceHtml(document);
+
+  function navigateToHeading(id: string) {
+    const target = window.document.getElementById(id);
+
+    target?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  const visualHeadingCursor = { value: 0 };
 
   return (
     <div
@@ -327,9 +674,66 @@ export function DocumentPreview({
               </p>
             ) : null}
 
-            {document.blocks.map(block => (
-              <PreviewBlock key={block.id} block={block} />
-            ))}
+            {document.toc.enabled && headings.length > 0 ? (
+              <nav
+                className="studio-v2-preview-toc"
+                aria-label="Table of contents"
+              >
+                <h2>
+                  {document.toc.title ||
+                    "Table of Contents"}
+                </h2>
+
+                <TocList
+                  nodes={tocTree}
+                  onNavigate={navigateToHeading}
+                />
+              </nav>
+            ) : null}
+
+            {document.blocks.map(block => {
+              let headingId: string | undefined;
+              let importedHtml: string | undefined;
+
+              if (
+                block.type === "heading" &&
+                block.level >= 2 &&
+                block.level <= document.toc.maxDepth
+              ) {
+                headingId =
+                  headings[visualHeadingCursor.value]?.id;
+
+                if (headingId) {
+                  visualHeadingCursor.value += 1;
+                }
+              }
+
+              if (
+                block.type === "code" &&
+                (
+                  block.language === "html" ||
+                  looksLikeHtml(block.code)
+                )
+              ) {
+                importedHtml = sanitizePreviewHtml(
+                  applyHeadingIdsToImportedHtml(
+                    block.code,
+                    headings,
+                    visualHeadingCursor,
+                    document.toc.maxDepth,
+                  ),
+                );
+              }
+
+              return (
+                <PreviewBlock
+                  key={block.id}
+                  block={block}
+                  headingId={headingId}
+                  importedHtml={importedHtml}
+                />
+              );
+            })}
 
             {document.socialSharing.enabled &&
             document.socialSharing.platforms.length > 0 ? (

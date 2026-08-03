@@ -53,6 +53,11 @@ export function createEmptyDocument(): CmsDocument {
       heading: "Related Posts",
       items: [],
     },
+    toc: {
+      enabled: false,
+      title: "Table of Contents",
+      maxDepth: 3,
+    },
     scheduledAt: null,
     publishedAt: null,
     createdAt: null,

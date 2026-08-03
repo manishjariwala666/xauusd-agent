@@ -541,6 +541,100 @@ export function StudioWorkspace() {
         <header>
           <div>
             <span className="section-kicker">
+              ARTICLE NAVIGATION
+            </span>
+            <h2>Automatic table of contents</h2>
+          </div>
+        </header>
+
+        <article className="studio-v2-feature-card studio-v2-toc-settings">
+          <label className="studio-v2-toggle-row">
+            <div>
+              <strong>Enable Auto TOC</strong>
+              <small>
+                Build navigation automatically from H2-H6 headings.
+              </small>
+            </div>
+
+            <input
+              type="checkbox"
+              checked={document.toc.enabled}
+              onChange={event =>
+                setDocument(current =>
+                  current
+                    ? {
+                        ...current,
+                        toc: {
+                          ...current.toc,
+                          enabled: event.target.checked,
+                        },
+                      }
+                    : current,
+                )
+              }
+            />
+          </label>
+
+          <div className="studio-v2-toc-grid">
+            <label>
+              <span>TOC title</span>
+              <input
+                value={document.toc.title}
+                maxLength={120}
+                placeholder="Table of Contents"
+                disabled={!document.toc.enabled}
+                onChange={event =>
+                  setDocument(current =>
+                    current
+                      ? {
+                          ...current,
+                          toc: {
+                            ...current.toc,
+                            title: event.target.value,
+                          },
+                        }
+                      : current,
+                  )
+                }
+              />
+            </label>
+
+            <label>
+              <span>Maximum heading depth</span>
+              <select
+                value={document.toc.maxDepth}
+                disabled={!document.toc.enabled}
+                onChange={event =>
+                  setDocument(current =>
+                    current
+                      ? {
+                          ...current,
+                          toc: {
+                            ...current.toc,
+                            maxDepth: Number(
+                              event.target.value,
+                            ) as 2 | 3 | 4 | 5 | 6,
+                          },
+                        }
+                      : current,
+                  )
+                }
+              >
+                <option value={2}>H2 only</option>
+                <option value={3}>H2-H3</option>
+                <option value={4}>H2-H4</option>
+                <option value={5}>H2-H5</option>
+                <option value={6}>H2-H6</option>
+              </select>
+            </label>
+          </div>
+        </article>
+      </section>
+
+      <section className="studio-v2-publishing-features">
+        <header>
+          <div>
+            <span className="section-kicker">
               ARTICLE ENGAGEMENT
             </span>
             <h2>Sharing and related posts</h2>

@@ -369,6 +369,20 @@ export function normalizeCmsDocument(
         "Related Posts",
       items: document.relatedPosts?.items || [],
     },
+    toc: {
+      enabled: document.toc?.enabled ?? false,
+      title:
+        document.toc?.title?.trim() ||
+        "Table of Contents",
+      maxDepth:
+        document.toc?.maxDepth === 2 ||
+        document.toc?.maxDepth === 3 ||
+        document.toc?.maxDepth === 4 ||
+        document.toc?.maxDepth === 5 ||
+        document.toc?.maxDepth === 6
+          ? document.toc.maxDepth
+          : 3,
+    },
   };
 }
 
@@ -383,6 +397,11 @@ export function cmsApiDetailToDocument(
     return {
       ...structured,
       blocks: normalizeCmsDocument(structured).blocks,
+      toc: normalizeCmsDocument(structured).toc,
+      socialSharing:
+        normalizeCmsDocument(structured).socialSharing,
+      relatedPosts:
+        normalizeCmsDocument(structured).relatedPosts,
       id: content.id,
       title: String(content.title || structured.title || ""),
       slug: String(content.slug || structured.slug || ""),
@@ -446,6 +465,11 @@ export function cmsApiDetailToDocument(
       enabled: false,
       heading: "Related Posts",
       items: [],
+    },
+    toc: {
+      enabled: false,
+      title: "Table of Contents",
+      maxDepth: 3 as const,
     },
     scheduledAt: content.scheduled_at ?? null,
     publishedAt: content.published_at ?? null,
