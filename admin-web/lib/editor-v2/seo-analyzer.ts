@@ -30,6 +30,12 @@ export type SeoDocumentAnalysis = {
   checks: SeoCheck[];
 };
 
+function looksLikeHtml(value: string): boolean {
+  return /<\/?(?:html|body|main|article|section|aside|nav|header|footer|div|span|h[1-6]|p|ul|ol|li|table|thead|tbody|tr|th|td|blockquote|figure|figcaption|img|a|hr|br|details|summary)\b[^>]*>/i.test(
+    String(value || ""),
+  );
+}
+
 function stripHtml(value: string): string {
   return String(value || "")
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
@@ -54,7 +60,12 @@ function blockText(block: CmsBlock): string {
       return stripHtml(block.html);
 
     case "code":
-      return block.code;
+      return (
+        block.language === "html" ||
+        looksLikeHtml(block.code)
+      )
+        ? stripHtml(block.code)
+        : block.code;
 
     case "button":
       return `${block.label} ${block.url}`;
@@ -100,11 +111,6 @@ function countWords(value: string): number {
 function analyzeHeadings(
   blocks: CmsBlock[],
 ): HeadingAnalysis {
-  const headings = blocks.filter(
-    (block): block is CmsHeadingBlock =>
-      block.type === "heading",
-  );
-
   const counts: HeadingAnalysis["counts"] = {
     1: 0,
     2: 0,
@@ -114,20 +120,59 @@ function analyzeHeadings(
     6: 0,
   };
 
+  const entries: Array<{
+    level: 1 | 2 | 3 | 4 | 5 | 6;
+    text: string;
+  }> = [];
+
+  for (const block of blocks) {
+    if (block.type === "heading") {
+      entries.push({
+        level: block.level,
+        text: block.text,
+      });
+      continue;
+    }
+
+    if (
+      block.type === "code" &&
+      (
+        block.language === "html" ||
+        looksLikeHtml(block.code)
+      )
+    ) {
+      const pattern =
+        /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
+
+      let match: RegExpExecArray | null;
+
+      while ((match = pattern.exec(block.code)) !== null) {
+        entries.push({
+          level: Number(match[1]) as
+            | 1 | 2 | 3 | 4 | 5 | 6,
+          text: stripHtml(match[2]),
+        });
+      }
+    }
+  }
+
   const normalizedTexts = new Map<string, number>();
   const skippedLevels: string[] = [];
   let emptyCount = 0;
   let previousLevel: number | null = null;
 
-  for (const heading of headings) {
+  for (const heading of entries) {
     counts[heading.level] += 1;
 
-    const text = heading.text.trim();
+    const headingText = heading.text.trim();
 
-    if (!text) {
+    if (!headingText) {
       emptyCount += 1;
     } else {
-      const normalized = text.toLowerCase().replace(/\s+/g, " ");
+      const normalized = headingText
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
       normalizedTexts.set(
         normalized,
         (normalizedTexts.get(normalized) || 0) + 1,
@@ -154,18 +199,16 @@ function analyzeHeadings(
     0,
   );
 
-  const hasValidHierarchy =
-    counts[1] === 1 &&
-    emptyCount === 0 &&
-    skippedLevels.length === 0;
-
   return {
     counts,
-    total: headings.length,
+    total: entries.length,
     emptyCount,
     duplicateCount,
     skippedLevels,
-    hasValidHierarchy,
+    hasValidHierarchy:
+      counts[1] === 1 &&
+      emptyCount === 0 &&
+      skippedLevels.length === 0,
   };
 }
 
@@ -195,9 +238,21 @@ function detectLinks(document: CmsDocument): {
     if (
       block.type === "paragraph" ||
       block.type === "quote" ||
-      block.type === "table"
+      block.type === "table" ||
+      (
+        block.type === "code" &&
+        (
+          block.language === "html" ||
+          looksLikeHtml(block.code)
+        )
+      )
     ) {
-      const matches = block.html.match(
+      const html =
+        block.type === "code"
+          ? block.code
+          : block.html;
+
+      const matches = html.match(
         /href=["']([^"']+)["']/gi,
       );
 
@@ -256,11 +311,29 @@ export function analyzeSeoDocument(
   );
 
   const hasFaq = document.blocks.some(
-    block => block.type === "accordion",
+    block =>
+      block.type === "accordion" ||
+      (
+        block.type === "code" &&
+        (
+          block.language === "html" ||
+          looksLikeHtml(block.code)
+        ) &&
+        /<(?:details|summary)\b/i.test(block.code)
+      ),
   );
 
   const hasTable = document.blocks.some(
-    block => block.type === "table",
+    block =>
+      block.type === "table" ||
+      (
+        block.type === "code" &&
+        (
+          block.language === "html" ||
+          looksLikeHtml(block.code)
+        ) &&
+        /<table\b/i.test(block.code)
+      ),
   );
 
   const hasRiskDisclaimer =
