@@ -3954,3 +3954,199 @@ button,a,input,select,textarea { outline-offset:2px; }
   font-size: 11px;
   margin: 0;
 }
+
+/* === CMS V2 CUSTOM LINK SETTINGS MODAL === */
+
+.editor-v2-link-modal-backdrop {
+  align-items: center;
+  background: rgb(15 23 42 / 58%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 1300;
+}
+
+.editor-v2-link-modal {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgb(15 23 42 / 28%);
+  max-height: min(760px, 92vh);
+  max-width: 680px;
+  overflow: auto;
+  padding: 24px;
+  width: 100%;
+}
+
+.editor-v2-link-modal > header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.editor-v2-link-modal > header h2 {
+  margin: 4px 0 0;
+}
+
+.editor-v2-link-modal-close {
+  align-items: center;
+  background: #f1f5f9;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  display: flex;
+  font-size: 24px;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.editor-v2-link-modal-fields {
+  display: grid;
+  gap: 18px;
+}
+
+.editor-v2-link-modal-fields > label,
+.editor-v2-link-meta-grid label {
+  display: grid;
+  gap: 7px;
+}
+
+.editor-v2-link-modal-fields label > span,
+.editor-v2-link-meta-grid label > span {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.editor-v2-link-modal input[type="text"],
+.editor-v2-link-modal input:not([type]) {
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  font: inherit;
+  min-height: 44px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.link-url-status {
+  font-size: 11px;
+}
+
+.link-url-status.status-internal {
+  color: #1d4ed8;
+}
+
+.link-url-status.status-external,
+.link-url-status.status-special {
+  color: #15803d;
+}
+
+.link-url-status.status-invalid {
+  color: #b91c1c;
+}
+
+.editor-v2-link-option-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.editor-v2-link-toggle {
+  align-items: flex-start;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+}
+
+.editor-v2-link-toggle > span {
+  display: grid;
+  gap: 3px;
+}
+
+.editor-v2-link-toggle strong {
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.editor-v2-link-toggle small {
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.editor-v2-link-meta-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.editor-v2-link-rel-preview {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 11px 13px;
+}
+
+.editor-v2-link-rel-preview span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.editor-v2-link-rel-preview code {
+  color: #1e293b;
+  font-size: 12px;
+}
+
+.editor-v2-link-modal > footer {
+  align-items: center;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 22px;
+  padding-top: 18px;
+}
+
+.editor-v2-link-modal > footer > div {
+  display: flex;
+  gap: 10px;
+}
+
+.editor-v2-link-remove {
+  background: transparent;
+  border: 0;
+  color: #dc2626;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.editor-v2-rich-block-content a.cms-link-no-underline,
+.studio-v2-preview-richtext a.cms-link-no-underline {
+  text-decoration: none;
+}
+
+@media (max-width: 680px) {
+  .editor-v2-link-option-grid,
+  .editor-v2-link-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-v2-link-modal > footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+    gap: 14px;
+  }
+
+  .editor-v2-link-modal > footer > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}

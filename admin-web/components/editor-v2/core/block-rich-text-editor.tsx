@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 
 import { createEditorV2Extensions } from "@/lib/editor-v2/extensions";
+import {
+  LinkSettingsModal,
+  type LinkSettingsValue,
+} from "../dialogs/link-settings-modal";
 
 type BlockRichTextEditorProps = {
   value: string;
@@ -18,6 +22,23 @@ export function BlockRichTextEditor({
   placeholder = "Start writing…",
   onChange,
 }: BlockRichTextEditorProps) {
+  const [linkModalOpen, setLinkModalOpen] =
+    useState(false);
+  const [linkSelectionEmpty, setLinkSelectionEmpty] =
+    useState(false);
+  const [linkInitialValue, setLinkInitialValue] =
+    useState<LinkSettingsValue>({
+      href: "",
+      text: "",
+      openInNewTab: false,
+      nofollow: false,
+      sponsored: false,
+      ugc: false,
+      underline: true,
+      title: "",
+      ariaLabel: "",
+    });
+
   const extensions = useMemo(
     () => createEditorV2Extensions(placeholder),
     [placeholder],
@@ -67,70 +88,103 @@ export function BlockRichTextEditor({
     );
   }
 
-  function setLink() {
+  function openLinkSettings() {
     if (!editor) return;
 
-    const currentHref =
-      editor.getAttributes("link").href as string | undefined;
+    const attributes = editor.getAttributes("link") as {
+      href?: string;
+      target?: string | null;
+      rel?: string | null;
+      underline?: boolean;
+      title?: string | null;
+      ariaLabel?: string | null;
+    };
 
-    const href = window.prompt(
-      "Enter link URL",
-      currentHref || "https://",
-    );
+    const { from, to, empty } = editor.state.selection;
+    const selectedText = empty
+      ? ""
+      : editor.state.doc.textBetween(from, to, " ");
 
-    if (href === null) return;
+    const relTokens = String(attributes.rel || "")
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
 
-    if (!href.trim()) {
-      editor
-        .chain()
-        .focus()
-        .extendMarkRange("link")
-        .unsetLink()
-        .run();
+    setLinkSelectionEmpty(empty);
+    setLinkInitialValue({
+      href: String(attributes.href || ""),
+      text: selectedText,
+      openInNewTab: attributes.target === "_blank",
+      nofollow: relTokens.includes("nofollow"),
+      sponsored: relTokens.includes("sponsored"),
+      ugc: relTokens.includes("ugc"),
+      underline: attributes.underline !== false,
+      title: String(attributes.title || ""),
+      ariaLabel: String(attributes.ariaLabel || ""),
+    });
+    setLinkModalOpen(true);
+  }
 
-      return;
-    }
+  function saveLink(settings: LinkSettingsValue) {
+    if (!editor) return;
 
-    if (editor.state.selection.empty) {
-      const label = window.prompt(
-        "Link text",
-        "Open link",
-      );
+    const rel = [
+      settings.openInNewTab ? "noopener" : "",
+      settings.openInNewTab ? "noreferrer" : "",
+      settings.nofollow ? "nofollow" : "",
+      settings.sponsored ? "sponsored" : "",
+      settings.ugc ? "ugc" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
 
-      if (!label?.trim()) return;
+    const attributes = {
+      href: settings.href.trim(),
+      target: settings.openInNewTab ? "_blank" : null,
+      rel: rel || null,
+      underline: settings.underline,
+      title: settings.title.trim() || null,
+      ariaLabel: settings.ariaLabel.trim() || null,
+    };
 
+    if (linkSelectionEmpty) {
       editor
         .chain()
         .focus()
         .insertContent({
           type: "text",
-          text: label.trim(),
+          text: settings.text.trim(),
           marks: [
             {
               type: "link",
-              attrs: {
-                href: href.trim(),
-                target: "_blank",
-                rel: "noopener noreferrer",
-              },
+              attrs: attributes,
             },
           ],
         })
         .run();
-
-      return;
+    } else {
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange("link")
+        .setLink(attributes)
+        .run();
     }
+
+    setLinkModalOpen(false);
+  }
+
+  function removeLink() {
+    if (!editor) return;
 
     editor
       .chain()
       .focus()
       .extendMarkRange("link")
-      .setLink({
-        href: href.trim(),
-        target: "_blank",
-        rel: "noopener noreferrer",
-      })
+      .unsetLink()
       .run();
+
+    setLinkModalOpen(false);
   }
 
   return (
@@ -323,7 +377,7 @@ export function BlockRichTextEditor({
 
         <button
           type="button"
-          onClick={setLink}
+          onClick={openLinkSettings}
           disabled={disabled}
         >
           Link
@@ -372,6 +426,15 @@ export function BlockRichTextEditor({
       </div>
 
       <EditorContent editor={editor} />
+
+      <LinkSettingsModal
+        open={linkModalOpen}
+        initialValue={linkInitialValue}
+        allowTextEditing={linkSelectionEmpty}
+        onClose={() => setLinkModalOpen(false)}
+        onSave={saveLink}
+        onRemove={removeLink}
+      />
     </section>
   );
 }
