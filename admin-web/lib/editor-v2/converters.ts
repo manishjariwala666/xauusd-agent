@@ -1,6 +1,7 @@
 import type {
   CmsBlock,
-  CmsDocument,
+    CmsDocument,
+    CmsSocialPlatform
 } from "./document-types";
 
 export type CmsApiPayload = {
@@ -429,6 +430,22 @@ export function cmsApiDetailToDocument(
       robotsIndex: false,
       robotsFollow: false,
       schemaJsonLd: null,
+    },
+    socialSharing: {
+      enabled: false,
+      platforms: [
+        "whatsapp",
+        "telegram",
+        "facebook",
+        "x",
+        "linkedin",
+        "copy",
+      ] as CmsSocialPlatform[],
+    },
+    relatedPosts: {
+      enabled: false,
+      heading: "Related Posts",
+      items: [],
     },
     scheduledAt: content.scheduled_at ?? null,
     publishedAt: content.published_at ?? null,

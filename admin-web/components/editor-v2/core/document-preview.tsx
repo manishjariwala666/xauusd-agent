@@ -54,6 +54,35 @@ function normalizePreviewHtml(value: string): string {
   return html;
 }
 
+
+function looksLikeHtml(value: string): boolean {
+  const html = String(value || "").trim();
+
+  return /<\/?(?:html|body|main|article|section|aside|nav|header|footer|div|span|h[1-6]|p|ul|ol|li|table|thead|tbody|tr|th|td|blockquote|figure|figcaption|img|a|hr|br|details|summary)\b[^>]*>/i.test(
+    html,
+  );
+}
+
+function sanitizePreviewHtml(value: string): string {
+  return normalizePreviewHtml(value)
+    .replace(
+      /<(script|iframe|object|embed|form|style)\b[^>]*>[\s\S]*?<\/\1>/gi,
+      "",
+    )
+    .replace(
+      /<(script|iframe|object|embed|form|style)\b[^>]*\/?>/gi,
+      "",
+    )
+    .replace(
+      /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,
+      "",
+    )
+    .replace(
+      /\s+(href|src)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi,
+      ' $1="#"',
+    );
+}
+
 function documentSourceHtml(document: CmsDocument): string {
   return document.blocks
     .map(block => {
@@ -80,7 +109,12 @@ function documentSourceHtml(document: CmsDocument): string {
           return `<a href="${block.url}">${block.label}</a>`;
 
         case "code":
-          return `<pre><code>${block.code}</code></pre>`;
+          return (
+            block.language === "html" ||
+            looksLikeHtml(block.code)
+          )
+            ? normalizePreviewHtml(block.code)
+            : `<pre><code>${block.code}</code></pre>`;
 
         case "accordion":
           return block.items
@@ -159,6 +193,20 @@ function PreviewBlock({ block }: { block: CmsBlock }) {
       );
 
     case "code":
+      if (
+        block.language === "html" ||
+        looksLikeHtml(block.code)
+      ) {
+        return (
+          <div
+            className="studio-v2-preview-richtext studio-v2-preview-custom-html"
+            dangerouslySetInnerHTML={{
+              __html: sanitizePreviewHtml(block.code),
+            }}
+          />
+        );
+      }
+
       return (
         <pre>
           <code>{block.code}</code>
