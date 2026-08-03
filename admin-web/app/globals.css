@@ -3814,3 +3814,143 @@ button,a,input,select,textarea { outline-offset:2px; }
     padding: 18px;
   }
 }
+
+.studio-link-audit-card {
+  display: grid;
+  gap: 14px;
+}
+
+.studio-link-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-link-summary > span {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #64748b;
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.studio-link-summary strong {
+  color: #0f172a;
+}
+
+.studio-link-records {
+  display: grid;
+  gap: 10px;
+  max-height: 620px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.studio-link-records > article {
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 7px;
+  padding: 11px;
+}
+
+.studio-link-records > article.link-clean {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.studio-link-records > article.link-has-issues {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.studio-link-records article header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.studio-link-records article > strong {
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.studio-link-records code {
+  color: #475569;
+  display: block;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-kind {
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  padding: 3px 7px;
+  text-transform: uppercase;
+}
+
+.link-kind-internal {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.link-kind-external {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.link-kind-anchor {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.link-kind-email,
+.link-kind-telephone {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.link-kind-invalid {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.studio-link-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.studio-link-flags span {
+  background: #e2e8f0;
+  border-radius: 999px;
+  color: #475569;
+  font-size: 10px;
+  padding: 3px 7px;
+}
+
+.studio-link-records ul {
+  color: #c2410c;
+  display: grid;
+  font-size: 11px;
+  gap: 3px;
+  list-style: disc;
+  margin: 3px 0 0;
+  padding-left: 18px;
+}
+
+.studio-link-clean-message,
+.studio-link-empty {
+  color: #64748b;
+  font-size: 11px;
+  margin: 0;
+}

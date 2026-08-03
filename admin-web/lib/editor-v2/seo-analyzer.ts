@@ -21,12 +21,55 @@ export type HeadingAnalysis = {
   hasValidHierarchy: boolean;
 };
 
+export type LinkKind =
+  | "internal"
+  | "external"
+  | "anchor"
+  | "email"
+  | "telephone"
+  | "invalid";
+
+export type LinkIssue =
+  | "empty-url"
+  | "placeholder-anchor"
+  | "unsafe-javascript"
+  | "missing-anchor-text"
+  | "weak-anchor-text"
+  | "duplicate-url"
+  | "missing-external-security";
+
+export type LinkRecord = {
+  id: string;
+  url: string;
+  anchorText: string;
+  kind: LinkKind;
+  source: string;
+  targetBlank: boolean;
+  rel: string[];
+  nofollow: boolean;
+  sponsored: boolean;
+  ugc: boolean;
+  issues: LinkIssue[];
+};
+
+export type LinkAnalysis = {
+  total: number;
+  internal: number;
+  external: number;
+  anchor: number;
+  invalid: number;
+  duplicates: number;
+  issueCount: number;
+  records: LinkRecord[];
+};
+
 export type SeoDocumentAnalysis = {
   seoScore: number;
   contentScore: number;
   wordCount: number;
   readingTimeMinutes: number;
   headings: HeadingAnalysis;
+  links: LinkAnalysis;
   checks: SeoCheck[];
 };
 
@@ -212,78 +255,292 @@ function analyzeHeadings(
   };
 }
 
-function detectLinks(document: CmsDocument): {
-  total: number;
-  internal: number;
-  external: number;
-} {
-  const urls: string[] = [];
+function classifyLink(url: string): LinkKind {
+  const normalized = url.trim();
+
+  if (!normalized) return "invalid";
+  if (/^javascript:/i.test(normalized)) return "invalid";
+  if (/^mailto:/i.test(normalized)) return "email";
+  if (/^tel:/i.test(normalized)) return "telephone";
+  if (normalized.startsWith("#")) return "anchor";
+
+  if (
+    normalized.startsWith("/") ||
+    /^(?:https?:\/\/)?(?:www\.)?venusrealm\.net(?:\/|$)/i.test(
+      normalized,
+    )
+  ) {
+    return "internal";
+  }
+
+  if (/^https?:\/\//i.test(normalized)) {
+    return "external";
+  }
+
+  return "invalid";
+}
+
+function normalizeAnchorText(value: string): string {
+  return stripHtml(value)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function weakAnchorText(value: string): boolean {
+  const normalized = value
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return new Set([
+    "click here",
+    "read more",
+    "learn more",
+    "here",
+    "link",
+    "website",
+    "this page",
+    "more",
+  ]).has(normalized);
+}
+
+function extractAttribute(
+  attributes: string,
+  name: string,
+): string {
+  const pattern = new RegExp(
+    `\\\\b${name}\\\\s*=\\\\s*(?:"([^"]*)"|'([^']*)'|([^\\\\s>]+))`,
+    "i",
+  );
+
+  const match = attributes.match(pattern);
+
+  return String(
+    match?.[1] ??
+    match?.[2] ??
+    match?.[3] ??
+    "",
+  ).trim();
+}
+
+function extractHtmlLinks(
+  html: string,
+  source: string,
+): Array<Omit<LinkRecord, "id" | "issues">> {
+  const records: Array<Omit<LinkRecord, "id" | "issues">> = [];
+  const pattern =
+    /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(html)) !== null) {
+    const attributes = match[1] || "";
+    const url = extractAttribute(attributes, "href");
+    const target = extractAttribute(attributes, "target");
+    const relValue = extractAttribute(attributes, "rel");
+
+    const rel = relValue
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    records.push({
+      url,
+      anchorText: normalizeAnchorText(match[2]),
+      kind: classifyLink(url),
+      source,
+      targetBlank: target.toLowerCase() === "_blank",
+      rel,
+      nofollow: rel.includes("nofollow"),
+      sponsored: rel.includes("sponsored"),
+      ugc: rel.includes("ugc"),
+    });
+  }
+
+  return records;
+}
+
+function detectLinks(document: CmsDocument): LinkAnalysis {
+  const rawRecords: Array<Omit<LinkRecord, "id" | "issues">> = [];
 
   for (const block of document.blocks) {
-    if (block.type === "button" && block.url) {
-      urls.push(block.url);
-    }
+    switch (block.type) {
+      case "button":
+        rawRecords.push({
+          url: block.url,
+          anchorText: block.label,
+          kind: classifyLink(block.url),
+          source: "Button block",
+          targetBlank: false,
+          rel: [],
+          nofollow: false,
+          sponsored: false,
+          ugc: false,
+        });
+        break;
 
-    if (block.type === "youtube" && block.url) {
-      urls.push(block.url);
-    }
+      case "youtube":
+        rawRecords.push({
+          url: block.url,
+          anchorText: block.title || "YouTube video",
+          kind: classifyLink(block.url),
+          source: "YouTube block",
+          targetBlank: false,
+          rel: [],
+          nofollow: false,
+          sponsored: false,
+          ugc: false,
+        });
+        break;
 
-    if (
-      block.type === "image" &&
-      block.linkUrl
-    ) {
-      urls.push(block.linkUrl);
-    }
+      case "image":
+        if (block.linkUrl) {
+          rawRecords.push({
+            url: block.linkUrl,
+            anchorText:
+              block.alt ||
+              block.caption ||
+              "Linked image",
+            kind: classifyLink(block.linkUrl),
+            source: "Image block",
+            targetBlank: false,
+            rel: [],
+            nofollow: false,
+            sponsored: false,
+            ugc: false,
+          });
+        }
+        break;
 
-    if (
-      block.type === "paragraph" ||
-      block.type === "quote" ||
-      block.type === "table" ||
-      (
-        block.type === "code" &&
-        (
+      case "paragraph":
+      case "quote":
+      case "table":
+        rawRecords.push(
+          ...extractHtmlLinks(
+            block.html,
+            `${block.type} block`,
+          ),
+        );
+        break;
+
+      case "code":
+        if (
           block.language === "html" ||
           looksLikeHtml(block.code)
-        )
-      )
-    ) {
-      const html =
-        block.type === "code"
-          ? block.code
-          : block.html;
+        ) {
+          rawRecords.push(
+            ...extractHtmlLinks(
+              block.code,
+              "Imported HTML",
+            ),
+          );
+        }
+        break;
 
-      const matches = html.match(
-        /href=["']([^"']+)["']/gi,
-      );
+      case "accordion":
+        for (const item of block.items) {
+          rawRecords.push(
+            ...extractHtmlLinks(
+              item.html,
+              `Accordion: ${item.title || "Untitled item"}`,
+            ),
+          );
+        }
+        break;
 
-      for (const match of matches || []) {
-        const url = match.match(
-          /href=["']([^"']+)["']/i,
-        )?.[1];
+      case "heading":
+      case "gallery":
+      case "divider":
+        break;
+    }
+  }
 
-        if (url) urls.push(url);
+  const normalizedCounts = new Map<string, number>();
+
+  for (const record of rawRecords) {
+    const normalizedUrl = record.url.trim().toLowerCase();
+
+    if (!normalizedUrl) continue;
+
+    normalizedCounts.set(
+      normalizedUrl,
+      (normalizedCounts.get(normalizedUrl) || 0) + 1,
+    );
+  }
+
+  const records: LinkRecord[] = rawRecords.map(
+    (record, index) => {
+      const issues: LinkIssue[] = [];
+      const normalizedUrl =
+        record.url.trim().toLowerCase();
+
+      if (!record.url.trim()) {
+        issues.push("empty-url");
       }
-    }
-  }
 
-  let internal = 0;
-  let external = 0;
+      if (record.url.trim() === "#") {
+        issues.push("placeholder-anchor");
+      }
 
-  for (const url of urls) {
-    if (
-      url.startsWith("/") ||
-      /(?:^https?:\/\/)?(?:www\.)?venusrealm\.net/i.test(url)
-    ) {
-      internal += 1;
-    } else if (/^https?:\/\//i.test(url)) {
-      external += 1;
-    }
-  }
+      if (/^javascript:/i.test(record.url.trim())) {
+        issues.push("unsafe-javascript");
+      }
+
+      if (!record.anchorText.trim()) {
+        issues.push("missing-anchor-text");
+      } else if (weakAnchorText(record.anchorText)) {
+        issues.push("weak-anchor-text");
+      }
+
+      if (
+        normalizedUrl &&
+        (normalizedCounts.get(normalizedUrl) || 0) > 1
+      ) {
+        issues.push("duplicate-url");
+      }
+
+      if (
+        record.kind === "external" &&
+        (
+          !record.targetBlank ||
+          !record.rel.includes("noopener") ||
+          !record.rel.includes("noreferrer")
+        )
+      ) {
+        issues.push("missing-external-security");
+      }
+
+      return {
+        ...record,
+        id: `link-${index + 1}`,
+        issues,
+      };
+    },
+  );
 
   return {
-    total: urls.length,
-    internal,
-    external,
+    total: records.length,
+    internal: records.filter(
+      record => record.kind === "internal",
+    ).length,
+    external: records.filter(
+      record => record.kind === "external",
+    ).length,
+    anchor: records.filter(
+      record => record.kind === "anchor",
+    ).length,
+    invalid: records.filter(
+      record => record.kind === "invalid",
+    ).length,
+    duplicates: records.filter(
+      record =>
+        record.issues.includes("duplicate-url"),
+    ).length,
+    issueCount: records.reduce(
+      (total, record) => total + record.issues.length,
+      0,
+    ),
+    records,
   };
 }
 
@@ -458,6 +715,28 @@ export function analyzeSeoDocument(
         links.external >= 1 ? "info" : "warning",
     },
     {
+      id: "link-validity",
+      label: "Link validity",
+      passed: links.invalid === 0,
+      detail:
+        links.invalid === 0
+          ? "No invalid or unsafe links"
+          : `${links.invalid} invalid or unsafe links`,
+      severity:
+        links.invalid === 0 ? "info" : "error",
+    },
+    {
+      id: "link-quality",
+      label: "Link quality",
+      passed: links.issueCount === 0,
+      detail:
+        links.issueCount === 0
+          ? "No link quality issues"
+          : `${links.issueCount} link issues detected`,
+      severity:
+        links.issueCount === 0 ? "info" : "warning",
+    },
+    {
       id: "faq",
       label: "FAQ block",
       passed: hasFaq,
@@ -568,6 +847,7 @@ export function analyzeSeoDocument(
     wordCount,
     readingTimeMinutes,
     headings,
+    links,
     checks,
   };
 }

@@ -125,6 +125,97 @@ export function ContentInsightsPanel({
         </div>
       </section>
 
+      <section className="studio-insight-card studio-link-audit-card">
+        <header>
+          <div>
+            <span>LINK ANALYZER</span>
+            <h2>{analysis.links.total}</h2>
+          </div>
+
+          <strong>
+            {analysis.links.issueCount === 0
+              ? "Clean"
+              : `${analysis.links.issueCount} issues`}
+          </strong>
+        </header>
+
+        <div className="studio-link-summary">
+          <span>
+            Internal <strong>{analysis.links.internal}</strong>
+          </span>
+          <span>
+            External <strong>{analysis.links.external}</strong>
+          </span>
+          <span>
+            Anchors <strong>{analysis.links.anchor}</strong>
+          </span>
+          <span>
+            Invalid <strong>{analysis.links.invalid}</strong>
+          </span>
+        </div>
+
+        {analysis.links.records.length > 0 ? (
+          <div className="studio-link-records">
+            {analysis.links.records.map(link => (
+              <article
+                key={link.id}
+                className={
+                  link.issues.length
+                    ? "link-has-issues"
+                    : "link-clean"
+                }
+              >
+                <header>
+                  <span className={`link-kind link-kind-${link.kind}`}>
+                    {link.kind}
+                  </span>
+
+                  <small>{link.source}</small>
+                </header>
+
+                <strong>
+                  {link.anchorText || "Missing anchor text"}
+                </strong>
+
+                <code title={link.url}>
+                  {link.url || "Empty URL"}
+                </code>
+
+                <div className="studio-link-flags">
+                  {link.nofollow ? <span>nofollow</span> : null}
+                  {link.sponsored ? <span>sponsored</span> : null}
+                  {link.ugc ? <span>ugc</span> : null}
+                  {link.targetBlank ? <span>new tab</span> : null}
+                </div>
+
+                {link.issues.length > 0 ? (
+                  <ul>
+                    {link.issues.map(issue => (
+                      <li key={issue}>
+                        {issue
+                          .replace(/-/g, " ")
+                          .replace(
+                            /^./,
+                            value => value.toUpperCase(),
+                          )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <small className="studio-link-clean-message">
+                    No issues detected
+                  </small>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="studio-link-empty">
+            No links detected in this article.
+          </p>
+        )}
+      </section>
+
       <p className="studio-insights-note">
         Deterministic guidance hai. Search ranking
         ya trading outcome guarantee nahi hai.
