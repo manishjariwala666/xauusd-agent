@@ -102,6 +102,54 @@ function stripHtmlText(value: string): string {
     .trim();
 }
 
+
+const AUTO_TOC_IGNORED_HEADINGS = new Set([
+  "table of contents",
+  "contents",
+  "quick summary",
+  "summary",
+  "overview",
+]);
+
+function normalizeHeadingLabel(value: string): string {
+  return stripHtmlText(value)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isIgnoredTocHeading(value: string): boolean {
+  return AUTO_TOC_IGNORED_HEADINGS.has(
+    normalizeHeadingLabel(value),
+  );
+}
+
+function stripManualTocFromHtml(value: string): string {
+  let html = normalizePreviewHtml(value);
+
+  /*
+   * Remove a manual TOC heading followed by a typical TOC container.
+   * Supported patterns:
+   *   <h2>Table of Contents</h2><nav>...</nav>
+   *   <h2>Table of Contents</h2><ol>...</ol>
+   *   <h2>Contents</h2><ul>...</ul>
+   */
+  html = html.replace(
+    /<h([2-6])\b[^>]*>\s*(?:table\s+of\s+contents|contents)\s*<\/h\1>\s*(?:<nav\b[^>]*>[\s\S]*?<\/nav>|<ol\b[^>]*>[\s\S]*?<\/ol>|<ul\b[^>]*>[\s\S]*?<\/ul>)/gi,
+    "",
+  );
+
+  /*
+   * Also remove a standalone manual TOC nav when it is explicitly labelled.
+   */
+  html = html.replace(
+    /<nav\b[^>]*(?:aria-label\s*=\s*["']table of contents["']|class\s*=\s*["'][^"']*\b(?:toc|table-of-contents)\b[^"']*["'])[^>]*>[\s\S]*?<\/nav>/gi,
+    "",
+  );
+
+  return html.trim();
+}
+
 function slugifyHeading(value: string): string {
   return stripHtmlText(value)
     .toLowerCase()
@@ -150,7 +198,7 @@ function collectTocHeadings(
     ) {
       const text = block.text.trim();
 
-      if (text) {
+      if (text && !isIgnoredTocHeading(text)) {
         headings.push({
           level: block.level as 2 | 3 | 4 | 5 | 6,
           text,
@@ -169,10 +217,13 @@ function collectTocHeadings(
     ) {
       const pattern =
         /<h([2-6])\b([^>]*)>([\s\S]*?)<\/h\1>/gi;
+      const htmlForToc = document.toc.enabled
+        ? stripManualTocFromHtml(block.code)
+        : normalizePreviewHtml(block.code);
 
       let match: RegExpExecArray | null;
 
-      while ((match = pattern.exec(block.code)) !== null) {
+      while ((match = pattern.exec(htmlForToc)) !== null) {
         const level = Number(match[1]) as
           | 2 | 3 | 4 | 5 | 6;
 
@@ -180,7 +231,7 @@ function collectTocHeadings(
 
         const label = stripHtmlText(match[3]);
 
-        if (!label) continue;
+        if (!label || isIgnoredTocHeading(label)) continue;
 
         headings.push({
           level,
@@ -258,12 +309,17 @@ function applyHeadingIdsToImportedHtml(
   cursor: { value: number },
   maxDepth: number,
 ): string {
-  return normalizePreviewHtml(html).replace(
+  return stripManualTocFromHtml(html).replace(
     /<h([2-6])\b([^>]*)>([\s\S]*?)<\/h\1>/gi,
     (full, rawLevel: string, attributes: string, inner: string) => {
       const level = Number(rawLevel);
 
-      if (level > maxDepth) return full;
+      if (
+        level > maxDepth ||
+        isIgnoredTocHeading(inner)
+      ) {
+        return full;
+      }
 
       const heading = headings[cursor.value];
 
@@ -717,7 +773,9 @@ export function DocumentPreview({
               ) {
                 importedHtml = sanitizePreviewHtml(
                   applyHeadingIdsToImportedHtml(
-                    block.code,
+                    document.toc.enabled
+                      ? stripManualTocFromHtml(block.code)
+                      : block.code,
                     headings,
                     visualHeadingCursor,
                     document.toc.maxDepth,
