@@ -4294,3 +4294,98 @@ button,a,input,select,textarea { outline-offset:2px; }
     grid-template-columns: 1fr;
   }
 }
+/* ===== PUBLISH CHECKLIST ===== */
+
+.studio-publish-checklist-card {
+  display: grid;
+  gap: 14px;
+}
+
+.studio-publish-checklist {
+  display: grid;
+  gap: 9px;
+}
+
+.studio-publish-checklist article {
+  align-items: flex-start;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto 1fr auto;
+  padding: 10px;
+}
+
+.studio-publish-checklist article > span {
+  align-items: center;
+  border-radius: 999px;
+  display: flex;
+  font-size: 12px;
+  font-weight: 900;
+  height: 23px;
+  justify-content: center;
+  width: 23px;
+}
+
+.studio-publish-checklist article > div {
+  display: grid;
+  gap: 2px;
+}
+
+.studio-publish-checklist strong {
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.studio-publish-checklist small {
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.studio-publish-checklist em {
+  color: #64748b;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.publish-check-passed {
+  background: #f0fdf4;
+  border-color: #bbf7d0 !important;
+}
+
+.publish-check-passed > span {
+  background: #22c55e;
+  color: #ffffff;
+}
+
+.publish-check-required {
+  background: #fff1f2;
+  border-color: #fecdd3 !important;
+}
+
+.publish-check-required > span {
+  background: #e11d48;
+  color: #ffffff;
+}
+
+.publish-check-optional {
+  background: #fff7ed;
+  border-color: #fed7aa !important;
+}
+
+.publish-check-optional > span {
+  background: #f97316;
+  color: #ffffff;
+}
+
+@media (max-width: 720px) {
+  .studio-publish-checklist article {
+    grid-template-columns: auto 1fr;
+  }
+
+  .studio-publish-checklist em {
+    grid-column: 2;
+  }
+}

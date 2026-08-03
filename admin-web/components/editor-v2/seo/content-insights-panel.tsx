@@ -266,6 +266,52 @@ export function ContentInsightsPanel({
         </div>
       </section>
 
+      <section className="studio-insight-card studio-publish-checklist-card">
+        <header>
+          <div>
+            <span>PUBLISH CHECKLIST</span>
+            <h2>
+              {analysis.publishChecklist.passed}/
+              {analysis.publishChecklist.total}
+            </h2>
+          </div>
+
+          <strong>
+            {analysis.publishChecklist.ready
+              ? "Publish ready"
+              : "Needs attention"}
+          </strong>
+        </header>
+
+        <div className="studio-publish-checklist">
+          {analysis.publishChecklist.items.map(item => (
+            <article
+              key={item.id}
+              className={
+                item.passed
+                  ? "publish-check-passed"
+                  : item.required
+                    ? "publish-check-required"
+                    : "publish-check-optional"
+              }
+            >
+              <span>{item.passed ? "✓" : "!"}</span>
+
+              <div>
+                <strong>{item.label}</strong>
+                <small>{item.detail}</small>
+              </div>
+
+              <em>
+                {item.required
+                  ? "Required"
+                  : "Optional"}
+              </em>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section className="studio-insight-card studio-link-audit-card">
         <header>
           <div>

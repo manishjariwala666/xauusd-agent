@@ -97,6 +97,21 @@ export type ReadabilityAnalysis = {
   longParagraphCount: number;
 };
 
+export type PublishChecklistItem = {
+  id: string;
+  label: string;
+  passed: boolean;
+  required: boolean;
+  detail: string;
+};
+
+export type PublishChecklist = {
+  ready: boolean;
+  passed: number;
+  total: number;
+  items: PublishChecklistItem[];
+};
+
 export type SeoDocumentAnalysis = {
   seoScore: number;
   contentScore: number;
@@ -108,6 +123,7 @@ export type SeoDocumentAnalysis = {
   scoreBreakdown: SeoScoreBreakdownItem[];
   keywordAnalysis: KeywordAnalysis;
   readability: ReadabilityAnalysis;
+  publishChecklist: PublishChecklist;
 };
 
 function looksLikeHtml(value: string): boolean {
@@ -1047,6 +1063,168 @@ export function analyzeSeoDocument(
     });
   }
 
+  const publishChecklistItems: PublishChecklistItem[] = [
+    {
+      id: "title",
+      label: "Article title",
+      passed: title.length >= 10,
+      required: true,
+      detail:
+        title.length >= 10
+          ? "Title is ready."
+          : "Add a clear article title.",
+    },
+    {
+      id: "slug",
+      label: "URL slug",
+      passed:
+        slug.length >= 5 &&
+        /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug),
+      required: true,
+      detail:
+        slug.length >= 5 &&
+        /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
+          ? "Slug format is valid."
+          : "Use a lowercase hyphenated slug.",
+    },
+    {
+      id: "excerpt",
+      label: "Article excerpt",
+      passed: document.excerpt.trim().length >= 80,
+      required: true,
+      detail:
+        document.excerpt.trim().length >= 80
+          ? "Excerpt is ready."
+          : "Add an excerpt of at least 80 characters.",
+    },
+    {
+      id: "h1",
+      label: "Single H1",
+      passed: headings.counts[1] === 1,
+      required: true,
+      detail:
+        headings.counts[1] === 1
+          ? "Exactly one H1 found."
+          : "Article must contain exactly one H1.",
+    },
+    {
+      id: "meta-title",
+      label: "Meta title",
+      passed:
+        metaTitle.length >= 30 &&
+        metaTitle.length <= 60,
+      required: true,
+      detail:
+        metaTitle.length >= 30 &&
+        metaTitle.length <= 60
+          ? "Meta title length is ready."
+          : "Use 30–60 characters.",
+    },
+    {
+      id: "meta-description",
+      label: "Meta description",
+      passed:
+        metaDescription.length >= 120 &&
+        metaDescription.length <= 160,
+      required: true,
+      detail:
+        metaDescription.length >= 120 &&
+        metaDescription.length <= 160
+          ? "Meta description length is ready."
+          : "Use 120–160 characters.",
+    },
+    {
+      id: "focus-keyword",
+      label: "Focus keyword",
+      passed: normalizedKeyword.length > 0,
+      required: true,
+      detail:
+        normalizedKeyword.length > 0
+          ? "Focus keyword configured."
+          : "Add a focus keyword.",
+    },
+    {
+      id: "canonical",
+      label: "Canonical URL",
+      passed: /^https:\/\/(?:www\.)?venusrealm\.net(?:\/|$)/i.test(
+        canonical,
+      ),
+      required: true,
+      detail:
+        /^https:\/\/(?:www\.)?venusrealm\.net(?:\/|$)/i.test(
+          canonical,
+        )
+          ? "Canonical URL is valid."
+          : "Add a valid HTTPS VenusRealm canonical URL.",
+    },
+    {
+      id: "links",
+      label: "Link validity",
+      passed: links.invalid === 0,
+      required: true,
+      detail:
+        links.invalid === 0
+          ? "No invalid links detected."
+          : `${links.invalid} invalid links detected.`,
+    },
+    {
+      id: "image-alt",
+      label: "Image ALT text",
+      passed:
+        images.length === 0 ||
+        missingAltImages.length === 0,
+      required: true,
+      detail:
+        images.length === 0
+          ? "No image blocks to validate."
+          : missingAltImages.length === 0
+            ? "All image blocks include ALT text."
+            : `${missingAltImages.length} images are missing ALT text.`,
+    },
+    {
+      id: "risk-disclaimer",
+      label: "Risk disclaimer",
+      passed: hasRiskDisclaimer,
+      required: true,
+      detail:
+        hasRiskDisclaimer
+          ? "Risk wording detected."
+          : "Add an educational financial-risk disclaimer.",
+    },
+    {
+      id: "seo-score",
+      label: "SEO score",
+      passed: Math.min(seoScore, 100) >= 70,
+      required: false,
+      detail:
+        Math.min(seoScore, 100) >= 70
+          ? "SEO score is at least 70."
+          : "Improve the SEO score to 70 or higher.",
+    },
+    {
+      id: "readability",
+      label: "Readability",
+      passed: roundedReadabilityScore >= 50,
+      required: false,
+      detail:
+        roundedReadabilityScore >= 50
+          ? "Readability is acceptable."
+          : "Simplify long sentences and paragraphs.",
+    },
+  ];
+
+  const requiredPublishItems =
+    publishChecklistItems.filter(item => item.required);
+
+  const publishChecklist: PublishChecklist = {
+    ready: requiredPublishItems.every(item => item.passed),
+    passed: publishChecklistItems.filter(
+      item => item.passed,
+    ).length,
+    total: publishChecklistItems.length,
+    items: publishChecklistItems,
+  };
+
   const passedChecks = checks.filter(
     check => check.passed,
   ).length;
@@ -1097,5 +1275,6 @@ export function analyzeSeoDocument(
       longSentenceCount,
       longParagraphCount,
     },
+    publishChecklist,
   };
 }
