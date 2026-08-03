@@ -4150,3 +4150,34 @@ button,a,input,select,textarea { outline-offset:2px; }
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* === CMS V2 EDITOR LINK VISIBILITY === */
+
+.editor-v2-rich-block-content a {
+  color: #2563eb;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.editor-v2-rich-block-content a:hover {
+  color: #1d4ed8;
+}
+
+.editor-v2-rich-block-content a.cms-link-no-underline,
+.editor-v2-rich-block-content a[data-underline="false"] {
+  text-decoration: none;
+}
+
+.studio-v2-preview-richtext a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.studio-v2-preview-richtext a.cms-link-no-underline,
+.studio-v2-preview-richtext a[data-underline="false"] {
+  text-decoration: none;
+}

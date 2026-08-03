@@ -26,6 +26,8 @@ export function BlockRichTextEditor({
     useState(false);
   const [linkSelectionEmpty, setLinkSelectionEmpty] =
     useState(false);
+  const [linkSelectionRange, setLinkSelectionRange] =
+    useState<{ from: number; to: number } | null>(null);
   const [linkInitialValue, setLinkInitialValue] =
     useState<LinkSettingsValue>({
       href: "",
@@ -91,6 +93,18 @@ export function BlockRichTextEditor({
   function openLinkSettings() {
     if (!editor) return;
 
+    /*
+     * When the cursor is inside an existing link, select the
+     * complete mark before opening the modal.
+     */
+    if (editor.isActive("link")) {
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange("link")
+        .run();
+    }
+
     const attributes = editor.getAttributes("link") as {
       href?: string;
       target?: string | null;
@@ -110,7 +124,9 @@ export function BlockRichTextEditor({
       .split(/\s+/)
       .filter(Boolean);
 
+    setLinkSelectionRange({ from, to });
     setLinkSelectionEmpty(empty);
+
     setLinkInitialValue({
       href: String(attributes.href || ""),
       text: selectedText,
@@ -122,11 +138,14 @@ export function BlockRichTextEditor({
       title: String(attributes.title || ""),
       ariaLabel: String(attributes.ariaLabel || ""),
     });
+
     setLinkModalOpen(true);
   }
 
   function saveLink(settings: LinkSettingsValue) {
     if (!editor) return;
+
+    const savedRange = linkSelectionRange;
 
     const rel = [
       settings.openInNewTab ? "noopener" : "",
@@ -148,9 +167,13 @@ export function BlockRichTextEditor({
     };
 
     if (linkSelectionEmpty) {
-      editor
-        .chain()
-        .focus()
+      const chain = editor.chain().focus();
+
+      if (savedRange) {
+        chain.setTextSelection(savedRange.from);
+      }
+
+      chain
         .insertContent({
           type: "text",
           text: settings.text.trim(),
@@ -163,15 +186,22 @@ export function BlockRichTextEditor({
         })
         .run();
     } else {
-      editor
-        .chain()
-        .focus()
-        .extendMarkRange("link")
+      const chain = editor.chain().focus();
+
+      if (savedRange) {
+        chain.setTextSelection({
+          from: savedRange.from,
+          to: savedRange.to,
+        });
+      }
+
+      chain
         .setLink(attributes)
         .run();
     }
 
     setLinkModalOpen(false);
+    setLinkSelectionRange(null);
   }
 
   function removeLink() {
@@ -377,7 +407,10 @@ export function BlockRichTextEditor({
 
         <button
           type="button"
-          onClick={openLinkSettings}
+          onMouseDown={event => {
+            event.preventDefault();
+            openLinkSettings();
+          }}
           disabled={disabled}
         >
           Link
