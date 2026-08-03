@@ -537,6 +537,259 @@ export function StudioWorkspace() {
         </label>
       </section>
 
+      <section className="studio-v2-publishing-features">
+        <header>
+          <div>
+            <span className="section-kicker">
+              ARTICLE ENGAGEMENT
+            </span>
+            <h2>Sharing and related posts</h2>
+          </div>
+        </header>
+
+        <div className="studio-v2-feature-grid">
+          <article className="studio-v2-feature-card">
+            <label className="studio-v2-toggle-row">
+              <div>
+                <strong>Social sharing</strong>
+                <small>
+                  Show sharing buttons below the article.
+                </small>
+              </div>
+
+              <input
+                type="checkbox"
+                checked={document.socialSharing.enabled}
+                onChange={event =>
+                  setDocument(current =>
+                    current
+                      ? {
+                          ...current,
+                          socialSharing: {
+                            ...current.socialSharing,
+                            enabled: event.target.checked,
+                          },
+                        }
+                      : current,
+                  )
+                }
+              />
+            </label>
+
+            <div className="studio-v2-platform-grid">
+              {[
+                ["whatsapp", "WhatsApp"],
+                ["telegram", "Telegram"],
+                ["facebook", "Facebook"],
+                ["x", "X"],
+                ["linkedin", "LinkedIn"],
+                ["copy", "Copy Link"],
+              ].map(([value, label]) => {
+                const platform =
+                  value as CmsDocument["socialSharing"]["platforms"][number];
+                const checked =
+                  document.socialSharing.platforms.includes(platform);
+
+                return (
+                  <label key={value}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!document.socialSharing.enabled}
+                      onChange={() =>
+                        setDocument(current => {
+                          if (!current) return current;
+
+                          const platforms = checked
+                            ? current.socialSharing.platforms.filter(
+                                item => item !== platform,
+                              )
+                            : [
+                                ...current.socialSharing.platforms,
+                                platform,
+                              ];
+
+                          return {
+                            ...current,
+                            socialSharing: {
+                              ...current.socialSharing,
+                              platforms,
+                            },
+                          };
+                        })
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </article>
+
+          <article className="studio-v2-feature-card">
+            <label className="studio-v2-toggle-row">
+              <div>
+                <strong>Related posts</strong>
+                <small>
+                  Add selected article cards below the content.
+                </small>
+              </div>
+
+              <input
+                type="checkbox"
+                checked={document.relatedPosts.enabled}
+                onChange={event =>
+                  setDocument(current =>
+                    current
+                      ? {
+                          ...current,
+                          relatedPosts: {
+                            ...current.relatedPosts,
+                            enabled: event.target.checked,
+                          },
+                        }
+                      : current,
+                  )
+                }
+              />
+            </label>
+
+            <label>
+              <span>Section heading</span>
+              <input
+                value={document.relatedPosts.heading}
+                disabled={!document.relatedPosts.enabled}
+                onChange={event =>
+                  setDocument(current =>
+                    current
+                      ? {
+                          ...current,
+                          relatedPosts: {
+                            ...current.relatedPosts,
+                            heading: event.target.value,
+                          },
+                        }
+                      : current,
+                  )
+                }
+              />
+            </label>
+
+            <div className="studio-v2-related-editor">
+              {document.relatedPosts.items.map((item, index) => (
+                <div key={item.id} className="studio-v2-related-editor-row">
+                  <input
+                    value={item.title}
+                    placeholder="Related post title"
+                    disabled={!document.relatedPosts.enabled}
+                    onChange={event =>
+                      setDocument(current => {
+                        if (!current) return current;
+
+                        const items = [...current.relatedPosts.items];
+                        items[index] = {
+                          ...items[index],
+                          title: event.target.value,
+                        };
+
+                        return {
+                          ...current,
+                          relatedPosts: {
+                            ...current.relatedPosts,
+                            items,
+                          },
+                        };
+                      })
+                    }
+                  />
+
+                  <input
+                    value={item.url}
+                    placeholder="/blog/related-article"
+                    disabled={!document.relatedPosts.enabled}
+                    onChange={event =>
+                      setDocument(current => {
+                        if (!current) return current;
+
+                        const items = [...current.relatedPosts.items];
+                        items[index] = {
+                          ...items[index],
+                          url: event.target.value,
+                        };
+
+                        return {
+                          ...current,
+                          relatedPosts: {
+                            ...current.relatedPosts,
+                            items,
+                          },
+                        };
+                      })
+                    }
+                  />
+
+                  <button
+                    type="button"
+                    className="text-button danger-link"
+                    disabled={!document.relatedPosts.enabled}
+                    onClick={() =>
+                      setDocument(current =>
+                        current
+                          ? {
+                              ...current,
+                              relatedPosts: {
+                                ...current.relatedPosts,
+                                items:
+                                  current.relatedPosts.items.filter(
+                                    related => related.id !== item.id,
+                                  ),
+                              },
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={
+                  !document.relatedPosts.enabled ||
+                  document.relatedPosts.items.length >= 6
+                }
+                onClick={() =>
+                  setDocument(current =>
+                    current
+                      ? {
+                          ...current,
+                          relatedPosts: {
+                            ...current.relatedPosts,
+                            items: [
+                              ...current.relatedPosts.items,
+                              {
+                                id: crypto.randomUUID(),
+                                title: "",
+                                url: "",
+                                excerpt: "",
+                              },
+                            ],
+                          },
+                        }
+                      : current,
+                  )
+                }
+              >
+                + Add related post
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <div className="studio-editor-layout">
         <DocumentCanvas
           initialDocument={document}

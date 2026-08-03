@@ -345,8 +345,29 @@ export function normalizeCmsDocument(
   return {
     ...document,
     blocks: removeExactDuplicateBlocks(
-      expandHtmlCodeBlocks(document.blocks),
+      expandHtmlCodeBlocks(document.blocks || []),
     ),
+    socialSharing: {
+      enabled: document.socialSharing?.enabled ?? false,
+      platforms:
+        document.socialSharing?.platforms?.length
+          ? document.socialSharing.platforms
+          : [
+              "whatsapp",
+              "telegram",
+              "facebook",
+              "x",
+              "linkedin",
+              "copy",
+            ],
+    },
+    relatedPosts: {
+      enabled: document.relatedPosts?.enabled ?? false,
+      heading:
+        document.relatedPosts?.heading?.trim() ||
+        "Related Posts",
+      items: document.relatedPosts?.items || [],
+    },
   };
 }
 

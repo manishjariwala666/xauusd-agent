@@ -282,6 +282,57 @@ export function DocumentPreview({
             {document.blocks.map(block => (
               <PreviewBlock key={block.id} block={block} />
             ))}
+
+            {document.socialSharing.enabled &&
+            document.socialSharing.platforms.length > 0 ? (
+              <section className="studio-v2-preview-sharing">
+                <h3>Share this article</h3>
+
+                <div>
+                  {document.socialSharing.platforms.map(platform => (
+                    <button
+                      key={platform}
+                      type="button"
+                      onClick={() => undefined}
+                    >
+                      {platform === "x"
+                        ? "X"
+                        : platform === "copy"
+                          ? "Copy Link"
+                          : platform.charAt(0).toUpperCase() +
+                            platform.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {document.relatedPosts.enabled &&
+            document.relatedPosts.items.length > 0 ? (
+              <section className="studio-v2-preview-related">
+                <h2>
+                  {document.relatedPosts.heading ||
+                    "Related Posts"}
+                </h2>
+
+                <div className="studio-v2-preview-related-grid">
+                  {document.relatedPosts.items.map(item => (
+                    <article key={item.id}>
+                      <h3>{item.title || "Untitled related post"}</h3>
+
+                      {item.excerpt ? <p>{item.excerpt}</p> : null}
+
+                      <a
+                        href={item.url || "#"}
+                        onClick={event => event.preventDefault()}
+                      >
+                        Read article
+                      </a>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </article>
         ) : (
           <pre className="studio-v2-preview-source">

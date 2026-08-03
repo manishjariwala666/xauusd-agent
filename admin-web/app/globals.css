@@ -3605,3 +3605,123 @@ button,a,input,select,textarea { outline-offset:2px; }
     flex-direction: column;
   }
 }
+
+.studio-v2-publishing-features {
+  background: #ffffff;
+  border: 1px solid #dce3ee;
+  border-radius: 16px;
+  margin-bottom: 20px;
+  padding: 22px;
+}
+
+.studio-v2-publishing-features > header {
+  margin-bottom: 18px;
+}
+
+.studio-v2-feature-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-v2-feature-card {
+  border: 1px solid #dce3ee;
+  border-radius: 12px;
+  display: grid;
+  gap: 15px;
+  padding: 16px;
+}
+
+.studio-v2-feature-card label {
+  display: grid;
+  gap: 6px;
+}
+
+.studio-v2-toggle-row {
+  align-items: center;
+  display: flex !important;
+  justify-content: space-between;
+}
+
+.studio-v2-toggle-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.studio-v2-toggle-row small {
+  color: #64748b;
+}
+
+.studio-v2-platform-grid {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-v2-platform-grid label {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.studio-v2-related-editor,
+.studio-v2-related-editor-row {
+  display: grid;
+  gap: 10px;
+}
+
+.studio-v2-related-editor-row {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.studio-v2-preview-sharing {
+  border-top: 1px solid #dce3ee;
+  margin-top: 34px;
+  padding-top: 24px;
+}
+
+.studio-v2-preview-sharing > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.studio-v2-preview-sharing button {
+  background: #eff4ff;
+  border: 1px solid #cbd8f4;
+  border-radius: 999px;
+  color: #1d4ed8;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 8px 13px;
+}
+
+.studio-v2-preview-related {
+  border-top: 1px solid #dce3ee;
+  margin-top: 30px;
+  padding-top: 24px;
+}
+
+.studio-v2-preview-related-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-v2-preview-related-grid article {
+  border: 1px solid #dce3ee;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+@media (max-width: 800px) {
+  .studio-v2-feature-grid,
+  .studio-v2-preview-related-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-v2-related-editor-row {
+    grid-template-columns: 1fr;
+  }
+}

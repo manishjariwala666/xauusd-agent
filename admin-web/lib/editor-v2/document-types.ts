@@ -124,6 +124,32 @@ export type CmsSeoData = {
   schemaJsonLd: Record<string, unknown> | null;
 };
 
+export type CmsSocialPlatform =
+  | "whatsapp"
+  | "telegram"
+  | "facebook"
+  | "x"
+  | "linkedin"
+  | "copy";
+
+export type CmsSocialSharing = {
+  enabled: boolean;
+  platforms: CmsSocialPlatform[];
+};
+
+export type CmsRelatedPost = {
+  id: string;
+  title: string;
+  url: string;
+  excerpt: string;
+};
+
+export type CmsRelatedPosts = {
+  enabled: boolean;
+  heading: string;
+  items: CmsRelatedPost[];
+};
+
 export type CmsDocument = {
   id: number | null;
   title: string;
@@ -135,6 +161,8 @@ export type CmsDocument = {
   featuredMediaId: number | null;
   blocks: CmsBlock[];
   seo: CmsSeoData;
+  socialSharing: CmsSocialSharing;
+  relatedPosts: CmsRelatedPosts;
   scheduledAt: string | null;
   publishedAt: string | null;
   createdAt: string | null;

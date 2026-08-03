@@ -37,6 +37,22 @@ export function createEmptyDocument(): CmsDocument {
       robotsFollow: false,
       schemaJsonLd: null,
     },
+    socialSharing: {
+      enabled: false,
+      platforms: [
+        "whatsapp",
+        "telegram",
+        "facebook",
+        "x",
+        "linkedin",
+        "copy",
+      ],
+    },
+    relatedPosts: {
+      enabled: false,
+      heading: "Related Posts",
+      items: [],
+    },
     scheduledAt: null,
     publishedAt: null,
     createdAt: null,
