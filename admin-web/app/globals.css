@@ -4215,3 +4215,43 @@ button,a,input,select,textarea { outline-offset:2px; }
   color:#dc2626;
   font-weight:700;
 }
+/* ===== KEYWORD DENSITY CARD ===== */
+
+.studio-keyword-card {
+  display: grid;
+  gap: 14px;
+}
+
+.studio-keyword-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-keyword-grid > div {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.studio-keyword-grid span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.studio-keyword-grid strong {
+  color: #0f172a;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .studio-keyword-grid {
+    grid-template-columns: 1fr;
+  }
+}

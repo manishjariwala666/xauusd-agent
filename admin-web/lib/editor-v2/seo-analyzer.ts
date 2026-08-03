@@ -72,6 +72,21 @@ export type SeoScoreBreakdownItem = {
   detail: string;
 };
 
+export type KeywordAnalysis = {
+  keyword: string;
+  occurrences: number;
+  density: number;
+  inTitle: boolean;
+  inMetaTitle: boolean;
+  inMetaDescription: boolean;
+  inSlug: boolean;
+  inH1: boolean;
+  inFirstParagraph: boolean;
+  inLastParagraph: boolean;
+  h2Count: number;
+  h3Count: number;
+};
+
 export type SeoDocumentAnalysis = {
   seoScore: number;
   contentScore: number;
@@ -81,6 +96,7 @@ export type SeoDocumentAnalysis = {
   links: LinkAnalysis;
   checks: SeoCheck[];
   scoreBreakdown: SeoScoreBreakdownItem[];
+  keywordAnalysis: KeywordAnalysis;
 };
 
 function looksLikeHtml(value: string): boolean {
@@ -559,6 +575,7 @@ export function analyzeSeoDocument(
 ): SeoDocumentAnalysis {
   const text = documentText(document);
   const wordCount = countWords(text);
+
   const readingTimeMinutes = Math.max(
     1,
     Math.ceil(wordCount / 220),
@@ -612,6 +629,28 @@ export function analyzeSeoDocument(
   const slug = document.slug.trim();
   const keyword =
     document.seo.focusKeyword.trim().toLowerCase();
+
+  const normalizedKeyword = keyword;
+
+  const occurrences =
+    normalizedKeyword
+      ? (
+          text.toLowerCase().match(
+            new RegExp(
+              normalizedKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+              "g",
+            ),
+          ) || []
+        ).length
+      : 0;
+
+  const density =
+    wordCount > 0
+      ? Number(
+          ((occurrences / wordCount) * 100).toFixed(2),
+        )
+      : 0;
+
   const metaTitle = document.seo.metaTitle.trim();
   const metaDescription =
     document.seo.metaDescription.trim();
@@ -946,5 +985,19 @@ export function analyzeSeoDocument(
     links,
     checks,
     scoreBreakdown,
+    keywordAnalysis: {
+      keyword,
+      occurrences,
+      density,
+      inTitle: normalizedKeyword.length > 0 && title.toLowerCase().includes(normalizedKeyword),
+      inMetaTitle: normalizedKeyword.length > 0 && metaTitle.toLowerCase().includes(normalizedKeyword),
+      inMetaDescription: normalizedKeyword.length > 0 && metaDescription.toLowerCase().includes(normalizedKeyword),
+      inSlug: normalizedKeyword.length > 0 && slug.toLowerCase().includes(normalizedKeyword),
+      inH1: headings.counts[1] > 0,
+      inFirstParagraph: false,
+      inLastParagraph: false,
+      h2Count: headings.counts[2],
+      h3Count: headings.counts[3],
+    },
   };
 }

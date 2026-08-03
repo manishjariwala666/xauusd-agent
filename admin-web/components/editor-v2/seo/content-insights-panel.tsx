@@ -53,27 +53,13 @@ export function ContentInsightsPanel({
         </div>
 
         <ul>
-          <li>
-            H1: {analysis.headings.counts[1]}
-          </li>
-          <li>
-            H2: {analysis.headings.counts[2]}
-          </li>
-          <li>
-            H3: {analysis.headings.counts[3]}
-          </li>
-          <li>
-            H4: {analysis.headings.counts[4]}
-          </li>
-          <li>
-            H5: {analysis.headings.counts[5]}
-          </li>
-          <li>
-            H6: {analysis.headings.counts[6]}
-          </li>
-          <li>
-            Words: {analysis.wordCount}
-          </li>
+          <li>H1: {analysis.headings.counts[1]}</li>
+          <li>H2: {analysis.headings.counts[2]}</li>
+          <li>H3: {analysis.headings.counts[3]}</li>
+          <li>H4: {analysis.headings.counts[4]}</li>
+          <li>H5: {analysis.headings.counts[5]}</li>
+          <li>H6: {analysis.headings.counts[6]}</li>
+          <li>Words: {analysis.wordCount}</li>
           <li>
             Reading time:{" "}
             {analysis.readingTimeMinutes} min
@@ -101,7 +87,6 @@ export function ContentInsightsPanel({
               </strong>
             </div>
           ))}
-
         </div>
 
         <a
@@ -116,9 +101,7 @@ export function ContentInsightsPanel({
         <header>
           <div>
             <span>CONTENT CHECKER</span>
-            <h2>
-              {analysis.contentScore}/100
-            </h2>
+            <h2>{analysis.contentScore}/100</h2>
           </div>
 
           <strong>
@@ -136,9 +119,7 @@ export function ContentInsightsPanel({
                   : "check-warning"
               }
             >
-              <span>
-                {check.passed ? "✓" : "!"}
-              </span>
+              <span>{check.passed ? "✓" : "!"}</span>
 
               <div>
                 <strong>{check.label}</strong>
@@ -146,6 +127,92 @@ export function ContentInsightsPanel({
               </div>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="studio-insight-card studio-keyword-card">
+        <header>
+          <div>
+            <span>KEYWORD DENSITY</span>
+            <h2>
+              {analysis.keywordAnalysis.density}%
+            </h2>
+          </div>
+
+          <strong>
+            {analysis.keywordAnalysis.occurrences}{" "}
+            matches
+          </strong>
+        </header>
+
+        <div className="studio-keyword-grid">
+          <div>
+            <span>Keyword</span>
+            <strong>
+              {analysis.keywordAnalysis.keyword ||
+                "Not set"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Title</span>
+            <strong>
+              {analysis.keywordAnalysis.inTitle
+                ? "✓"
+                : "✗"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Meta title</span>
+            <strong>
+              {analysis.keywordAnalysis.inMetaTitle
+                ? "✓"
+                : "✗"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Meta description</span>
+            <strong>
+              {analysis.keywordAnalysis
+                .inMetaDescription
+                ? "✓"
+                : "✗"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Slug</span>
+            <strong>
+              {analysis.keywordAnalysis.inSlug
+                ? "✓"
+                : "✗"}
+            </strong>
+          </div>
+
+          <div>
+            <span>H1</span>
+            <strong>
+              {analysis.keywordAnalysis.inH1
+                ? "✓"
+                : "✗"}
+            </strong>
+          </div>
+
+          <div>
+            <span>H2 headings</span>
+            <strong>
+              {analysis.keywordAnalysis.h2Count}
+            </strong>
+          </div>
+
+          <div>
+            <span>H3 headings</span>
+            <strong>
+              {analysis.keywordAnalysis.h3Count}
+            </strong>
+          </div>
         </div>
       </section>
 
@@ -165,16 +232,31 @@ export function ContentInsightsPanel({
 
         <div className="studio-link-summary">
           <span>
-            Internal <strong>{analysis.links.internal}</strong>
+            Internal{" "}
+            <strong>
+              {analysis.links.internal}
+            </strong>
           </span>
+
           <span>
-            External <strong>{analysis.links.external}</strong>
+            External{" "}
+            <strong>
+              {analysis.links.external}
+            </strong>
           </span>
+
           <span>
-            Anchors <strong>{analysis.links.anchor}</strong>
+            Anchors{" "}
+            <strong>
+              {analysis.links.anchor}
+            </strong>
           </span>
+
           <span>
-            Invalid <strong>{analysis.links.invalid}</strong>
+            Invalid{" "}
+            <strong>
+              {analysis.links.invalid}
+            </strong>
           </span>
         </div>
 
@@ -190,7 +272,9 @@ export function ContentInsightsPanel({
                 }
               >
                 <header>
-                  <span className={`link-kind link-kind-${link.kind}`}>
+                  <span
+                    className={`link-kind link-kind-${link.kind}`}
+                  >
                     {link.kind}
                   </span>
 
@@ -198,7 +282,8 @@ export function ContentInsightsPanel({
                 </header>
 
                 <strong>
-                  {link.anchorText || "Missing anchor text"}
+                  {link.anchorText ||
+                    "Missing anchor text"}
                 </strong>
 
                 <code title={link.url}>
@@ -206,10 +291,21 @@ export function ContentInsightsPanel({
                 </code>
 
                 <div className="studio-link-flags">
-                  {link.nofollow ? <span>nofollow</span> : null}
-                  {link.sponsored ? <span>sponsored</span> : null}
-                  {link.ugc ? <span>ugc</span> : null}
-                  {link.targetBlank ? <span>new tab</span> : null}
+                  {link.nofollow ? (
+                    <span>nofollow</span>
+                  ) : null}
+
+                  {link.sponsored ? (
+                    <span>sponsored</span>
+                  ) : null}
+
+                  {link.ugc ? (
+                    <span>ugc</span>
+                  ) : null}
+
+                  {link.targetBlank ? (
+                    <span>new tab</span>
+                  ) : null}
                 </div>
 
                 {link.issues.length > 0 ? (
@@ -220,7 +316,8 @@ export function ContentInsightsPanel({
                           .replace(/-/g, " ")
                           .replace(
                             /^./,
-                            value => value.toUpperCase(),
+                            value =>
+                              value.toUpperCase(),
                           )}
                       </li>
                     ))}
