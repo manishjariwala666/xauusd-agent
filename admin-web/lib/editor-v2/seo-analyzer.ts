@@ -87,6 +87,16 @@ export type KeywordAnalysis = {
   h3Count: number;
 };
 
+export type ReadabilityAnalysis = {
+  score: number;
+  label: "Easy" | "Good" | "Improve" | "Difficult";
+  sentenceCount: number;
+  paragraphCount: number;
+  averageSentenceWords: number;
+  longSentenceCount: number;
+  longParagraphCount: number;
+};
+
 export type SeoDocumentAnalysis = {
   seoScore: number;
   contentScore: number;
@@ -97,6 +107,7 @@ export type SeoDocumentAnalysis = {
   checks: SeoCheck[];
   scoreBreakdown: SeoScoreBreakdownItem[];
   keywordAnalysis: KeywordAnalysis;
+  readability: ReadabilityAnalysis;
 };
 
 function looksLikeHtml(value: string): boolean {
@@ -581,6 +592,74 @@ export function analyzeSeoDocument(
     Math.ceil(wordCount / 220),
   );
 
+  const sentenceTexts = text
+    .split(/[.!?]+/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean);
+
+  const sentenceCount = sentenceTexts.length;
+
+  const averageSentenceWords =
+    sentenceCount > 0
+      ? Number(
+          (
+            sentenceTexts.reduce(
+              (total, sentence) =>
+                total + countWords(sentence),
+              0,
+            ) / sentenceCount
+          ).toFixed(1),
+        )
+      : 0;
+
+  const longSentenceCount = sentenceTexts.filter(
+    sentence => countWords(sentence) > 25,
+  ).length;
+
+  const paragraphTexts = document.blocks
+    .filter(
+      block =>
+        block.type === "paragraph" ||
+        block.type === "quote",
+    )
+    .map(block =>
+      block.type === "paragraph" ||
+      block.type === "quote"
+        ? stripHtml(block.html)
+        : "",
+    )
+    .filter(Boolean);
+
+  const paragraphCount = paragraphTexts.length;
+
+  const longParagraphCount = paragraphTexts.filter(
+    paragraph => countWords(paragraph) > 120,
+  ).length;
+
+  const readabilityScore = Math.max(
+    0,
+    Math.min(
+      100,
+      100 -
+        Math.max(0, averageSentenceWords - 18) * 3 -
+        longSentenceCount * 4 -
+        longParagraphCount * 8,
+    ),
+  );
+
+  const roundedReadabilityScore = Math.round(
+    readabilityScore,
+  );
+
+  const readabilityLabel: ReadabilityAnalysis["label"] =
+    roundedReadabilityScore >= 85
+      ? "Easy"
+      : roundedReadabilityScore >= 70
+        ? "Good"
+        : roundedReadabilityScore >= 50
+          ? "Improve"
+          : "Difficult";
+
   const headings = analyzeHeadings(document.blocks);
   const links = detectLinks(document);
 
@@ -989,15 +1068,34 @@ export function analyzeSeoDocument(
       keyword,
       occurrences,
       density,
-      inTitle: normalizedKeyword.length > 0 && title.toLowerCase().includes(normalizedKeyword),
-      inMetaTitle: normalizedKeyword.length > 0 && metaTitle.toLowerCase().includes(normalizedKeyword),
-      inMetaDescription: normalizedKeyword.length > 0 && metaDescription.toLowerCase().includes(normalizedKeyword),
-      inSlug: normalizedKeyword.length > 0 && slug.toLowerCase().includes(normalizedKeyword),
+      inTitle:
+        normalizedKeyword.length > 0 &&
+        title.toLowerCase().includes(normalizedKeyword),
+      inMetaTitle:
+        normalizedKeyword.length > 0 &&
+        metaTitle.toLowerCase().includes(normalizedKeyword),
+      inMetaDescription:
+        normalizedKeyword.length > 0 &&
+        metaDescription
+          .toLowerCase()
+          .includes(normalizedKeyword),
+      inSlug:
+        normalizedKeyword.length > 0 &&
+        slug.toLowerCase().includes(normalizedKeyword),
       inH1: headings.counts[1] > 0,
       inFirstParagraph: false,
       inLastParagraph: false,
       h2Count: headings.counts[2],
       h3Count: headings.counts[3],
+    },
+    readability: {
+      score: roundedReadabilityScore,
+      label: readabilityLabel,
+      sentenceCount,
+      paragraphCount,
+      averageSentenceWords,
+      longSentenceCount,
+      longParagraphCount,
     },
   };
 }

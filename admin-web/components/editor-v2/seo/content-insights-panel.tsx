@@ -216,6 +216,56 @@ export function ContentInsightsPanel({
         </div>
       </section>
 
+      <section className="studio-insight-card studio-readability-card">
+        <header>
+          <div>
+            <span>READABILITY</span>
+            <h2>{analysis.readability.score}/100</h2>
+          </div>
+
+          <strong>{analysis.readability.label}</strong>
+        </header>
+
+        <div className="studio-readability-grid">
+          <div>
+            <span>Sentences</span>
+            <strong>
+              {analysis.readability.sentenceCount}
+            </strong>
+          </div>
+
+          <div>
+            <span>Paragraphs</span>
+            <strong>
+              {analysis.readability.paragraphCount}
+            </strong>
+          </div>
+
+          <div>
+            <span>Avg. sentence</span>
+            <strong>
+              {analysis.readability
+                .averageSentenceWords}{" "}
+              words
+            </strong>
+          </div>
+
+          <div>
+            <span>Long sentences</span>
+            <strong>
+              {analysis.readability.longSentenceCount}
+            </strong>
+          </div>
+
+          <div>
+            <span>Long paragraphs</span>
+            <strong>
+              {analysis.readability.longParagraphCount}
+            </strong>
+          </div>
+        </div>
+      </section>
+
       <section className="studio-insight-card studio-link-audit-card">
         <header>
           <div>
