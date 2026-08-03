@@ -80,6 +80,30 @@ export function ContentInsightsPanel({
           </li>
         </ul>
 
+        <div className="studio-score-breakdown">
+          <h3>Score Breakdown</h3>
+
+          {analysis.scoreBreakdown.map(item => (
+            <div
+              key={item.id}
+              className="studio-score-row"
+            >
+              <span>{item.label}</span>
+
+              <strong
+                className={
+                  item.passed
+                    ? "score-good"
+                    : "score-bad"
+                }
+              >
+                +{item.earned}/{item.points}
+              </strong>
+            </div>
+          ))}
+
+        </div>
+
         <a
           href="/studio-v2/seo"
           className="secondary-button"

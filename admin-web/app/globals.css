@@ -4181,3 +4181,37 @@ button,a,input,select,textarea { outline-offset:2px; }
 .studio-v2-preview-richtext a[data-underline="false"] {
   text-decoration: none;
 }
+
+
+/* ===== SEO SCORE BREAKDOWN ===== */
+
+.studio-score-breakdown{
+  margin:16px 0;
+  border-top:1px solid #e2e8f0;
+  padding-top:14px;
+}
+
+.studio-score-breakdown h3{
+  margin:0 0 10px;
+  font-size:13px;
+  font-weight:700;
+  color:#334155;
+}
+
+.studio-score-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:6px 0;
+  border-bottom:1px dashed #e5e7eb;
+}
+
+.score-good{
+  color:#16a34a;
+  font-weight:700;
+}
+
+.score-bad{
+  color:#dc2626;
+  font-weight:700;
+}

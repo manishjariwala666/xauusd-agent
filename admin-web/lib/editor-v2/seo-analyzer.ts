@@ -63,6 +63,15 @@ export type LinkAnalysis = {
   records: LinkRecord[];
 };
 
+export type SeoScoreBreakdownItem = {
+  id: string;
+  label: string;
+  points: number;
+  earned: number;
+  passed: boolean;
+  detail: string;
+};
+
 export type SeoDocumentAnalysis = {
   seoScore: number;
   contentScore: number;
@@ -71,6 +80,7 @@ export type SeoDocumentAnalysis = {
   headings: HeadingAnalysis;
   links: LinkAnalysis;
   checks: SeoCheck[];
+  scoreBreakdown: SeoScoreBreakdownItem[];
 };
 
 function looksLikeHtml(value: string): boolean {
@@ -767,23 +777,75 @@ export function analyzeSeoDocument(
   ];
 
   let seoScore = 0;
+  const scoreBreakdown: SeoScoreBreakdownItem[] = [];
 
   if (title.length >= 30 && title.length <= 70) {
+    scoreBreakdown.push({
+      id: "title",
+      label: "Title Length",
+      points: 10,
+      earned: 10,
+      passed: true,
+      detail: "Title length is optimal.",
+    });
     seoScore += 10;
+  } else {
+    scoreBreakdown.push({
+      id: "title",
+      label: "Title Length",
+      points: 10,
+      earned: 0,
+      passed: false,
+      detail: "Recommended: 30–70 characters.",
+    });
   }
 
   if (
     metaTitle.length >= 30 &&
     metaTitle.length <= 60
   ) {
+    scoreBreakdown.push({
+      id: "meta-title",
+      label: "Meta Title",
+      points: 15,
+      earned: 15,
+      passed: true,
+      detail: "Meta title is optimized.",
+    });
     seoScore += 15;
+  } else {
+    scoreBreakdown.push({
+      id: "meta-title",
+      label: "Meta Title",
+      points: 15,
+      earned: 0,
+      passed: false,
+      detail: "Recommended: 30–60 characters.",
+    });
   }
 
   if (
     metaDescription.length >= 120 &&
     metaDescription.length <= 160
   ) {
+    scoreBreakdown.push({
+      id: "meta-description",
+      label: "Meta Description",
+      points: 15,
+      earned: 15,
+      passed: true,
+      detail: "Meta description is optimized.",
+    });
     seoScore += 15;
+  } else {
+    scoreBreakdown.push({
+      id: "meta-description",
+      label: "Meta Description",
+      points: 15,
+      earned: 0,
+      passed: false,
+      detail: "Recommended: 120–160 characters.",
+    });
   }
 
   if (slug.length >= 5 && slug.length <= 80) {
@@ -807,7 +869,24 @@ export function analyzeSeoDocument(
   }
 
   if (canonical) {
+    scoreBreakdown.push({
+      id: "canonical",
+      label: "Canonical URL",
+      points: 5,
+      earned: 5,
+      passed: true,
+      detail: "Canonical URL configured.",
+    });
     seoScore += 5;
+  } else {
+    scoreBreakdown.push({
+      id: "canonical",
+      label: "Canonical URL",
+      points: 5,
+      earned: 0,
+      passed: false,
+      detail: "Canonical URL missing.",
+    });
   }
 
   if (headings.counts[1] === 1) {
@@ -830,7 +909,24 @@ export function analyzeSeoDocument(
     images.length > 0 &&
     missingAltImages.length === 0
   ) {
+    scoreBreakdown.push({
+      id: "images",
+      label: "Image ALT",
+      points: 5,
+      earned: 5,
+      passed: true,
+      detail: "All images contain ALT text.",
+    });
     seoScore += 5;
+  } else {
+    scoreBreakdown.push({
+      id: "images",
+      label: "Image ALT",
+      points: 5,
+      earned: 0,
+      passed: false,
+      detail: "Some images are missing ALT text.",
+    });
   }
 
   const passedChecks = checks.filter(
@@ -849,5 +945,6 @@ export function analyzeSeoDocument(
     headings,
     links,
     checks,
+    scoreBreakdown,
   };
 }
