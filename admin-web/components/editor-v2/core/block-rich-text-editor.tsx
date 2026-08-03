@@ -182,6 +182,44 @@ export function BlockRichTextEditor({
           S
         </button>
 
+        <button
+          type="button"
+          className={
+            editor.isActive("heading", { level: 2 })
+              ? "active"
+              : ""
+          }
+          onClick={() =>
+            editor
+              .chain()
+              .focus()
+              .toggleHeading({ level: 2 })
+              .run()
+          }
+          disabled={disabled}
+        >
+          H2
+        </button>
+
+        <button
+          type="button"
+          className={
+            editor.isActive("heading", { level: 3 })
+              ? "active"
+              : ""
+          }
+          onClick={() =>
+            editor
+              .chain()
+              .focus()
+              .toggleHeading({ level: 3 })
+              .run()
+          }
+          disabled={disabled}
+        >
+          H3
+        </button>
+
         <span className="editor-v2-toolbar-divider" />
 
         <button

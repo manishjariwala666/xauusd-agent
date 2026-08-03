@@ -4,8 +4,10 @@ import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "rea
 import { useRouter } from "next/navigation";
 import type { Category, ContentDetail } from "@/lib/content-api";
 import { FeaturedImagePicker } from "./featured-image-picker";
+import { RichTextEditor } from "./rich-text-editor";
 import { SeoWorkbench } from "./seo-workbench";
 import type { SeoDetail } from "@/lib/seo-api";
+import { AIContentRepair } from "./ai-content-repair";
 
 type Intent = "save" | "draft" | "publish" | "schedule";
 const dateTime = (value?: string | null) => value ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Not set";
@@ -18,6 +20,7 @@ export function ContentEditor({ kind, initial, seo, categories, publicWebsiteUrl
   const [slug, setSlug] = useState(initial?.slug || "");
   const [excerpt, setExcerpt] = useState(initial?.excerpt || "");
   const [body, setBody] = useState(initial?.body || "");
+  const [editorMode, setEditorMode] = useState<"rich" | "source">("rich");
   const [scheduledAt, setScheduledAt] = useState(initial?.scheduled_at ? initial.scheduled_at.slice(0, 16) : "");
   const [pendingMediaId, setPendingMediaId] = useState<number | null>(initial?.featured_media_id || null);
   const [dirty, setDirty] = useState(false);
@@ -88,7 +91,59 @@ export function ContentEditor({ kind, initial, seo, categories, publicWebsiteUrl
           <label>Title<input name="title" value={title} onChange={e => setTitle(e.target.value)} required maxLength={240} placeholder="Add a clear post title" /></label>
           <div className="field-row"><label>Slug<input name="slug" value={slug} onChange={e => setSlug(e.target.value)} maxLength={160} pattern="[a-z0-9-]*" placeholder="generated-from-title" /></label><span className="field-hint">Lowercase letters, numbers and hyphens</span></div>
           <label>Excerpt<textarea name="excerpt" value={excerpt} onChange={e => setExcerpt(e.target.value)} rows={3} maxLength={2000} placeholder="A concise summary for search and post cards" /></label>
-          <label>Article body<span className="editor-help">Lightweight formatting: # H1, ## H2, ### H3, lists, &gt; quotes and Markdown links.</span><textarea name="body" value={body} onChange={e => setBody(e.target.value)} rows={22} maxLength={200000} placeholder="Start writing…" /></label>
+          <div className="article-body-field">
+            <div className="article-body-heading">
+              <div>
+                <strong>Article body</strong>
+                <span className="editor-help">
+                  Rich editor supports formatting, links, images and tables.
+                  Source mode remains available for direct HTML or Markdown editing.
+                </span>
+              </div>
+
+              <div className="editor-mode-switch" role="group" aria-label="Editor mode">
+                <button
+                  type="button"
+                  className={editorMode === "rich" ? "active" : ""}
+                  onClick={() => setEditorMode("rich")}
+                  aria-pressed={editorMode === "rich"}
+                >
+                  Visual editor
+                </button>
+                <button
+                  type="button"
+                  className={editorMode === "source" ? "active" : ""}
+                  onClick={() => setEditorMode("source")}
+                  aria-pressed={editorMode === "source"}
+                >
+                  Source
+                </button>
+              </div>
+            </div>
+
+            <input type="hidden" name="body" value={body} />
+
+            {editorMode === "rich" ? (
+              <RichTextEditor
+                value={body}
+                onChange={(nextBody) => {
+                  setBody(nextBody);
+                  setDirty(true);
+                  setSavedMessage("Unsaved changes");
+                }}
+                disabled={busy || isTrashed}
+              />
+            ) : (
+              <textarea
+                value={body}
+                onChange={event => setBody(event.target.value)}
+                rows={22}
+                maxLength={200000}
+                placeholder="Edit article HTML or Markdown source…"
+                disabled={busy || isTrashed}
+              />
+            )}
+          </div>
           <footer className="editor-stats word-count"><span>{words.toLocaleString("en-IN")} words</span><span>{minutes} min read</span><span>{body.length.toLocaleString("en-IN")} characters</span></footer>
         </section>
         <SeoWorkbench initial={seo || null} content={initial ? { ...initial, title, excerpt, body, slug } : null} kind={kind} categories={categories} publicUrl={publicUrl} />
@@ -103,6 +158,7 @@ export function ContentEditor({ kind, initial, seo, categories, publicWebsiteUrl
         </section>
         <section className="editor-card"><div className="card-heading"><div><h2>Organization</h2></div></div><label>Category<select name="category_id" defaultValue={initial?.category_id || ""}><option value="">Uncategorized</option>{categories.map(c => <option value={c.id} key={c.id}>{c.title}</option>)}</select></label><label>Subcategory<input name="subcategory" defaultValue={initial?.subcategory || ""} maxLength={120} /></label><label>Author<input value={initial?.author || "Current administrator"} readOnly aria-describedby="author-note" /></label><small id="author-note" className="support-note">Author reassignment is not supported by the current API.</small></section>
         <FeaturedImagePicker contentId={initial?.id} initial={{ id: initial?.featured_media_id || null, url: initial?.featured_image || null, alt: initial?.featured_image_alt || "" }} onPendingChange={setPendingMediaId} />
+        {kind === "posts" && initial && !isTrashed && <AIContentRepair contentId={initial.id} currentStatus={initial.status} />}
         <section className="editor-card seo-side-card"><div className="score-ring" style={{ "--score": `${seo?.seo_score || 0}%` } as CSSProperties}><strong>{seo?.seo_score || 0}</strong><small>/ 100</small></div><div><h2>SEO score</h2><p>Deterministic checks; no ranking guarantee.</p></div></section>
         <section className="editor-card public-card"><h2>Public URL</h2><code>{publicUrl}</code>{isPublished && publicWebsiteUrl && <a href={publicUrl} target="_blank" rel="noreferrer" className="secondary-button">Open Public Post ↗</a>}</section>
         {initial && <section className="danger-actions"><button type="button" onClick={() => action("duplicate")} disabled={busy}>Duplicate post</button>{!isTrashed && <button type="button" className="danger-link" onClick={() => action("trash")} disabled={busy}>Move to Trash</button>}</section>}

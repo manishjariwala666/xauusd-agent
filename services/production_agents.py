@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import hashlib
+from html import escape
 import json
 from pathlib import Path
 import re
@@ -34,6 +35,8 @@ from services.whatsapp_standing_authorization import (
     WhatsAppStandingAuthorizationService,
 )
 
+UNKNOWN_VERIFICATION = "Unknown - verification required"
+
 
 class WhatsAppAutomationBlocked(RuntimeError):
     """Safe policy failure that prevents a queued job reporting false success."""
@@ -43,6 +46,38 @@ class WhatsAppAutomationBlocked(RuntimeError):
 def run_blog_agent(payload: dict[str, Any]) -> str:
     """Generate one validated long-form SEO/GEO blog draft."""
     topic = str(payload.get("topic") or "").strip()
+    selected_title = str(
+        payload.get("selected_title") or ""
+    ).strip()
+    content_type = str(
+        payload.get("content_type") or "complete_guide"
+    ).strip()
+    content_length = str(
+        payload.get("content_length") or "standard"
+    ).strip()
+    include_comparison_table = bool(
+        payload.get("include_comparison_table", True)
+    )
+    include_faq = bool(payload.get("include_faq", True))
+    include_schema = bool(payload.get("include_schema", True))
+    include_internal_links = bool(payload.get("include_internal_links", True))
+    include_risk_disclaimer = bool(payload.get("include_risk_disclaimer", True))
+    approved_outline = [
+        " ".join(str(item).split())[:240]
+        for item in payload.get("outline", [])
+        if str(item).strip()
+    ][:20]
+    source_material = str(payload.get("source_material") or "").strip()[:60_000]
+
+    word_ranges = {
+        "short": "700 to 900",
+        "standard": "1200 to 1600",
+        "long": "2000 to 2600",
+    }
+    target_word_range = word_ranges.get(
+        content_length,
+        word_ranges["standard"],
+    )
     if not topic:
         topic = "Current XAUUSD market structure and disciplined risk control"
 
@@ -58,6 +93,13 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         location=location,
         target_keyword=target_keyword,
         target_audience=target_audience,
+        content_type=content_type,
+        content_length=content_length,
+        include_comparison_table=include_comparison_table,
+        include_faq=include_faq,
+        include_schema=include_schema,
+        include_internal_links=include_internal_links,
+        source_material=source_material,
     )
 
     system_instruction = (
@@ -65,18 +107,25 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         "Create factual, original, educational content. Never fabricate facts, "
         "keyword volume, competition, performance, profit, price data or sources. "
         "If verified keyword metrics are unavailable, write "
-        "'Unknown - verification required'. Financial content must include a "
-        "risk disclaimer. Return one valid JSON object with keys: title, "
+        f"'{UNKNOWN_VERIFICATION}'. Return one valid JSON object with keys: title, "
         "alternate_titles, meta_title, meta_description, focus_keyword, "
         "secondary_keywords, search_intent, keyword_volume, keyword_competition, "
         "research_brief, slug, excerpt, body_markdown, internal_links, faq, "
         "schema_jsonld, image_research_brief, image_prompt, image_alt_text. "
-        "body_markdown must contain 1200 to 1600 meaningful words, exactly one H1, "
+        f"body_markdown must contain {target_word_range} meaningful words, exactly one H1, "
         "at least six H2 headings, and supporting H3, H4 and H5 headings. "
-        "Use six to eight FAQs and include accordion-ready <details> and "
-        "<summary> markup. Include actionable guidance, natural keywords, "
+        f"FAQ requested: {include_faq}. When requested, use six to eight FAQs "
+        "and include accordion-ready <details> and <summary> markup. "
+        "Include actionable guidance, natural keywords, "
         "internal links, relevant GEO context and a local CTA only when location "
         "is genuinely relevant. Do not publish automatically."
+    )
+    outline_instruction = (
+        "Use this owner-reviewed outline in order:\n- "
+        + "\n- ".join(approved_outline)
+        + "\n"
+        if approved_outline
+        else ""
     )
 
     user_instruction = (
@@ -84,7 +133,23 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         f"Target keyword: {target_keyword}\n"
         f"Location: {location or 'Global / not specified'}\n"
         f"Target audience: {target_audience}\n"
-        "Prepare the complete SEO and GEO article draft."
+        "Prepare the complete SEO and GEO article draft. "
+        f"Article type: {content_type}. "
+        f"Target word range: {target_word_range} words. "
+        f"Comparison table required: {include_comparison_table}. "
+        f"Risk disclaimer required: {include_risk_disclaimer}. "
+        + outline_instruction
+        + "If required, include a real semantic HTML table with thead, tbody, "
+        "column headings and at least three useful rows. "
+        "Do not expose internal QA checklists or repetitive review instructions "
+        "inside the public article. "
+        + (
+            "Use only the supplied source material for document-specific facts. "
+            "If a fact is absent, write 'verification required'.\n"
+            f"Source material:\n{source_material}"
+            if source_material
+            else ""
+        )
     )
 
     try:
@@ -125,20 +190,46 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         if not generated.get(key):
             generated[key] = fallback[key]
 
-    if not _valid_long_form_blog(generated):
+    if not _valid_long_form_blog(
+        generated,
+        content_length=content_length,
+        include_faq=include_faq,
+    ):
         logger.warning(
             "Generated blog failed long-form validation; using safe fallback."
         )
         generated = fallback
 
-    generated["faq"] = _normalize_blog_faq(
-        generated.get("faq"),
-        fallback["faq"],
+    if selected_title:
+        generated["title"] = selected_title[:240]
+        generated["meta_title"] = selected_title[:60]
+        generated["slug"] = _slugify(selected_title)
+        body = str(generated.get("body_markdown") or "")
+        generated["body_markdown"] = re.sub(
+            r"(?m)^#\s+.*$", f"# {selected_title[:240]}", body, count=1
+        )
+
+    generated["faq"] = (
+        _normalize_blog_faq(generated.get("faq"), fallback["faq"])
+        if include_faq
+        else []
     )
-    generated["schema_jsonld"] = _build_blog_schema(
-        title=str(generated["title"]),
-        focus_keyword=str(generated["focus_keyword"]),
+    generated["schema_jsonld"] = (
+        _build_blog_schema(
+            title=str(generated["title"]),
+            focus_keyword=str(generated["focus_keyword"]),
+            faq=generated["faq"],
+        )
+        if include_schema
+        else {}
+    )
+    if not include_internal_links:
+        generated["internal_links"] = []
+    generated["body_markdown"] = _normalize_public_blog_sections(
+        str(generated.get("body_markdown") or ""),
         faq=generated["faq"],
+        include_faq=include_faq,
+        include_risk_disclaimer=include_risk_disclaimer,
     )
 
     slug = _slugify(str(generated["slug"] or generated["title"]))
@@ -1711,24 +1802,112 @@ def _build_blog_schema(
     }
 
 
-def _valid_long_form_blog(generated: dict[str, Any]) -> bool:
+def _valid_long_form_blog(
+    generated: dict[str, Any],
+    *,
+    content_length: str = "standard",
+    include_faq: bool = True,
+) -> bool:
     """Reject short or structurally incomplete articles."""
     body = str(generated.get("body_markdown") or "")
     faq = generated.get("faq")
+    ranges = {
+        "short": (500, 1100),
+        "standard": (800, 1900),
+        "long": (1100, 3000),
+    }
+    minimum, maximum = ranges.get(content_length, ranges["standard"])
+    faq_valid = (
+        isinstance(faq, list) and 6 <= len(faq) <= 8
+        and "<details>" in body and "<summary>" in body
+        if include_faq
+        else True
+    )
 
     return bool(
-        1200 <= _blog_word_count(body) <= 1900
+        minimum <= _blog_word_count(body) <= maximum
         and _blog_heading_count(body, 1) == 1
-        and _blog_heading_count(body, 2) >= 6
+        and _blog_heading_count(body, 2) >= 4
         and _blog_heading_count(body, 3) >= 1
-        and _blog_heading_count(body, 4) >= 1
-        and _blog_heading_count(body, 5) >= 1
-        and isinstance(faq, list)
-        and 6 <= len(faq) <= 8
-        and "<details>" in body
-        and "<summary>" in body
-        and "Risk disclaimer" in body
+        and faq_valid
     )
+
+
+def _normalize_public_blog_sections(
+    body: str,
+    *,
+    faq: list[dict[str, str]],
+    include_faq: bool,
+    include_risk_disclaimer: bool,
+) -> str:
+    """Remove internal review content and render optional sections once."""
+    blocked_headings = {
+        "complete prepublication checklist",
+        "seo and geo quality checklist",
+        "mandatory owner approval gate",
+        "quality and accuracy review",
+        "local call to action and approval",
+        "frequently asked questions",
+        "faq",
+        "faqs",
+        "risk disclaimer",
+    }
+    clean_lines: list[str] = []
+    skipped_heading_level: int | None = None
+
+    for line in body.splitlines():
+        heading = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
+        if heading:
+            level = len(heading.group(1))
+            heading_text = re.sub(
+                r"[^a-z0-9 ]+",
+                "",
+                heading.group(2).lower(),
+            ).strip()
+            if skipped_heading_level is not None and level <= skipped_heading_level:
+                skipped_heading_level = None
+            if heading_text in blocked_headings:
+                skipped_heading_level = level
+                continue
+        if skipped_heading_level is not None:
+            continue
+        if re.match(r"^\s*\d+\.\s+\*\*Review\b", line, re.IGNORECASE):
+            continue
+        clean_lines.append(line)
+
+    cleaned = "\n".join(clean_lines)
+    cleaned = re.sub(
+        r"(?ims)^\s*(?:\*\*)?risk disclaimer(?:\*\*)?\s*:\s*.*?(?=\n\s*\n|\Z)",
+        "",
+        cleaned,
+    )
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
+    optional_sections: list[str] = []
+    if include_faq:
+        faq_parts = ["## Frequently Asked Questions"]
+        for item in faq:
+            faq_parts.extend(
+                [
+                    "<details>",
+                    f"<summary>{escape(str(item['question']))}</summary>",
+                    "",
+                    str(item["answer"]),
+                    "",
+                    "</details>",
+                ]
+            )
+        optional_sections.append("\n\n".join(faq_parts))
+    if include_risk_disclaimer:
+        optional_sections.append(
+            "## Risk disclaimer\n\n"
+            "This content is educational only. Trading gold, forex and "
+            "derivatives involves substantial risk, and losses are possible. "
+            "Nothing in this article guarantees profit or constitutes personal "
+            "financial advice."
+        )
+
+    return "\n\n".join([cleaned, *optional_sections]).strip()
 
 
 def _slugify(value: str) -> str:
@@ -1767,6 +1946,13 @@ def _fallback_blog_payload(
     location: str = "",
     target_keyword: str = "",
     target_audience: str = "",
+    content_type: str = "complete_guide",
+    content_length: str = "standard",
+    include_comparison_table: bool = True,
+    include_faq: bool = True,
+    include_schema: bool = True,
+    include_internal_links: bool = True,
+    source_material: str = "",
 ) -> dict[str, Any]:
     """Build deterministic long-form SEO/GEO content without external AI."""
     safe_topic = re.sub(r"\s+", " ", topic).strip()
@@ -1784,7 +1970,25 @@ def _fallback_blog_payload(
     )
 
     geo_suffix = f" in {safe_location}" if safe_location else ""
-    title = f"{safe_topic.title()}{geo_suffix}: Complete Practical Guide"
+    title_suffix = {
+        "complete_guide": "Complete Practical Guide",
+        "news_analysis": "Current News Analysis",
+        "how_to": "Step-by-Step How-To Guide",
+    }.get(content_type, "Complete Practical Guide")
+    title = f"{safe_topic.title()}{geo_suffix}: {title_suffix}"
+
+    if source_material.strip():
+        return _source_material_blog_payload(
+            title=title,
+            safe_topic=safe_topic,
+            focus_keyword=focus_keyword,
+            source_material=source_material,
+            content_length=content_length,
+            include_comparison_table=include_comparison_table,
+            include_faq=include_faq,
+            include_schema=include_schema,
+            include_internal_links=include_internal_links,
+        )
 
     faq = [
         {
@@ -1823,10 +2027,10 @@ def _fallback_blog_payload(
             ),
         },
         {
-            "question": "Can the Blog AI publish automatically?",
+            "question": "What should happen when evidence cannot be verified?",
             "answer": (
-                "No. It saves a draft first. Publication requires explicit owner "
-                "approval in addition to a publish request."
+                "The claim should remain labelled verification required and must "
+                "not be presented as an established fact."
             ),
         },
     ]
@@ -1893,98 +2097,78 @@ def _fallback_blog_payload(
             "the topic clearly and avoid fake chart values, broker logos, profit "
             "claims or irrelevant decorative images.",
         ),
-        (
-            "Quality and Accuracy Review",
-            "Proofread the article, validate the heading structure, review factual "
-            "claims and confirm that keywords sound natural. Check metadata, links, "
-            "FAQ answers, image alt text and mobile readability before saving.",
-        ),
-        (
-            "Local Call to Action and Approval",
-            "Use a local call to action only when a verified location or business "
-            "service exists. Do not invent an office address or phone number. Save "
-            "the completed content as a draft and wait for explicit owner approval.",
-        ),
     ]
 
-    for heading, paragraph in sections:
-        body_parts.extend(
+    if content_type == "news_analysis":
+        sections[0] = (
+            "What Is Known Right Now",
+            "Separate confirmed developments from commentary and unknown details. "
+            "Every time-sensitive claim needs a current source and date; when a "
+            "metric cannot be verified, mark it as verification required.",
+        )
+    elif content_type == "how_to":
+        sections[0] = (
+            "Define the Intended Outcome",
+            "State the task, required inputs and safe stopping point before taking "
+            "the first step. This prevents a how-to article from implying an "
+            "outcome that its evidence cannot support.",
+        )
+
+    if content_length == "short":
+        sections = sections[:5]
+    elif content_length == "long":
+        sections.extend(
             [
-                f"## {heading}",
-                paragraph,
-                "### Practical application",
                 (
-                    f"For {safe_topic}, write down the evidence, intended reader, "
-                    "primary decision and next safe action. Confirm each important "
-                    "claim before treating it as publish-ready."
+                    "Evidence and Verification Matrix",
+                    "Map each important statement to its source, publication date, "
+                    "geographic scope and verification state. Conflicting evidence "
+                    "should be described rather than silently resolved.",
+                ),
+                (
+                    "Implementation Risks and Exceptions",
+                    "Document the conditions in which the guidance may not apply, "
+                    "the signals that require human review and the assumptions that "
+                    "must be rechecked before action.",
+                ),
+                (
+                    "Measurement and Maintenance",
+                    "Define what can be measured after implementation, who owns the "
+                    "review and when the article should be refreshed. Unknown metrics "
+                    "remain verification required until a trusted source is recorded.",
                 ),
             ]
         )
 
-    body_parts.extend(
-        [
-            "#### SEO and GEO quality checklist",
-            (
-                "Confirm title quality, opening hook, location relevance, keyword "
-                "placement, heading order, internal links, metadata, FAQ usefulness, "
-                "image accessibility and the accuracy of every measurable claim."
-            ),
-            "##### Mandatory owner approval gate",
-            (
-                "The final article must remain a draft until the owner explicitly "
-                "approves publication. A normal publish flag alone is not sufficient."
-            ),
-            "## Complete Pre-Publication Checklist",
-        ]
-    )
+    for index, (heading, paragraph) in enumerate(sections):
+        body_parts.extend([f"## {heading}", paragraph])
+        if index == 0:
+            body_parts.extend(
+                [
+                    "### Questions this draft must answer",
+                    (
+                        f"Explain what {safe_topic} means, why it matters, who it "
+                        "affects, when the guidance applies, where verified evidence "
+                        "comes from, how a reader can use it and what to do if an "
+                        "important fact cannot yet be confirmed. Unknown facts remain "
+                        "marked verification required until a reviewer supplies a "
+                        "current authoritative source."
+                    ),
+                ]
+            )
 
-    checklist = [
-        "reader intent",
-        "topic relevance",
-        "source credibility",
-        "publication dates",
-        "local context",
-        "primary keyword",
-        "secondary keywords",
-        "search intent",
-        "search volume source",
-        "competition source",
-        "H1 title",
-        "introduction hook",
-        "H2 structure",
-        "supporting H3 headings",
-        "actionable instructions",
-        "internal links",
-        "image research brief",
-        "image alt text",
-        "meta title",
-        "meta description",
-        "FAQ answers",
-        "FAQ schema",
-        "risk disclaimer",
-        "local CTA",
-        "owner approval",
-    ]
-
-    for number, item in enumerate(checklist, 1):
-        body_parts.append(
-            f"{number}. **Review {item}:** Verify this item independently and "
-            f"record whether it is confirmed, missing or requires human review. "
-            f"For {safe_topic}, avoid unsupported precision. Strong content is "
-            "clear, useful, traceable and honest about unknown information."
-        )
-
-    body_parts.append("## Frequently Asked Questions")
-
-    for item in faq:
+    if include_comparison_table:
         body_parts.extend(
             [
-                "<details>",
-                f"<summary>{item['question']}</summary>",
-                "",
-                item["answer"],
-                "",
-                "</details>",
+                "## Practical Comparison",
+                "<table>",
+                "<thead><tr><th>Area</th><th>What to verify</th><th>Safe treatment</th></tr></thead>",
+                "<tbody>",
+                "<tr><td>Evidence</td><td>Source and date</td><td>Label unknown facts verification required</td></tr>",
+                "<tr><td>Audience</td><td>Need and experience</td><td>Explain assumptions plainly</td></tr>",
+                "<tr><td>Action</td><td>Risk and owner</td><td>Use a human approval checkpoint</td></tr>",
+                "</tbody>",
+                "</table>",
             ]
         )
 
@@ -1997,15 +2181,8 @@ def _fallback_blog_payload(
                 "steps and transparent limitations. The purpose is to help readers "
                 "make better-informed decisions without exaggerated claims."
             ),
-            (
-                "Risk disclaimer: This content is educational only. Trading gold, "
-                "forex and derivatives involves substantial risk, and losses are "
-                "possible. Nothing in this article guarantees profit or constitutes "
-                "personal financial advice."
-            ),
         ]
     )
-
     body = "\n\n".join(body_parts)
 
     return {
@@ -2015,7 +2192,7 @@ def _fallback_blog_payload(
             f"How to Understand {safe_topic.title()}{geo_suffix}",
             f"{safe_topic.title()}: Research and Strategy Guide",
             f"Complete {focus_keyword.title()} Guide",
-            f"{safe_topic.title()}: SEO and GEO Checklist",
+            f"{safe_topic.title()}: Questions and Practical Guidance",
             f"{safe_topic.title()}{geo_suffix}: What to Know",
         ],
         "meta_title": title[:60],
@@ -2031,8 +2208,8 @@ def _fallback_blog_payload(
             f"{safe_topic} FAQ",
         ],
         "search_intent": "Informational and educational",
-        "keyword_volume": "Unknown - verification required",
-        "keyword_competition": "Unknown - verification required",
+        "keyword_volume": UNKNOWN_VERIFICATION,
+        "keyword_competition": UNKNOWN_VERIFICATION,
         "research_brief": (
             "Verify current relevance using trusted news, official information "
             "and an approved keyword platform before publication."
@@ -2043,12 +2220,14 @@ def _fallback_blog_payload(
             "GEO context, actionable planning, FAQs and responsible risk controls."
         ),
         "body_markdown": body,
-        "internal_links": ["/", "/signals", "/blog", "/contact"],
-        "faq": faq,
-        "schema_jsonld": _build_blog_schema(
-            title=title,
-            focus_keyword=focus_keyword,
-            faq=faq,
+        "internal_links": (
+            ["/", "/signals", "/blog", "/contact"]
+            if include_internal_links else []
+        ),
+        "faq": faq if include_faq else [],
+        "schema_jsonld": (
+            _build_blog_schema(title=title, focus_keyword=focus_keyword, faq=faq)
+            if include_schema else {}
         ),
         "image_research_brief": (
             "Use a relevant editorial visual concept. Avoid fake prices, "
@@ -2062,4 +2241,151 @@ def _fallback_blog_payload(
         "image_alt_text": (
             f"{focus_keyword}{geo_suffix} educational guide image"
         )[:160],
+    }
+
+
+def _source_material_blog_payload(
+    *,
+    title: str,
+    safe_topic: str,
+    focus_keyword: str,
+    source_material: str,
+    content_length: str,
+    include_comparison_table: bool,
+    include_faq: bool,
+    include_schema: bool,
+    include_internal_links: bool,
+) -> dict[str, Any]:
+    """Build a bounded PDF fallback using only text extracted from that PDF."""
+    clean_source = re.sub(r"\s+", " ", source_material).strip()
+    sentence_limit = {"short": 6, "standard": 10, "long": 16}.get(
+        content_length,
+        10,
+    )
+    source_sentences = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", clean_source)
+        if len(sentence.strip()) >= 20
+    ][:sentence_limit]
+    if not source_sentences:
+        words = clean_source.split()
+        source_sentences = [
+            " ".join(words[index:index + 45])
+            for index in range(0, min(len(words), sentence_limit * 45), 45)
+            if words[index:index + 45]
+        ]
+
+    source_summary = " ".join(source_sentences)
+    source_points = source_sentences[: min(6, len(source_sentences))]
+    faq = [
+        {
+            "question": f"What source was used for this {safe_topic} draft?",
+            "answer": "Only the text extracted from the uploaded PDF was used for document-specific statements.",
+        },
+        {
+            "question": "Does this draft add external facts?",
+            "answer": "No. Information not present in the uploaded source is labelled verification required.",
+        },
+        {
+            "question": "Who should review the draft?",
+            "answer": "A human editor should compare every important statement with the original PDF before publication.",
+        },
+        {
+            "question": "When should verification be repeated?",
+            "answer": "Repeat verification whenever the source document changes or the draft is updated.",
+        },
+        {
+            "question": "How are missing metrics handled?",
+            "answer": "Missing metrics are not estimated; they remain marked verification required.",
+        },
+        {
+            "question": "Can this PDF draft publish automatically?",
+            "answer": "No. It is saved as a review draft and requires a separate explicit publish action.",
+        },
+    ]
+    body_parts = [
+        f"# {title}",
+        (
+            "This is a source-based review draft. Document-specific statements "
+            "below are limited to text extracted from the uploaded PDF. No absent "
+            "price, metric, result, source or factual claim has been added."
+        ),
+        "## Source summary",
+        source_summary,
+        "## Key points present in the source",
+        *[f"- {point}" for point in source_points],
+        "## Scope and limitations",
+        (
+            "The PDF text alone may not establish publication date, authorship, "
+            "current accuracy or external context. Each missing item is verification "
+            "required and must be checked against the original document."
+        ),
+        "### Human review questions",
+        (
+            "What does the source state, why does it matter, who is affected, when "
+            "does it apply, where did the information originate, how should it be "
+            "used, and what should happen if a statement cannot be verified?"
+        ),
+        "## Editorial next steps",
+        (
+            "Compare this draft with the original PDF, retain the source meaning, "
+            "remove unsupported interpretation and keep verification-required labels "
+            "until an editor records suitable evidence."
+        ),
+    ]
+    if include_comparison_table:
+        table_points = source_points[:3]
+        body_parts.extend(
+            [
+                "## Source verification table",
+                "<table>",
+                "<thead><tr><th>Source statement</th><th>Review status</th></tr></thead>",
+                "<tbody>",
+                *[
+                    f"<tr><td>{escape(point)}</td><td>Verify against original PDF</td></tr>"
+                    for point in table_points
+                ],
+                "</tbody>",
+                "</table>",
+            ]
+        )
+    body = "\n\n".join(body_parts)
+    schema_faq = faq if include_faq else []
+    return {
+        "title": title,
+        "alternate_titles": [
+            f"{safe_topic.title()}: Source-Based Summary",
+            f"Understanding {safe_topic.title()} from the Uploaded PDF",
+            f"{safe_topic.title()}: Review Draft and Verification Notes",
+            f"Uploaded Source Guide to {focus_keyword.title()}",
+            f"{safe_topic.title()}: Key Source Points",
+        ],
+        "meta_title": title[:60],
+        "meta_description": (
+            f"Source-based review draft for {focus_keyword}; absent facts and metrics remain verification required."
+        )[:160],
+        "focus_keyword": focus_keyword,
+        "secondary_keywords": [
+            f"{focus_keyword} source summary",
+            f"{focus_keyword} PDF review",
+            f"{focus_keyword} verification",
+        ],
+        "search_intent": "Informational and source review",
+        "keyword_volume": UNKNOWN_VERIFICATION,
+        "keyword_competition": UNKNOWN_VERIFICATION,
+        "research_brief": "Use only the uploaded PDF and verify every material statement before publication.",
+        "slug": _slugify(title),
+        "excerpt": (
+            f"A source-limited review draft about {safe_topic}; unsupported facts remain verification required."
+        )[:1000],
+        "body_markdown": body,
+        "internal_links": ["/blog"] if include_internal_links else [],
+        "faq": schema_faq,
+        "schema_jsonld": (
+            _build_blog_schema(title=title, focus_keyword=focus_keyword, faq=schema_faq)
+            if include_schema else {}
+        ),
+        "image_research_brief": "Use a neutral document-review visual without factual or performance claims.",
+        "image_prompt": "Professional 16:9 editorial document-review visual, no logos, no charts and no marketing claims.",
+        "image_alt_text": f"Source review draft for {focus_keyword}"[:160],
     }

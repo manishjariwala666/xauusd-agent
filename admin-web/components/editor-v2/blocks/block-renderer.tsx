@@ -3,7 +3,6 @@
 import type { CmsBlock } from "@/lib/editor-v2/document-types";
 
 import { AccordionBlockEditor } from "./accordion-block-editor";
-import { BlockControls } from "./block-controls";
 import { ButtonBlockEditor } from "./button-block-editor";
 import { CodeBlockEditor } from "./code-block-editor";
 import { DividerBlockEditor } from "./divider-block-editor";
@@ -43,104 +42,159 @@ export function BlockRenderer({
   switch (block.type) {
     case "paragraph":
       editorContent = (
-        <ParagraphBlockEditor block={block} disabled={disabled} onChange={onChange} />
+        <ParagraphBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
       );
       break;
-
     case "heading":
       editorContent = (
-        <HeadingBlockEditor block={block} disabled={disabled} onChange={onChange} />
+        <HeadingBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
       );
       break;
-
-    case "gallery":
-      editorContent = (
-        <GalleryBlockEditor block={block} disabled={disabled} onChange={onChange} />
-      );
-      break;
-
-
     case "image":
       editorContent = (
-        <ImageBlockEditor block={block} disabled={disabled} onChange={onChange} />
+        <ImageBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
       );
       break;
-
+    case "gallery":
+      editorContent = (
+        <GalleryBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      );
+      break;
     case "table":
       editorContent = (
-        <TableBlockEditor block={block} disabled={disabled} onChange={onChange} />
+        <TableBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
       );
       break;
-
     case "quote":
       editorContent = (
-        <QuoteBlockEditor block={block} disabled={disabled} onChange={onChange} />
+        <QuoteBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
       );
       break;
-
     case "code":
       editorContent = (
-        <CodeBlockEditor block={block} disabled={disabled} onChange={onChange} />
+        <CodeBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
       );
       break;
-
     case "button":
       editorContent = (
-        <ButtonBlockEditor block={block} disabled={disabled} onChange={onChange} />
+        <ButtonBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
       );
       break;
-
     case "divider":
       editorContent = (
-        <DividerBlockEditor block={block} disabled={disabled} onChange={onChange} />
+        <DividerBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
       );
       break;
-
     case "accordion":
       editorContent = (
-        <AccordionBlockEditor block={block} disabled={disabled} onChange={onChange} />
+        <AccordionBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
       );
       break;
-
     case "youtube":
       editorContent = (
-        <YouTubeBlockEditor block={block} disabled={disabled} onChange={onChange} />
+        <YouTubeBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
       );
       break;
-
-    default:
-      editorContent = (
-        <div className="editor-v2-block-placeholder">
-          <strong>Unsupported block</strong>
-          <p>This block is waiting for its editor module.</p>
-        </div>
-      );
   }
 
   return (
     <section
-      className="editor-v2-block"
+      className="wp-content-block"
       data-block-id={block.id}
       data-block-type={block.type}
     >
-      <header className="editor-v2-block-header">
-        <div>
-          <strong>{block.type}</strong>
-          <small>Block {index + 1}</small>
-        </div>
+      <div
+        className="wp-block-toolbar"
+        role="toolbar"
+        aria-label={`${block.type} block controls`}
+      >
+        <span className="wp-block-type">{block.type}</span>
 
-        <BlockControls
+        <button
+          type="button"
+          disabled={disabled || index === 0}
+          onClick={onMoveUp}
+          title="Move up"
+        >
+          ↑
+        </button>
+
+        <button
+          type="button"
+          disabled={disabled || index === total - 1}
+          onClick={onMoveDown}
+          title="Move down"
+        >
+          ↓
+        </button>
+
+        <button
+          type="button"
           disabled={disabled}
-          canMoveUp={index > 0}
-          canMoveDown={index < total - 1}
-          onMoveUp={onMoveUp}
-          onMoveDown={onMoveDown}
-          onDuplicate={onDuplicate}
-          onRemove={onRemove}
-        />
-      </header>
+          onClick={onDuplicate}
+          title="Duplicate"
+        >
+          Duplicate
+        </button>
 
-      <div className="editor-v2-block-body">{editorContent}</div>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onRemove}
+          className="danger-link"
+          title="Remove"
+        >
+          Remove
+        </button>
+      </div>
+
+      <div className="wp-block-content">
+        {editorContent}
+      </div>
     </section>
   );
 }

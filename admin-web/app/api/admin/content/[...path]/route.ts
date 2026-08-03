@@ -4,7 +4,7 @@ import { verifyCsrfToken } from "@/lib/csrf";
 import { getAdminServerConfig } from "@/lib/server-config";
 import { ADMIN_CSRF_COOKIE, ADMIN_SESSION_COOKIE } from "@/lib/session";
 
-const allowedPath = /^(posts|pages)(\/\d+(\/(publish|unpublish|trash|duplicate))?)?$|^categories(\/\d+(\/disable)?)?$/;
+const allowedPath = /^(posts\/(?:plan-ai-draft|generate-ai-draft|generate-pdf-draft)|posts|pages)(\/\d+(\/(publish|unpublish|trash|duplicate|repair-preview|repair-apply))?)?$|^categories(\/\d+(\/disable)?)?$/;
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const path = (await context.params).path.join("/");
@@ -30,7 +30,13 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
       },
       body,
       cache: "no-store",
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(
+        path === "posts/plan-ai-draft"
+          ? 60000
+          : path === "posts/generate-ai-draft" || path === "posts/generate-pdf-draft" || path.endsWith("/repair-preview")
+            ? 120000
+            : 5000
+      )
     });
     const payload = await upstream.text();
     return new NextResponse(payload || null, {

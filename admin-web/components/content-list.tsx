@@ -20,7 +20,25 @@ export function ContentList({ kind, data, categories, search, status, category, 
   return <>
     <section className="page-heading studio-heading">
       <div><span className="eyebrow">CONTENT WORKSPACE</span><h1>{label}</h1><p>{isPosts ? "Create, optimize and publish your market coverage from one focused workspace." : "Manage the site’s evergreen public pages."}</p></div>
-      <Link className="primary-button button-with-icon" href={`/admin/${kind}/new`}><span aria-hidden="true">＋</span> New {isPosts ? "Post" : "Page"}</Link>
+      <div className="studio-heading-actions">
+        {isPosts && (
+          <Link
+            className="secondary-button studio-ai-button"
+            href="/admin/posts/ai-writer"
+          >
+            <span aria-hidden="true">✦</span>
+            Generate with AI
+          </Link>
+        )}
+
+        <Link
+          className="primary-button button-with-icon"
+          href={`/admin/${kind}/new`}
+        >
+          <span aria-hidden="true">＋</span>
+          New {isPosts ? "Post" : "Page"}
+        </Link>
+      </div>
     </section>
     {isPosts && <section className="studio-kpis" aria-label="Post totals">
       {[
