@@ -2,66 +2,14 @@
 
 import { useEffect, useState } from "react";
 
+import {
+  analyzeSeoDocument,
+} from "@/lib/editor-v2/seo-analyzer";
 import type {
   CmsDocument,
 } from "@/lib/editor-v2/document-types";
 
 const DRAFT_KEY = "venusrealm-custom-cms-v2-draft";
-
-function calculateSeoScore(document: CmsDocument): number {
-  let score = 0;
-
-  const keyword =
-    document.seo.focusKeyword.trim().toLowerCase();
-
-  if (
-    document.title.length >= 30 &&
-    document.title.length <= 70
-  ) {
-    score += 15;
-  }
-
-  if (
-    document.seo.metaTitle.length >= 30 &&
-    document.seo.metaTitle.length <= 60
-  ) {
-    score += 20;
-  }
-
-  if (
-    document.seo.metaDescription.length >= 120 &&
-    document.seo.metaDescription.length <= 160
-  ) {
-    score += 20;
-  }
-
-  if (
-    document.slug.length >= 5 &&
-    document.slug.length <= 80
-  ) {
-    score += 15;
-  }
-
-  if (
-    keyword &&
-    document.title.toLowerCase().includes(keyword)
-  ) {
-    score += 15;
-  }
-
-  if (
-    keyword &&
-    document.excerpt.toLowerCase().includes(keyword)
-  ) {
-    score += 10;
-  }
-
-  if (document.seo.canonicalUrl.trim()) {
-    score += 5;
-  }
-
-  return Math.min(score, 100);
-}
 
 export function SeoWorkspace() {
   const [document, setDocument] =
@@ -100,7 +48,8 @@ export function SeoWorkspace() {
     );
   }
 
-  const score = calculateSeoScore(document);
+  const analysis = analyzeSeoDocument(document);
+  const score = analysis.seoScore;
 
   function updateSeo<
     Key extends keyof CmsDocument["seo"],
