@@ -156,11 +156,21 @@ export function cmsDocumentToApiPayload(
   };
 }
 
+let importedBlockSequence = 0;
+
 function createImportedBlockId(
   type: string,
   index: number,
 ): string {
-  return `imported-${type}-${index}-${Date.now()}`;
+  importedBlockSequence += 1;
+
+  return [
+    "imported",
+    type,
+    index,
+    Date.now(),
+    importedBlockSequence,
+  ].join("-");
 }
 
 function stripHtmlTags(value: string): string {
@@ -340,13 +350,38 @@ function extractStructuredDocument(
   }
 }
 
+function ensureUniqueBlockIds(
+  blocks: CmsDocument["blocks"],
+): CmsDocument["blocks"] {
+  const seen = new Map<string, number>();
+
+  return blocks.map((block, index) => {
+    const baseId =
+      String(block.id || "").trim() ||
+      `normalized-${block.type}-${index + 1}`;
+
+    const occurrence = (seen.get(baseId) || 0) + 1;
+    seen.set(baseId, occurrence);
+
+    return {
+      ...block,
+      id:
+        occurrence === 1
+          ? baseId
+          : `${baseId}-${occurrence}`,
+    };
+  }) as CmsDocument["blocks"];
+}
+
 export function normalizeCmsDocument(
   document: CmsDocument,
 ): CmsDocument {
   return {
     ...document,
-    blocks: removeExactDuplicateBlocks(
-      expandHtmlCodeBlocks(document.blocks || []),
+    blocks: ensureUniqueBlockIds(
+      removeExactDuplicateBlocks(
+        expandHtmlCodeBlocks(document.blocks || []),
+      ),
     ),
     socialSharing: {
       enabled: document.socialSharing?.enabled ?? false,
