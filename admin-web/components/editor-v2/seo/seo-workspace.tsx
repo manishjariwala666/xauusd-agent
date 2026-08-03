@@ -83,6 +83,12 @@ export function SeoWorkspace() {
       JSON.stringify(savedDocument),
     );
 
+    window.dispatchEvent(
+      new CustomEvent("venusrealm:cms-draft-updated", {
+        detail: savedDocument,
+      }),
+    );
+
     setDocument(savedDocument);
 
     setMessage(

@@ -165,6 +165,57 @@ export function StudioWorkspace() {
   }, []);
 
   useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (
+        event.key !== LOCAL_DRAFT_KEY ||
+        !event.newValue
+      ) {
+        return;
+      }
+
+      try {
+        const nextDocument = normalizeCmsDocument(
+          JSON.parse(event.newValue) as CmsDocument,
+        );
+
+        setDocument(nextDocument);
+      } catch {
+        return;
+      }
+    }
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleDraftUpdate(event: Event) {
+      const customEvent = event as CustomEvent<CmsDocument>;
+
+      if (!customEvent.detail) return;
+
+      setDocument(
+        normalizeCmsDocument(customEvent.detail),
+      );
+    }
+
+    window.addEventListener(
+      "venusrealm:cms-draft-updated",
+      handleDraftUpdate,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "venusrealm:cms-draft-updated",
+        handleDraftUpdate,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     if (!document) return;
 
     setSaveMessage("Unsaved changes");
