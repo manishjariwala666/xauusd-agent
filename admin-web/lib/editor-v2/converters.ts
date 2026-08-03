@@ -155,6 +155,112 @@ export function cmsDocumentToApiPayload(
   };
 }
 
+function createImportedBlockId(
+  type: string,
+  index: number,
+): string {
+  return `imported-${type}-${index}-${Date.now()}`;
+}
+
+function stripHtmlTags(value: string): string {
+  return value
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function legacyHtmlToBlocks(
+  body: string,
+): CmsDocument["blocks"] {
+  const normalized = body.trim();
+
+  if (!normalized) {
+    return [
+      {
+        id: createImportedBlockId("paragraph", 0),
+        type: "paragraph",
+        html: "<p></p>",
+      },
+    ];
+  }
+
+  const tokenPattern =
+    /<(h[1-6]|table|blockquote|ul|ol)\b[^>]*>[\s\S]*?<\/\1>|<hr\b[^>]*\/?\s*>/gi;
+
+  const blocks: CmsDocument["blocks"] = [];
+  let cursor = 0;
+  let index = 0;
+  let match: RegExpExecArray | null;
+
+  function pushParagraph(html: string) {
+    const clean = html.trim();
+
+    if (!clean || !stripHtmlTags(clean)) return;
+
+    blocks.push({
+      id: createImportedBlockId("paragraph", index++),
+      type: "paragraph",
+      html: clean,
+    });
+  }
+
+  while ((match = tokenPattern.exec(normalized)) !== null) {
+    pushParagraph(normalized.slice(cursor, match.index));
+
+    const html = match[0];
+    const tag = String(match[1] || "hr").toLowerCase();
+
+    if (/^h[1-6]$/.test(tag)) {
+      blocks.push({
+        id: createImportedBlockId("heading", index++),
+        type: "heading",
+        level: Number(tag.slice(1)) as 1 | 2 | 3 | 4 | 5 | 6,
+        text: stripHtmlTags(html),
+      });
+    } else if (tag === "table") {
+      blocks.push({
+        id: createImportedBlockId("table", index++),
+        type: "table",
+        html,
+      });
+    } else if (tag === "blockquote") {
+      blocks.push({
+        id: createImportedBlockId("quote", index++),
+        type: "quote",
+        html,
+        citation: "",
+      });
+    } else {
+      blocks.push({
+        id: createImportedBlockId("divider", index++),
+        type: "divider",
+        style: "solid",
+      });
+    }
+
+    cursor = match.index + html.length;
+  }
+
+  pushParagraph(normalized.slice(cursor));
+
+  return blocks.length
+    ? blocks
+    : [
+        {
+          id: createImportedBlockId("paragraph", 0),
+          type: "paragraph",
+          html: normalized,
+        },
+      ];
+}
+
 export type CmsApiContentDetail = {
   id: number;
   title?: string | null;
@@ -169,6 +275,51 @@ export type CmsApiContentDetail = {
   created_at?: string | null;
   updated_at?: string | null;
 };
+
+function blockFingerprint(block: CmsDocument["blocks"][number]): string {
+  return JSON.stringify(block, (key, value) =>
+    key === "id" ? undefined : value,
+  );
+}
+
+function expandHtmlCodeBlocks(
+  blocks: CmsDocument["blocks"],
+): CmsDocument["blocks"] {
+  return blocks.flatMap(block => {
+    if (block.type !== "code") {
+      return [block];
+    }
+
+    const source = String(block.code || "").trim();
+
+    const containsArticleHtml =
+      /<(?:h[1-6]|p|ul|ol|li|table|thead|tbody|tr|th|td|blockquote|hr|strong|em)\b/i
+        .test(source);
+
+    if (!containsArticleHtml) {
+      return [block];
+    }
+
+    return legacyHtmlToBlocks(source);
+  });
+}
+
+function removeExactDuplicateBlocks(
+  blocks: CmsDocument["blocks"],
+): CmsDocument["blocks"] {
+  const seen = new Set<string>();
+
+  return blocks.filter(block => {
+    const fingerprint = blockFingerprint(block);
+
+    if (seen.has(fingerprint)) {
+      return false;
+    }
+
+    seen.add(fingerprint);
+    return true;
+  });
+}
 
 function extractStructuredDocument(
   body: string,
@@ -188,6 +339,18 @@ function extractStructuredDocument(
   }
 }
 
+export function normalizeCmsDocument(
+  document: CmsDocument,
+): CmsDocument {
+  return {
+    ...document,
+    blocks: removeExactDuplicateBlocks(
+      expandHtmlCodeBlocks(document.blocks),
+    ),
+  };
+}
+
+
 export function cmsApiDetailToDocument(
   content: CmsApiContentDetail,
 ): CmsDocument {
@@ -197,6 +360,7 @@ export function cmsApiDetailToDocument(
   if (structured) {
     return {
       ...structured,
+      blocks: normalizeCmsDocument(structured).blocks,
       id: content.id,
       title: String(content.title || structured.title || ""),
       slug: String(content.slug || structured.slug || ""),
@@ -235,13 +399,7 @@ export function cmsApiDetailToDocument(
     categoryId: content.category_id ?? null,
     tags: [],
     featuredMediaId: content.featured_media_id ?? null,
-    blocks: [
-      {
-        id: `legacy-${content.id}`,
-        type: "paragraph" as const,
-        html: body,
-      },
-    ],
+    blocks: legacyHtmlToBlocks(body),
     seo: {
       metaTitle: "",
       metaDescription: "",

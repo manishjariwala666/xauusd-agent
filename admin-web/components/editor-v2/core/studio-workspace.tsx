@@ -8,12 +8,16 @@ import {
 import {
   cmsApiDetailToDocument,
   cmsDocumentToApiPayload,
+  normalizeCmsDocument,
   type CmsApiContentDetail,
 } from "@/lib/editor-v2/converters";
 import type {
   CmsDocument,
 } from "@/lib/editor-v2/document-types";
 
+import {
+  ContentInsightsPanel,
+} from "../seo/content-insights-panel";
 import { DocumentCanvas } from "./document-canvas";
 import { DocumentPreview } from "./document-preview";
 
@@ -139,8 +143,17 @@ export function StudioWorkspace() {
       const saved = window.localStorage.getItem(LOCAL_DRAFT_KEY);
 
       if (saved) {
-        setDocument(JSON.parse(saved) as CmsDocument);
-        setSaveMessage("Local draft restored");
+        const restoredDocument = normalizeCmsDocument(
+          JSON.parse(saved) as CmsDocument,
+        );
+
+        window.localStorage.setItem(
+          LOCAL_DRAFT_KEY,
+          JSON.stringify(restoredDocument),
+        );
+
+        setDocument(restoredDocument);
+        setSaveMessage("Local draft restored and normalized");
         return;
       }
     } catch {
@@ -353,33 +366,29 @@ export function StudioWorkspace() {
         </div>
 
         {drafts.length > 0 ? (
-          <div className="studio-v2-draft-list">
-            {drafts.map(draft => (
-              <button
-                type="button"
-                key={draft.id}
-                className="studio-v2-draft-item"
-                onClick={() => void openSavedDraft(draft.id)}
-                disabled={openingDraftId !== null}
-              >
-                <strong>
-                  {draft.title || `Untitled draft #${draft.id}`}
-                </strong>
-                <span>
-                  #{draft.id} · {draft.slug || "no-slug"}
-                </span>
-                <small>
-                  {openingDraftId === draft.id
-                    ? "Opening…"
-                    : draft.updated_at
-                      ? new Date(
-                          draft.updated_at,
-                        ).toLocaleString()
-                      : "No update date"}
-                </small>
-              </button>
-            ))}
-          </div>
+          <label className="studio-v2-draft-selector">
+            <span>Open saved draft</span>
+
+            <select
+              value={document.id ?? ""}
+              disabled={openingDraftId !== null}
+              onChange={event => {
+                const draftId = Number(event.target.value);
+
+                if (draftId > 0) {
+                  void openSavedDraft(draftId);
+                }
+              }}
+            >
+              <option value="">Select a database draft…</option>
+
+              {drafts.map(draft => (
+                <option key={draft.id} value={draft.id}>
+                  #{draft.id} — {draft.title || "Untitled draft"}
+                </option>
+              ))}
+            </select>
+          </label>
         ) : null}
         <div className="studio-v2-document-status">
           <span>{saveMessage}</span>
@@ -477,19 +486,23 @@ export function StudioWorkspace() {
         </label>
       </section>
 
-      <DocumentCanvas
-        initialDocument={document}
-        onChange={canvasDocument =>
-          setDocument(current =>
-            current
-              ? {
-                  ...current,
-                  blocks: canvasDocument.blocks,
-                }
-              : canvasDocument,
-          )
-        }
-      />
+      <div className="studio-editor-layout">
+        <DocumentCanvas
+          initialDocument={document}
+          onChange={canvasDocument =>
+            setDocument(current =>
+              current
+                ? {
+                    ...current,
+                    blocks: canvasDocument.blocks,
+                  }
+                : canvasDocument,
+            )
+          }
+        />
+
+        <ContentInsightsPanel document={document} />
+      </div>
 
       {previewOpen ? (
         <DocumentPreview
