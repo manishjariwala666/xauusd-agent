@@ -4389,3 +4389,125 @@ button,a,input,select,textarea { outline-offset:2px; }
     grid-column: 2;
   }
 }
+
+/* ===== IMAGE SEO INSPECTOR ===== */
+
+.studio-image-seo-card {
+  display: grid;
+  gap: 14px;
+}
+
+.studio-image-seo-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-image-seo-grid > div {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.studio-image-seo-grid span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.studio-image-seo-grid strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.studio-image-records {
+  display: grid;
+  gap: 10px;
+  max-height: 560px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.studio-image-records article {
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 7px;
+  padding: 11px;
+}
+
+.studio-image-records article.image-clean {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.studio-image-records article.image-has-issues {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.studio-image-records article header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.studio-image-records article header strong {
+  color: #1e293b;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.studio-image-records article header small {
+  color: #64748b;
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+.studio-image-records code {
+  color: #475569;
+  display: block;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-image-records p {
+  color: #64748b;
+  font-size: 11px;
+  margin: 0;
+}
+
+.studio-image-records ul {
+  color: #c2410c;
+  display: grid;
+  font-size: 11px;
+  gap: 3px;
+  list-style: disc;
+  margin: 3px 0 0;
+  padding-left: 18px;
+}
+
+.studio-image-clean-message,
+.studio-image-empty {
+  color: #64748b;
+  font-size: 11px;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .studio-image-seo-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-image-records article header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

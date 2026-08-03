@@ -312,6 +312,114 @@ export function ContentInsightsPanel({
         </div>
       </section>
 
+      <section className="studio-insight-card studio-image-seo-card">
+        <header>
+          <div>
+            <span>IMAGE SEO</span>
+            <h2>{analysis.imageSeo.score}/100</h2>
+          </div>
+
+          <strong>
+            {analysis.imageSeo.total} images
+          </strong>
+        </header>
+
+        <div className="studio-image-seo-grid">
+          <div>
+            <span>Missing ALT</span>
+            <strong>
+              {analysis.imageSeo.missingAlt}
+            </strong>
+          </div>
+
+          <div>
+            <span>Missing Source</span>
+            <strong>
+              {analysis.imageSeo.missingSource}
+            </strong>
+          </div>
+
+          <div>
+            <span>Missing Dimensions</span>
+            <strong>
+              {analysis.imageSeo.missingDimensions}
+            </strong>
+          </div>
+
+          <div>
+            <span>Missing Caption</span>
+            <strong>
+              {analysis.imageSeo.missingCaption}
+            </strong>
+          </div>
+
+          <div>
+            <span>External Images</span>
+            <strong>
+              {analysis.imageSeo.externalSources}
+            </strong>
+          </div>
+
+          <div>
+            <span>Large Images</span>
+            <strong>
+              {analysis.imageSeo.largeDimensions}
+            </strong>
+          </div>
+        </div>
+
+        {analysis.imageSeo.records.length > 0 ? (
+          <div className="studio-image-records">
+            {analysis.imageSeo.records.map(image => (
+              <article
+                key={image.id}
+                className={
+                  image.issues.length > 0
+                    ? "image-has-issues"
+                    : "image-clean"
+                }
+              >
+                <header>
+                  <strong>
+                    {image.alt || "Missing ALT text"}
+                  </strong>
+
+                  <small>
+                    {image.width && image.height
+                      ? `${image.width} × ${image.height}`
+                      : "Dimensions missing"}
+                  </small>
+                </header>
+
+                <code title={image.src}>
+                  {image.src || "Missing image source"}
+                </code>
+
+                {image.caption ? (
+                  <p>{image.caption}</p>
+                ) : null}
+
+                {image.issues.length > 0 ? (
+                  <ul>
+                    {image.issues.map(issue => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <small className="studio-image-clean-message">
+                    No image SEO issues detected
+                  </small>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="studio-image-empty">
+            No image blocks detected in this article.
+          </p>
+        )}
+      </section>
+
       <section className="studio-insight-card studio-link-audit-card">
         <header>
           <div>

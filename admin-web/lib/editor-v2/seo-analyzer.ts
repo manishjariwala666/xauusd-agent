@@ -112,6 +112,30 @@ export type PublishChecklist = {
   items: PublishChecklistItem[];
 };
 
+export type ImageSeoRecord = {
+  id: string;
+  src: string;
+  alt: string;
+  caption: string;
+  width: number | null;
+  height: number | null;
+  external: boolean;
+  issues: string[];
+};
+
+export type ImageSeoAnalysis = {
+  score: number;
+  total: number;
+  missingAlt: number;
+  missingSource: number;
+  missingDimensions: number;
+  missingCaption: number;
+  externalSources: number;
+  largeDimensions: number;
+  issueCount: number;
+  records: ImageSeoRecord[];
+};
+
 export type SeoDocumentAnalysis = {
   seoScore: number;
   contentScore: number;
@@ -124,6 +148,7 @@ export type SeoDocumentAnalysis = {
   keywordAnalysis: KeywordAnalysis;
   readability: ReadabilityAnalysis;
   publishChecklist: PublishChecklist;
+  imageSeo: ImageSeoAnalysis;
 };
 
 function looksLikeHtml(value: string): boolean {
@@ -688,6 +713,95 @@ export function analyzeSeoDocument(
       block.type === "image" &&
       !block.alt.trim(),
   );
+
+  const imageSeoRecords: ImageSeoRecord[] = images.map(
+    block => {
+      const src = block.src.trim();
+      const alt = block.alt.trim();
+      const caption = block.caption.trim();
+
+      const external =
+        /^https?:\/\//i.test(src) &&
+        !/^https:\/\/(?:www\.)?venusrealm\.net(?:\/|$)/i.test(
+          src,
+        );
+
+      const issues: string[] = [];
+
+      if (!src) issues.push("Missing image source");
+      if (!alt) issues.push("Missing ALT text");
+      if (!caption) issues.push("Missing caption");
+
+      if (!block.width || !block.height) {
+        issues.push("Missing width or height");
+      }
+
+      if (
+        (block.width && block.width > 2400) ||
+        (block.height && block.height > 2400)
+      ) {
+        issues.push("Large image dimensions");
+      }
+
+      if (external) {
+        issues.push("External image source");
+      }
+
+      return {
+        id: block.id,
+        src,
+        alt,
+        caption,
+        width: block.width,
+        height: block.height,
+        external,
+        issues,
+      };
+    },
+  );
+
+  const missingSourceImages = imageSeoRecords.filter(
+    image => !image.src,
+  ).length;
+
+  const missingDimensionImages = imageSeoRecords.filter(
+    image => !image.width || !image.height,
+  ).length;
+
+  const missingCaptionImages = imageSeoRecords.filter(
+    image => !image.caption,
+  ).length;
+
+  const externalImageSources = imageSeoRecords.filter(
+    image => image.external,
+  ).length;
+
+  const largeDimensionImages = imageSeoRecords.filter(
+    image =>
+      (image.width && image.width > 2400) ||
+      (image.height && image.height > 2400),
+  ).length;
+
+  const imageIssueCount = imageSeoRecords.reduce(
+    (total, image) => total + image.issues.length,
+    0,
+  );
+
+  const imageSeoScore =
+    images.length === 0
+      ? 100
+      : Math.max(
+          0,
+          Math.round(
+            100 -
+              missingAltImages.length * 25 -
+              missingSourceImages * 30 -
+              missingDimensionImages * 10 -
+              missingCaptionImages * 5 -
+              externalImageSources * 5 -
+              largeDimensionImages * 10,
+          ),
+        );
 
   const hasFaq = document.blocks.some(
     block =>
@@ -1276,5 +1390,17 @@ export function analyzeSeoDocument(
       longParagraphCount,
     },
     publishChecklist,
+    imageSeo: {
+      score: imageSeoScore,
+      total: images.length,
+      missingAlt: missingAltImages.length,
+      missingSource: missingSourceImages,
+      missingDimensions: missingDimensionImages,
+      missingCaption: missingCaptionImages,
+      externalSources: externalImageSources,
+      largeDimensions: largeDimensionImages,
+      issueCount: imageIssueCount,
+      records: imageSeoRecords,
+    },
   };
 }
