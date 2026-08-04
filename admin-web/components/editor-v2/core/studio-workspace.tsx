@@ -14,6 +14,9 @@ import {
 import type {
   CmsDocument,
 } from "@/lib/editor-v2/document-types";
+import {
+  analyzeSeoDocument,
+} from "@/lib/editor-v2/seo-analyzer";
 
 import {
   ContentInsightsPanel,
@@ -425,6 +428,53 @@ export function StudioWorkspace() {
     );
   }
 
+  const seoAnalysis = analyzeSeoDocument(document);
+
+  const quickSeoChecks = [
+    {
+      id: "meta-title",
+      label: "SEO title",
+      passed:
+        document.seo.metaTitle.trim().length >= 30 &&
+        document.seo.metaTitle.trim().length <= 60,
+    },
+    {
+      id: "meta-description",
+      label: "Meta description",
+      passed:
+        document.seo.metaDescription.trim().length >= 120 &&
+        document.seo.metaDescription.trim().length <= 160,
+    },
+    {
+      id: "focus-keyword",
+      label: "Focus keyword",
+      passed:
+        document.seo.focusKeyword.trim().length > 0,
+    },
+    {
+      id: "internal-links",
+      label: "Internal link",
+      passed: seoAnalysis.links.internal > 0,
+    },
+    {
+      id: "external-links",
+      label: "External link",
+      passed: seoAnalysis.links.external > 0,
+    },
+    {
+      id: "image-alt",
+      label: "Image ALT",
+      passed:
+        seoAnalysis.imageSeo.total === 0 ||
+        seoAnalysis.imageSeo.missingAlt === 0,
+    },
+    {
+      id: "readability",
+      label: "Readability",
+      passed: seoAnalysis.readability.score >= 50,
+    },
+  ];
+
   return (
     <main className="studio-v2-page">
       <header className="studio-v2-page-heading">
@@ -757,6 +807,48 @@ export function StudioWorkspace() {
                 document.excerpt ||
                 "Add a useful meta description for this article."}
             </p>
+          </section>
+
+          <section className="studio-v2-live-seo-score">
+            <header>
+              <div>
+                <span>LIVE SEO SCORE</span>
+                <strong>
+                  {seoAnalysis.seoScore}/100
+                </strong>
+              </div>
+
+              <a
+                className="secondary-button"
+                href="/studio-v2/seo"
+              >
+                Open Advanced SEO
+              </a>
+            </header>
+
+            <div className="studio-v2-live-seo-checks">
+              {quickSeoChecks.map(check => (
+                <article
+                  key={check.id}
+                  className={
+                    check.passed
+                      ? "is-passed"
+                      : "is-missing"
+                  }
+                >
+                  <span>
+                    {check.passed ? "✓" : "!"}
+                  </span>
+
+                  <strong>{check.label}</strong>
+                </article>
+              ))}
+            </div>
+
+            <small>
+              Links are counted only when they are
+              clickable anchors, buttons or linked media.
+            </small>
           </section>
         </section>
       </section>
