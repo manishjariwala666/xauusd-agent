@@ -5569,3 +5569,196 @@ button,a,input,select,textarea { outline-offset:2px; }
     width: 100%;
   }
 }
+
+/* ===== SEO PRINT / PDF REPORT ===== */
+
+.studio-seo-print-report {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+    size: A4;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .studio-seo-print-report,
+  .studio-seo-print-report * {
+    visibility: visible !important;
+  }
+
+  .studio-seo-print-report {
+    background: #ffffff;
+    color: #111827;
+    display: grid;
+    gap: 22px;
+    left: 0;
+    padding: 0;
+    position: absolute;
+    top: 0;
+    width: 100%;
+  }
+
+  .studio-seo-print-report > header {
+    align-items: flex-start;
+    border-bottom: 2px solid #111827;
+    display: flex;
+    gap: 20px;
+    justify-content: space-between;
+    padding-bottom: 14px;
+  }
+
+  .studio-seo-print-report > header span {
+    color: #475569;
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+
+  .studio-seo-print-report > header h1 {
+    color: #111827;
+    font-size: 24px;
+    line-height: 1.25;
+    margin: 6px 0 0;
+  }
+
+  .studio-seo-print-report > header > strong {
+    border: 2px solid #111827;
+    border-radius: 999px;
+    color: #111827;
+    font-size: 24px;
+    min-width: 54px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+
+  .studio-seo-print-meta {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .studio-seo-print-meta > div,
+  .studio-seo-print-grid article {
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    break-inside: avoid;
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+  }
+
+  .studio-seo-print-meta span,
+  .studio-seo-print-grid span {
+    color: #64748b;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .studio-seo-print-meta strong,
+  .studio-seo-print-grid strong {
+    color: #111827;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .studio-seo-print-report section {
+    break-inside: avoid;
+    display: grid;
+    gap: 10px;
+  }
+
+  .studio-seo-print-report section > h2 {
+    border-bottom: 1px solid #cbd5e1;
+    color: #111827;
+    font-size: 15px;
+    margin: 0;
+    padding-bottom: 6px;
+  }
+
+  .studio-seo-print-score {
+    align-items: center;
+    border: 1px solid #94a3b8;
+    border-radius: 8px;
+    display: grid;
+    gap: 4px;
+    justify-items: center;
+    padding: 16px;
+  }
+
+  .studio-seo-print-score strong {
+    color: #111827;
+    font-size: 30px;
+  }
+
+  .studio-seo-print-score span {
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  .studio-seo-print-score small {
+    color: #64748b;
+    font-size: 10px;
+  }
+
+  .studio-seo-print-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .studio-seo-print-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .studio-seo-print-list article {
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    break-inside: avoid;
+    display: grid;
+    gap: 4px;
+    padding: 9px;
+  }
+
+  .studio-seo-print-list strong {
+    color: #111827;
+    font-size: 11px;
+  }
+
+  .studio-seo-print-list p {
+    color: #334155;
+    font-size: 10px;
+    line-height: 1.45;
+    margin: 0;
+  }
+
+  .studio-seo-print-list small {
+    color: #64748b;
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+
+  .studio-seo-print-report footer {
+    border-top: 1px solid #cbd5e1;
+    color: #64748b;
+    font-size: 9px;
+    padding-top: 10px;
+    text-align: center;
+  }
+
+  .studio-insights-panel {
+    display: none !important;
+  }
+}

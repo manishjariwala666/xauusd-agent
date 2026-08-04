@@ -687,6 +687,10 @@ export function ContentInsightsPanel({
     };
   }
 
+  function printSeoReport() {
+    window.print();
+  }
+
   function downloadSeoReportJson() {
     triggerDownload(
       JSON.stringify(buildSeoReport(), null, 2),
@@ -804,7 +808,208 @@ export function ContentInsightsPanel({
   }
 
   return (
-    <aside className="studio-insights-panel">
+    <>
+      <section className="studio-seo-print-report">
+        <header>
+          <div>
+            <span>VENUSREALM SEO AUDIT REPORT</span>
+            <h1>
+              {document.title ||
+                "Untitled VenusRealm article"}
+            </h1>
+          </div>
+
+          <strong>
+            {analysis.advancedHealth.grade}
+          </strong>
+        </header>
+
+        <div className="studio-seo-print-meta">
+          <div>
+            <span>Generated</span>
+            <strong>
+              {new Date().toLocaleString()}
+            </strong>
+          </div>
+
+          <div>
+            <span>Status</span>
+            <strong>{document.status}</strong>
+          </div>
+
+          <div>
+            <span>Slug</span>
+            <strong>
+              {document.slug || "Not set"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Focus keyword</span>
+            <strong>
+              {document.seo.focusKeyword ||
+                "Not set"}
+            </strong>
+          </div>
+        </div>
+
+        <section>
+          <h2>Overall SEO Health</h2>
+
+          <div className="studio-seo-print-score">
+            <strong>
+              {analysis.advancedHealth.score}/100
+            </strong>
+
+            <span>
+              {analysis.advancedHealth.label}
+            </span>
+
+            <small>
+              {analysis.advancedHealth.criticalCount}
+              {" critical · "}
+              {analysis.advancedHealth.warningCount}
+              {" warnings"}
+            </small>
+          </div>
+        </section>
+
+        <section>
+          <h2>Category Scores</h2>
+
+          <div className="studio-seo-print-grid">
+            {analysis.advancedHealth.categories.map(
+              category => (
+                <article key={category.id}>
+                  <span>{category.label}</span>
+                  <strong>
+                    {category.score}/100
+                  </strong>
+                  <small>
+                    Weight {category.weight}%
+                  </small>
+                </article>
+              ),
+            )}
+          </div>
+        </section>
+
+        <section>
+          <h2>Priority Issues</h2>
+
+          {analysis.advancedHealth.priorityIssues.length >
+          0 ? (
+            <div className="studio-seo-print-list">
+              {analysis.advancedHealth.priorityIssues.map(
+                issue => (
+                  <article key={issue.id}>
+                    <strong>{issue.label}</strong>
+                    <p>{issue.detail}</p>
+                    <small>
+                      {issue.source}
+                      {" · "}
+                      {issue.severity}
+                    </small>
+                  </article>
+                ),
+              )}
+            </div>
+          ) : (
+            <p>No priority SEO issues detected.</p>
+          )}
+        </section>
+
+        <section>
+          <h2>Publish Checklist</h2>
+
+          <div className="studio-seo-print-list">
+            {analysis.publishChecklist.items.map(
+              item => (
+                <article key={item.id}>
+                  <strong>
+                    {item.passed ? "PASS" : "FAIL"}
+                    {" — "}
+                    {item.label}
+                  </strong>
+                  <p>{item.detail}</p>
+                  <small>
+                    {item.required
+                      ? "Required"
+                      : "Optional"}
+                  </small>
+                </article>
+              ),
+            )}
+          </div>
+        </section>
+
+        <section>
+          <h2>Technical Summary</h2>
+
+          <div className="studio-seo-print-grid">
+            <article>
+              <span>SEO score</span>
+              <strong>
+                {analysis.seoScore}/100
+              </strong>
+            </article>
+
+            <article>
+              <span>Content score</span>
+              <strong>
+                {analysis.contentScore}/100
+              </strong>
+            </article>
+
+            <article>
+              <span>Readability</span>
+              <strong>
+                {analysis.readability.score}/100
+              </strong>
+            </article>
+
+            <article>
+              <span>Image SEO</span>
+              <strong>
+                {analysis.imageSeo.score}/100
+              </strong>
+            </article>
+
+            <article>
+              <span>Schema health</span>
+              <strong>
+                {analysis.schemaHealth.score}/100
+              </strong>
+            </article>
+
+            <article>
+              <span>Social preview</span>
+              <strong>
+                {analysis.socialPreview.score}/100
+              </strong>
+            </article>
+
+            <article>
+              <span>Word count</span>
+              <strong>{analysis.wordCount}</strong>
+            </article>
+
+            <article>
+              <span>Link issues</span>
+              <strong>
+                {analysis.links.issueCount}
+              </strong>
+            </article>
+          </div>
+        </section>
+
+        <footer>
+          Deterministic SEO audit. Search ranking
+          guarantee nahi hai.
+        </footer>
+      </section>
+
+      <aside className="studio-insights-panel">
       <section className="studio-insight-card studio-advanced-health-card">
         <header>
           <div>
@@ -833,6 +1038,14 @@ export function ContentInsightsPanel({
             onClick={downloadSeoReportCsv}
           >
             Export CSV
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={printSeoReport}
+          >
+            Print / Save PDF
           </button>
         </div>
 
@@ -2144,6 +2357,7 @@ export function ContentInsightsPanel({
         Deterministic guidance hai. Search ranking
         ya trading outcome guarantee nahi hai.
       </p>
-    </aside>
+      </aside>
+    </>
   );
 }
