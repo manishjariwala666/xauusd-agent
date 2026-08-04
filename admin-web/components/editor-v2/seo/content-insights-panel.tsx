@@ -381,6 +381,171 @@ export function ContentInsightsPanel({
     setSelectedSnapshotB("");
   }
 
+  function exportSeoTrendJson() {
+    triggerDownload(
+      JSON.stringify(
+        {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          articleKey: articleHistoryKey,
+          snapshots: articleHistory,
+        },
+        null,
+        2,
+      ),
+      "application/json",
+      "trend.json",
+    );
+  }
+
+  function exportSeoTrendCsv() {
+    const rows: Array<Record<string, string | number>> =
+      articleHistory.map(snapshot => {
+        const categoryValues =
+          snapshot.categories.reduce<Record<string, number>>(
+            (result, category) => {
+              result[category.label] = category.score;
+              return result;
+            },
+            {},
+          );
+
+        return {
+          savedAt: snapshot.savedAt,
+          score: snapshot.score,
+          grade: snapshot.grade,
+          ...categoryValues,
+        };
+      });
+
+    const categoryLabels = Array.from(
+      new Set(
+        articleHistory.flatMap(snapshot =>
+          snapshot.categories.map(
+            category => category.label,
+          ),
+        ),
+      ),
+    );
+
+    const headers = [
+      "Saved At",
+      "Overall Score",
+      "Grade",
+      ...categoryLabels,
+    ];
+
+    const csvRows = [
+      headers.map(csvCell).join(","),
+      ...rows.map(row =>
+        [
+          row.savedAt,
+          row.score,
+          row.grade,
+          ...categoryLabels.map(
+            label => row[label] ?? "",
+          ),
+        ]
+          .map(csvCell)
+          .join(","),
+      ),
+    ];
+
+    triggerDownload(
+      `\uFEFF${csvRows.join("\n")}`,
+      "text/csv",
+      "trend.csv",
+    );
+  }
+
+  function backupAllSeoHistory() {
+    triggerDownload(
+      JSON.stringify(
+        {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          snapshots: seoHistory,
+        },
+        null,
+        2,
+      ),
+      "application/json",
+      "history-backup.json",
+    );
+  }
+
+  async function restoreSeoHistoryBackup(
+    file: File,
+  ) {
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      window.alert("Invalid JSON backup file.");
+      return;
+    }
+
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !("version" in parsed) ||
+      !("snapshots" in parsed)
+    ) {
+      window.alert("Invalid SEO history backup format.");
+      return;
+    }
+
+    const backup = parsed as {
+      version?: unknown;
+      snapshots?: unknown;
+    };
+
+    if (
+      backup.version !== 1 ||
+      !Array.isArray(backup.snapshots)
+    ) {
+      window.alert("Unsupported SEO history backup.");
+      return;
+    }
+
+    const validSnapshots =
+      backup.snapshots.filter(
+        (item): item is SeoHistorySnapshot =>
+          Boolean(
+            item &&
+            typeof item === "object" &&
+            "articleKey" in item &&
+            typeof item.articleKey === "string" &&
+            "savedAt" in item &&
+            typeof item.savedAt === "string" &&
+            "score" in item &&
+            typeof item.score === "number" &&
+            "grade" in item &&
+            typeof item.grade === "string" &&
+            "categories" in item &&
+            Array.isArray(item.categories),
+          ),
+      );
+
+    if (validSnapshots.length === 0) {
+      window.alert("Backup contains no valid snapshots.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Restore ${validSnapshots.length} snapshots and overwrite current local SEO history?`,
+    );
+
+    if (!confirmed) return;
+
+    persistSeoHistory(validSnapshots);
+    setSelectedSnapshotA("");
+    setSelectedSnapshotB("");
+
+    window.alert("SEO history restored successfully.");
+  }
+
   const trendPoints = articleHistory.map(
     snapshot => ({
       label: new Date(
@@ -1188,6 +1353,53 @@ export function ContentInsightsPanel({
               </div>
             </div>
           ) : null}
+
+          <div className="studio-seo-trend-export-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={articleHistory.length === 0}
+              onClick={exportSeoTrendJson}
+            >
+              Export trend JSON
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={articleHistory.length === 0}
+              onClick={exportSeoTrendCsv}
+            >
+              Export trend CSV
+            </button>
+
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={seoHistory.length === 0}
+              onClick={backupAllSeoHistory}
+            >
+              Backup all history
+            </button>
+
+            <label className="studio-seo-history-restore">
+              <span>Restore backup</span>
+
+              <input
+                type="file"
+                accept="application/json,.json"
+                onChange={event => {
+                  const file = event.target.files?.[0];
+
+                  if (file) {
+                    void restoreSeoHistoryBackup(file);
+                  }
+
+                  event.target.value = "";
+                }}
+              />
+            </label>
+          </div>
 
           <div className="studio-seo-history-actions">
             <button

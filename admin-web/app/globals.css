@@ -5518,3 +5518,54 @@ button,a,input,select,textarea { outline-offset:2px; }
     height: 155px;
   }
 }
+
+/* ===== SEO TREND EXPORT ===== */
+
+.studio-seo-trend-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.studio-seo-trend-export-actions .secondary-button {
+  margin: 0;
+}
+
+.studio-seo-trend-export-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.studio-seo-history-restore {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  color: #1d4ed8;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 800;
+  justify-content: center;
+  padding: 6px 9px;
+}
+
+.studio-seo-history-restore:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.studio-seo-history-restore input {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .studio-seo-trend-export-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .studio-seo-history-restore {
+    width: 100%;
+  }
+}
