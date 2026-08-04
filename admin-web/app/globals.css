@@ -5386,3 +5386,135 @@ button,a,input,select,textarea { outline-offset:2px; }
     flex-direction: column;
   }
 }
+
+/* ===== SEO TREND CHART ===== */
+
+.studio-seo-trend-chart {
+  background: #f8fafc;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.studio-seo-trend-chart > header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.studio-seo-trend-chart > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.studio-seo-trend-chart > header strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.studio-seo-trend-chart > header small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.studio-seo-trend-chart select {
+  max-width: 170px;
+  min-width: 0;
+}
+
+.studio-seo-trend-stats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.studio-seo-trend-stats > div {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+}
+
+.studio-seo-trend-stats span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.studio-seo-trend-stats strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.studio-seo-trend-svg-wrap {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  height: 180px;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.studio-seo-trend-svg-wrap svg {
+  display: block;
+  height: 100%;
+  overflow: visible;
+  width: 100%;
+}
+
+.studio-seo-trend-svg-wrap line {
+  stroke: #e2e8f0;
+  stroke-width: 1;
+}
+
+.studio-seo-trend-svg-wrap polyline {
+  stroke: #2563eb;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.studio-seo-trend-svg-wrap circle {
+  fill: #2563eb;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.studio-seo-trend-labels {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  overflow-x: auto;
+}
+
+.studio-seo-trend-labels span {
+  color: #64748b;
+  flex: 0 0 auto;
+  font-size: 9px;
+}
+
+@media (max-width: 720px) {
+  .studio-seo-trend-chart > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .studio-seo-trend-chart select {
+    max-width: none;
+    width: 100%;
+  }
+
+  .studio-seo-trend-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-seo-trend-svg-wrap {
+    height: 155px;
+  }
+}

@@ -189,6 +189,9 @@ export function ContentInsightsPanel({
   const [selectedSnapshotB, setSelectedSnapshotB] =
     useState<string>("");
 
+  const [selectedTrendCategory, setSelectedTrendCategory] =
+    useState<string>("overall");
+
   const articleHistoryKey =
     document.id !== null
       ? `id:${document.id}`
@@ -377,6 +380,59 @@ export function ContentInsightsPanel({
     setSelectedSnapshotA("");
     setSelectedSnapshotB("");
   }
+
+  const trendPoints = articleHistory.map(
+    snapshot => ({
+      label: new Date(
+        snapshot.savedAt,
+      ).toLocaleDateString(),
+      score:
+        selectedTrendCategory === "overall"
+          ? snapshot.score
+          : (
+              snapshot.categories.find(
+                item =>
+                  item.id === selectedTrendCategory,
+              )?.score ?? 0
+            ),
+    }),
+  );
+
+  const trendMax =
+    trendPoints.length > 0
+      ? Math.max(
+          ...trendPoints.map(point => point.score),
+        )
+      : 100;
+
+  const trendMin =
+    trendPoints.length > 0
+      ? Math.min(
+          ...trendPoints.map(point => point.score),
+        )
+      : 0;
+
+  const trendRange =
+    Math.max(1, trendMax - trendMin);
+
+  const trendPolyline =
+    trendPoints
+      .map((point, index) => {
+        const x =
+          trendPoints.length === 1
+            ? 150
+            : (index * 300) /
+              (trendPoints.length - 1);
+
+        const y =
+          120 -
+          ((point.score - trendMin) /
+            trendRange) *
+            100;
+
+        return `${x},${y}`;
+      })
+      .join(" ");
 
   const passedChecks = analysis.checks.filter(
     check => check.passed,
@@ -765,6 +821,171 @@ export function ContentInsightsPanel({
             <span>Snapshots</span>
             <strong>{articleHistory.length}/10</strong>
           </div>
+        </div>
+
+        <div className="studio-seo-trend-chart">
+          <header>
+            <div>
+              <strong>Score Trend</strong>
+              <small>
+                Last {articleHistory.length} snapshots
+              </small>
+            </div>
+
+            <select
+              value={selectedTrendCategory}
+              onChange={event =>
+                setSelectedTrendCategory(
+                  event.target.value,
+                )
+              }
+            >
+              <option value="overall">
+                Overall health
+              </option>
+
+              {analysis.advancedHealth.categories.map(
+                category => (
+                  <option
+                    key={category.id}
+                    value={category.id}
+                  >
+                    {category.label}
+                  </option>
+                ),
+              )}
+            </select>
+          </header>
+
+          {trendPoints.length > 0 ? (
+            <>
+              <div className="studio-seo-trend-stats">
+                <div>
+                  <span>Highest</span>
+                  <strong>{trendMax}</strong>
+                </div>
+
+                <div>
+                  <span>Lowest</span>
+                  <strong>{trendMin}</strong>
+                </div>
+
+                <div>
+                  <span>Change</span>
+                  <strong
+                    className={
+                      trendPoints.length > 1 &&
+                      trendPoints[
+                        trendPoints.length - 1
+                      ].score >
+                        trendPoints[0].score
+                        ? "seo-history-positive"
+                        : trendPoints.length > 1 &&
+                            trendPoints[
+                              trendPoints.length - 1
+                            ].score <
+                              trendPoints[0].score
+                          ? "seo-history-negative"
+                          : "seo-history-neutral"
+                    }
+                  >
+                    {trendPoints.length > 1
+                      ? trendPoints[
+                          trendPoints.length - 1
+                        ].score -
+                          trendPoints[0].score >
+                        0
+                        ? `+${
+                            trendPoints[
+                              trendPoints.length - 1
+                            ].score -
+                            trendPoints[0].score
+                          }`
+                        : `${
+                            trendPoints[
+                              trendPoints.length - 1
+                            ].score -
+                            trendPoints[0].score
+                          }`
+                      : "0"}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="studio-seo-trend-svg-wrap">
+                <svg
+                  viewBox="0 0 300 140"
+                  role="img"
+                  aria-label="SEO score trend chart"
+                  preserveAspectRatio="none"
+                >
+                  <line
+                    x1="0"
+                    y1="20"
+                    x2="300"
+                    y2="20"
+                  />
+                  <line
+                    x1="0"
+                    y1="70"
+                    x2="300"
+                    y2="70"
+                  />
+                  <line
+                    x1="0"
+                    y1="120"
+                    x2="300"
+                    y2="120"
+                  />
+
+                  <polyline
+                    points={trendPolyline}
+                    fill="none"
+                  />
+
+                  {trendPoints.map((point, index) => {
+                    const x =
+                      trendPoints.length === 1
+                        ? 150
+                        : (index * 300) /
+                          (trendPoints.length - 1);
+
+                    const y =
+                      120 -
+                      ((point.score - trendMin) /
+                        trendRange) *
+                        100;
+
+                    return (
+                      <g key={`${point.label}-${index}`}>
+                        <circle
+                          cx={x}
+                          cy={y}
+                          r="4"
+                        />
+
+                        <title>
+                          {point.label}: {point.score}
+                        </title>
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              <div className="studio-seo-trend-labels">
+                {trendPoints.map((point, index) => (
+                  <span key={`${point.label}-${index}`}>
+                    {point.label}
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="studio-seo-history-empty">
+              Save this article to create trend data.
+            </p>
+          )}
         </div>
 
         {scoreComparisonBase ? (
