@@ -167,6 +167,14 @@ export function ContentInsightsPanel({
       analysis.links.records.map(link => link.url),
     );
 
+  function handleQuickAction(target: string) {
+    window.dispatchEvent(
+      new CustomEvent("studio-seo-quick-action", {
+        detail: { target },
+      }),
+    );
+  }
+
   return (
     <aside className="studio-insights-panel">
       <section className="studio-insight-card studio-advanced-health-card">
@@ -255,6 +263,18 @@ export function ContentInsightsPanel({
                     <strong>{issue.label}</strong>
                     <small>{issue.detail}</small>
                     <em>{issue.source}</em>
+
+                    <button
+                      type="button"
+                      className="studio-health-fix-button"
+                      onClick={() =>
+                        handleQuickAction(
+                          issue.actionTarget,
+                        )
+                      }
+                    >
+                      Fix now
+                    </button>
                   </div>
                 </article>
               ),

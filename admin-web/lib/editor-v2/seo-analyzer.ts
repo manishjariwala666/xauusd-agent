@@ -195,6 +195,15 @@ export type SeoHealthPriorityIssue = {
   detail: string;
   source: string;
   severity: "critical" | "warning";
+  actionTarget:
+    | "title"
+    | "slug"
+    | "excerpt"
+    | "seo"
+    | "schema"
+    | "images"
+    | "social"
+    | "content";
 };
 
 export type AdvancedSeoHealthAnalysis = {
@@ -1891,6 +1900,20 @@ export function analyzeSeoDocument(
         detail: item.detail,
         source: "Publish checklist",
         severity: "critical" as const,
+        actionTarget:
+          item.id === "title"
+            ? "title" as const
+            : item.id === "slug"
+              ? "slug" as const
+              : item.id === "excerpt"
+                ? "excerpt" as const
+                : item.id.startsWith("meta-") ||
+                    item.id === "focus-keyword" ||
+                    item.id === "canonical"
+                  ? "seo" as const
+                  : item.id === "image-alt"
+                    ? "images" as const
+                    : "content" as const,
       })),
     ...schemaChecks
       .filter(check => !check.passed && check.required)
@@ -1900,6 +1923,7 @@ export function analyzeSeoDocument(
         detail: check.detail,
         source: "Schema health",
         severity: "critical" as const,
+        actionTarget: "schema" as const,
       })),
     ...checks
       .filter(check => !check.passed)
@@ -1912,6 +1936,7 @@ export function analyzeSeoDocument(
           check.severity === "error"
             ? "critical" as const
             : "warning" as const,
+        actionTarget: "content" as const,
       })),
     ...socialPreviewChecks
       .filter(check => !check.passed)
@@ -1921,6 +1946,7 @@ export function analyzeSeoDocument(
         detail: check.detail,
         source: "Social preview",
         severity: "warning" as const,
+        actionTarget: "social" as const,
       })),
   ];
 
@@ -1935,6 +1961,7 @@ export function analyzeSeoDocument(
         missingSourceImages > 0
           ? "critical"
           : "warning",
+      actionTarget: "images",
     });
   }
 

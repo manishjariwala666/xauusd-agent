@@ -139,6 +139,73 @@ export function StudioWorkspace() {
   }, []);
 
   useEffect(() => {
+    function handleSeoQuickAction(event: Event) {
+      const customEvent = event as CustomEvent<{
+        target?: string;
+      }>;
+
+      const target = customEvent.detail?.target;
+
+      const selectors: Record<string, string> = {
+        title: "[data-seo-target='title']",
+        slug: "[data-seo-target='slug']",
+        excerpt: "[data-seo-target='excerpt']",
+        social: "[data-seo-target='social']",
+        content: "[data-seo-target='content']",
+        images: "[data-seo-target='content']",
+      };
+
+      const selector =
+        target && selectors[target];
+
+      if (!selector) return;
+
+      const element =
+        window.document.querySelector<HTMLElement>(
+          selector,
+        );
+
+      if (!element) return;
+
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
+      element.classList.add(
+        "studio-seo-target-highlight",
+      );
+
+      window.setTimeout(() => {
+        element.classList.remove(
+          "studio-seo-target-highlight",
+        );
+      }, 1800);
+
+      const input =
+        element.matches("input, textarea, select")
+          ? element
+          : element.querySelector<
+              HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+            >("input, textarea, select");
+
+      input?.focus();
+    }
+
+    window.addEventListener(
+      "studio-seo-quick-action",
+      handleSeoQuickAction,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "studio-seo-quick-action",
+        handleSeoQuickAction,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     try {
       const saved = window.localStorage.getItem(LOCAL_DRAFT_KEY);
 
@@ -446,7 +513,7 @@ export function StudioWorkspace() {
           <strong>{document.status}</strong>
         </div>
 
-        <label className="studio-v2-title-field">
+        <label className="studio-v2-title-field" data-seo-target="title">
           <span>Article title</span>
           <input
             value={document.title}
@@ -471,7 +538,7 @@ export function StudioWorkspace() {
         </label>
 
         <div className="studio-v2-meta-grid">
-          <label>
+          <label data-seo-target="slug">
             <span>Slug</span>
             <input
               value={document.slug}
@@ -516,7 +583,7 @@ export function StudioWorkspace() {
           </label>
         </div>
 
-        <label>
+        <label data-seo-target="excerpt">
           <span>Excerpt</span>
           <textarea
             value={document.excerpt}
@@ -642,7 +709,10 @@ export function StudioWorkspace() {
         </header>
 
         <div className="studio-v2-feature-grid">
-          <article className="studio-v2-feature-card">
+          <article
+            className="studio-v2-feature-card"
+            data-seo-target="social"
+          >
             <label className="studio-v2-toggle-row">
               <div>
                 <strong>Social sharing</strong>
@@ -884,7 +954,7 @@ export function StudioWorkspace() {
         </div>
       </section>
 
-      <div className="studio-editor-layout">
+      <div className="studio-editor-layout" data-seo-target="content">
         <DocumentCanvas
           initialDocument={document}
           onChange={canvasDocument =>

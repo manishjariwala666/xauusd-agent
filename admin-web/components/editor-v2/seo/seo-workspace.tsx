@@ -96,6 +96,67 @@ export function SeoWorkspace() {
     );
   }
 
+  useEffect(() => {
+    function handleSeoQuickAction(event: Event) {
+      const customEvent = event as CustomEvent<{
+        target?: string;
+      }>;
+
+      const target = customEvent.detail?.target;
+
+      const selectors: Record<string, string> = {
+        seo: "[data-seo-target='seo']",
+        schema: "[data-seo-target='schema']",
+      };
+
+      const selector =
+        target && selectors[target];
+
+      if (!selector) return;
+
+      const element =
+        window.document.querySelector<HTMLElement>(
+          selector,
+        );
+
+      if (!element) return;
+
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
+      element.classList.add(
+        "studio-seo-target-highlight",
+      );
+
+      window.setTimeout(() => {
+        element.classList.remove(
+          "studio-seo-target-highlight",
+        );
+      }, 1800);
+
+      const input =
+        element.querySelector<
+          HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+        >("input, textarea, select");
+
+      input?.focus();
+    }
+
+    window.addEventListener(
+      "studio-seo-quick-action",
+      handleSeoQuickAction,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "studio-seo-quick-action",
+        handleSeoQuickAction,
+      );
+    };
+  }, []);
+
   function generateBasicSchema() {
     if (!document) return;
 
@@ -138,7 +199,7 @@ export function SeoWorkspace() {
         </p>
       </aside>
 
-      <div className="studio-seo-form">
+      <div className="studio-seo-form" data-seo-target="seo">
         <label>
           <span>Focus keyword</span>
 
@@ -272,7 +333,7 @@ export function SeoWorkspace() {
           </div>
         ) : null}
 
-        <details className="studio-seo-schema">
+        <details className="studio-seo-schema" data-seo-target="schema">
           <summary>JSON-LD schema preview</summary>
 
           <pre>

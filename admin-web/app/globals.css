@@ -5081,3 +5081,56 @@ button,a,input,select,textarea { outline-offset:2px; }
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== SEO ISSUE QUICK ACTIONS ===== */
+
+.studio-health-fix-button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  color: #1d4ed8;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 800;
+  justify-content: center;
+  margin-top: 6px;
+  padding: 6px 9px;
+  width: fit-content;
+}
+
+.studio-health-fix-button:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.studio-health-fix-button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.studio-seo-target-highlight {
+  animation: studio-seo-target-pulse 1.8s ease;
+  border-radius: 10px;
+  outline: 3px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 5px;
+}
+
+@keyframes studio-seo-target-pulse {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+
+  25%,
+  70% {
+    background-color: rgba(219, 234, 254, 0.75);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-seo-target-highlight {
+    animation: none;
+  }
+}
