@@ -6664,3 +6664,70 @@ button,a,input,select,textarea { outline-offset:2px; }
     width: 100%;
   }
 }
+
+.editor-v2-youtube-card,
+.studio-v2-preview-youtube {
+  aspect-ratio: 16 / 9;
+  background: #0f172a;
+  border-radius: 14px;
+  display: block;
+  overflow: hidden;
+  position: relative;
+}
+
+.editor-v2-youtube-card img,
+.studio-v2-preview-youtube img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.editor-v2-youtube-play,
+.studio-v2-preview-youtube-play {
+  align-items: center;
+  background: rgb(220 38 38 / 94%);
+  border-radius: 999px;
+  color: #ffffff;
+  display: flex;
+  font-size: 28px;
+  height: 68px;
+  justify-content: center;
+  left: 50%;
+  padding-left: 5px;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 68px;
+}
+
+.editor-v2-youtube-caption {
+  background: linear-gradient(
+    to top,
+    rgb(15 23 42 / 92%),
+    transparent
+  );
+  bottom: 0;
+  color: #ffffff;
+  display: grid;
+  gap: 2px;
+  left: 0;
+  padding: 28px 16px 14px;
+  position: absolute;
+  right: 0;
+}
+
+.editor-v2-youtube-caption small {
+  color: #cbd5e1;
+}
+
+.studio-v2-preview-youtube-title {
+  background: rgb(15 23 42 / 82%);
+  bottom: 0;
+  color: #ffffff;
+  font-weight: 700;
+  left: 0;
+  padding: 12px 14px;
+  position: absolute;
+  right: 0;
+}

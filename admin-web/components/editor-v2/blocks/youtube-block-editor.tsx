@@ -66,14 +66,37 @@ export function YouTubeBlockEditor({
 
       <div className="editor-v2-youtube-preview">
         {videoId ? (
-          <>
-            <strong>{block.title || "YouTube video ready"}</strong>
-            <span>Video ID: {videoId}</span>
-          </>
+          <a
+            href={block.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="editor-v2-youtube-card"
+            aria-label={
+              block.title
+                ? `Open YouTube video: ${block.title}`
+                : "Open YouTube video"
+            }
+          >
+            <img
+              src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+              alt={block.title || "YouTube video thumbnail"}
+              loading="lazy"
+              decoding="async"
+            />
+
+            <span className="editor-v2-youtube-play" aria-hidden="true">
+              ▶
+            </span>
+
+            <span className="editor-v2-youtube-caption">
+              <strong>{block.title || "YouTube video"}</strong>
+              <small>Open on YouTube</small>
+            </span>
+          </a>
         ) : (
           <>
             <strong>Add a valid YouTube URL</strong>
-            <span>The public embed will be generated safely.</span>
+            <span>The public preview will show a thumbnail and play button.</span>
           </>
         )}
       </div>

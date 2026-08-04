@@ -595,12 +595,57 @@ function PreviewBlock({
         </div>
       );
 
-    case "youtube":
-      return (
+    case "youtube": {
+      const videoId = (() => {
+        try {
+          const url = new URL(block.url);
+
+          if (url.hostname.includes("youtu.be")) {
+            return url.pathname.replace("/", "");
+          }
+
+          if (url.hostname.includes("youtube.com")) {
+            return (
+              url.searchParams.get("v") ||
+              url.pathname.split("/").filter(Boolean).at(-1) ||
+              ""
+            );
+          }
+        } catch {
+          return "";
+        }
+
+        return "";
+      })();
+
+      return videoId ? (
+        <a
+          href={block.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="studio-v2-preview-youtube"
+        >
+          <img
+            src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+            alt={block.title || "YouTube video thumbnail"}
+            loading="lazy"
+            decoding="async"
+          />
+
+          <span className="studio-v2-preview-youtube-play" aria-hidden="true">
+            ▶
+          </span>
+
+          <span className="studio-v2-preview-youtube-title">
+            {block.title || "Watch on YouTube"}
+          </span>
+        </a>
+      ) : (
         <div className="studio-v2-preview-placeholder">
-          YouTube: {block.title || block.url || "Video URL required"}
+          YouTube video URL required
         </div>
       );
+    }
 
     case "gallery":
       return (
