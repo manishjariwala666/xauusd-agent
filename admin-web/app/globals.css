@@ -5821,3 +5821,51 @@ button,a,input,select,textarea { outline-offset:2px; }
     padding: 12px;
   }
 }
+
+/* ===== CONTENT STUDIO QUICK SEO FULL PANEL ===== */
+
+.studio-v2-quick-seo-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-v2-quick-seo-grid label,
+.studio-v2-quick-seo-meta-description {
+  display: grid;
+  gap: 7px;
+}
+
+.studio-v2-quick-seo-grid label > span,
+.studio-v2-quick-seo-meta-description > span {
+  align-items: center;
+  color: #334155;
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.studio-v2-quick-seo-grid small,
+.studio-v2-quick-seo-meta-description small {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.studio-v2-quick-seo-grid small.is-recommended,
+.studio-v2-quick-seo-meta-description small.is-recommended {
+  color: #15803d;
+}
+
+.studio-v2-quick-seo-grid small.is-over-limit,
+.studio-v2-quick-seo-meta-description small.is-over-limit {
+  color: #b91c1c;
+}
+
+@media (max-width: 720px) {
+  .studio-v2-quick-seo-grid {
+    grid-template-columns: 1fr;
+  }
+}

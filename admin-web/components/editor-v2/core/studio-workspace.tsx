@@ -619,49 +619,120 @@ export function StudioWorkspace() {
               <span className="section-kicker">
                 QUICK SEO
               </span>
-              <strong>Meta description</strong>
+              <strong>Search optimization</strong>
             </div>
 
-            <small
-              className={
-                document.seo.metaDescription.length > 160
-                  ? "is-over-limit"
-                  : document.seo.metaDescription.length >= 120
-                    ? "is-recommended"
-                    : ""
-              }
-            >
-              {document.seo.metaDescription.length}
-              {" / "}160
+            <small>
+              Autosaved with this draft
             </small>
           </header>
 
-          <textarea
-            value={document.seo.metaDescription}
-            rows={4}
-            maxLength={200}
-            placeholder="Write a concise search result description"
-            aria-describedby="studio-v2-meta-description-help"
-            onChange={event =>
-              setDocument(current =>
-                current
-                  ? {
-                      ...current,
-                      seo: {
-                        ...current.seo,
-                        metaDescription:
-                          event.target.value,
-                      },
-                    }
-                  : current,
-              )
-            }
-          />
+          <div className="studio-v2-quick-seo-grid">
+            <label>
+              <span>Focus keyword</span>
+              <input
+                value={document.seo.focusKeyword}
+                maxLength={120}
+                placeholder="Example: gold market analysis"
+                onChange={event =>
+                  setDocument(current =>
+                    current
+                      ? {
+                          ...current,
+                          seo: {
+                            ...current.seo,
+                            focusKeyword:
+                              event.target.value,
+                          },
+                        }
+                      : current,
+                  )
+                }
+              />
+            </label>
+
+            <label>
+              <span>
+                SEO title
+                <small
+                  className={
+                    document.seo.metaTitle.length > 60
+                      ? "is-over-limit"
+                      : document.seo.metaTitle.length >= 30
+                        ? "is-recommended"
+                        : ""
+                  }
+                >
+                  {document.seo.metaTitle.length}
+                  {" / "}60
+                </small>
+              </span>
+
+              <input
+                value={document.seo.metaTitle}
+                maxLength={70}
+                placeholder="Search result title"
+                onChange={event =>
+                  setDocument(current =>
+                    current
+                      ? {
+                          ...current,
+                          seo: {
+                            ...current.seo,
+                            metaTitle:
+                              event.target.value,
+                          },
+                        }
+                      : current,
+                  )
+                }
+              />
+            </label>
+          </div>
+
+          <label className="studio-v2-quick-seo-meta-description">
+            <span>
+              Meta description
+              <small
+                className={
+                  document.seo.metaDescription.length > 160
+                    ? "is-over-limit"
+                    : document.seo.metaDescription.length >= 120
+                      ? "is-recommended"
+                      : ""
+                }
+              >
+                {document.seo.metaDescription.length}
+                {" / "}160
+              </small>
+            </span>
+
+            <textarea
+              value={document.seo.metaDescription}
+              rows={4}
+              maxLength={200}
+              placeholder="Write a concise search result description"
+              aria-describedby="studio-v2-meta-description-help"
+              onChange={event =>
+                setDocument(current =>
+                  current
+                    ? {
+                        ...current,
+                        seo: {
+                          ...current.seo,
+                          metaDescription:
+                            event.target.value,
+                        },
+                      }
+                    : current,
+                )
+              }
+            />
+          </label>
 
           <small id="studio-v2-meta-description-help">
-            Recommended length: 120–160 characters.
-            This value is included in autosave and
-            database draft saving.
+            Recommended: SEO title 30–60 characters,
+            meta description 120–160 characters.
           </small>
         </section>
       </section>
