@@ -4,15 +4,19 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, Response
+from fastapi import APIRouter, Header, HTTPException, Response
 
 from services.admin_auth_api import (
     _bearer_token,
+    _request_id,
     _require_bff,
     _require_identity,
 )
 from services.admin_auth_service import AdminIdentity
-from services.ai_agent_service import list_ai_agents
+from services.ai_agent_service import (
+    list_ai_agents,
+    set_blog_agent_enabled_guarded,
+)
 from services.master_ai_agent_registry import (
     get_agent_dashboard_record,
     list_agent_dashboard_records,
@@ -107,4 +111,55 @@ def admin_agent_detail(
         "item": get_agent_dashboard_record(agent),
         "found": True,
         "read_only": True,
+    }
+
+@router.post("/admin/agents/{agent_key}/enabled")
+def admin_agent_enabled_update(
+    agent_key: str,
+    payload: dict[str, bool],
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
+    x_request_id: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Guarded enable/disable control for AI Blog Agent only."""
+    identity = _identity(authorization, x_admin_bff_key)
+
+    if "enabled" not in payload:
+        raise HTTPException(
+            status_code=422,
+            detail="Enabled state is required.",
+        )
+
+    try:
+        result = set_blog_agent_enabled_guarded(
+            agent_key=agent_key,
+            enabled=bool(payload["enabled"]),
+            actor_id=identity.user_id,
+            request_id=_request_id(x_request_id),
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Agent control service is temporarily unavailable.",
+        ) from exc
+
+    return {
+        **result,
+        "message": (
+            "AI Blog Agent enabled state updated."
+            if result["changed"]
+            else "AI Blog Agent was already in the requested state."
+        ),
     }

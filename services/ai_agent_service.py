@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from typing import Any
 
 from loguru import logger
@@ -95,6 +96,99 @@ def set_ai_agent_enabled(agent_key: str, enabled: bool) -> None:
         )
         if result.rowcount != 1:
             raise ValueError(f"Unknown AI agent: {agent_key}")
+
+
+def set_blog_agent_enabled_guarded(
+    *,
+    agent_key: str,
+    enabled: bool,
+    actor_id: int,
+    request_id: str,
+) -> dict[str, Any]:
+    """Safely change only the AI Blog Agent enabled state with audit."""
+    normalized_key = str(agent_key or "").strip().lower()
+
+    if normalized_key != "ai_blog_agent":
+        raise PermissionError(
+            "Only AI Blog Agent control is enabled in this phase."
+        )
+
+    with session_scope() as session:
+        current = session.execute(
+            text(
+                """
+                SELECT agent_key, display_name, is_enabled, status
+                FROM public.ai_agents
+                WHERE agent_key = :agent_key
+                FOR UPDATE
+                """
+            ),
+            {"agent_key": normalized_key},
+        ).mappings().first()
+
+        if current is None:
+            raise ValueError("AI Blog Agent is not configured.")
+
+        previous_enabled = bool(current["is_enabled"])
+        requested_enabled = bool(enabled)
+        changed = previous_enabled != requested_enabled
+
+        if changed:
+            session.execute(
+                text(
+                    """
+                    UPDATE public.ai_agents
+                    SET is_enabled = :enabled,
+                        updated_at = NOW()
+                    WHERE agent_key = :agent_key
+                    """
+                ),
+                {
+                    "agent_key": normalized_key,
+                    "enabled": requested_enabled,
+                },
+            )
+
+        session.execute(
+            text(
+                """
+                INSERT INTO public.admin_auth_audit_events (
+                    user_id,
+                    event_type,
+                    outcome,
+                    request_id,
+                    details
+                ) VALUES (
+                    :user_id,
+                    'AI_BLOG_AGENT_ENABLED_STATE_CHANGED',
+                    'SUCCESS',
+                    :request_id,
+                    CAST(:details AS JSONB)
+                )
+                """
+            ),
+            {
+                "user_id": int(actor_id),
+                "request_id": str(request_id or "unknown")[:128],
+                "details": json.dumps(
+                    {
+                        "agent_key": normalized_key,
+                        "previous_enabled": previous_enabled,
+                        "requested_enabled": requested_enabled,
+                        "changed": changed,
+                    }
+                ),
+            },
+        )
+
+    return {
+        "agent_key": normalized_key,
+        "display_name": str(current["display_name"]),
+        "enabled": requested_enabled,
+        "previous_enabled": previous_enabled,
+        "changed": changed,
+        "status": str(current["status"] or "UNKNOWN"),
+    }
 
 
 def resolve_agent_key_from_number(number: int | str) -> str:
