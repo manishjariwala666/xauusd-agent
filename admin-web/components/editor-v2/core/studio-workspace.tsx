@@ -734,6 +734,30 @@ export function StudioWorkspace() {
             Recommended: SEO title 30–60 characters,
             meta description 120–160 characters.
           </small>
+
+          <section
+            className="studio-v2-quick-seo-preview"
+            aria-label="Google search preview"
+          >
+            <span>GOOGLE SEARCH PREVIEW</span>
+
+            <h3>
+              {document.seo.metaTitle ||
+                document.title ||
+                "Untitled VenusRealm article"}
+            </h3>
+
+            <code>
+              https://venusrealm.net/
+              {document.slug || "article-slug"}
+            </code>
+
+            <p>
+              {document.seo.metaDescription ||
+                document.excerpt ||
+                "Add a useful meta description for this article."}
+            </p>
+          </section>
         </section>
       </section>
 
