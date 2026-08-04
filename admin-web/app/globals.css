@@ -6036,3 +6036,57 @@ button,a,input,select,textarea { outline-offset:2px; }
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== CONTENT STUDIO QUICK SEO ADVANCED CONTROLS ===== */
+
+.studio-v2-quick-seo-advanced-controls {
+  background: #ffffff;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.studio-v2-quick-seo-advanced-controls > label {
+  display: grid;
+  gap: 7px;
+}
+
+.studio-v2-quick-seo-advanced-controls > label > span {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.studio-v2-quick-seo-toggle-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-v2-quick-seo-toggle-grid label {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: flex;
+  gap: 9px;
+  padding: 10px;
+}
+
+.studio-v2-quick-seo-toggle-grid input {
+  margin: 0;
+}
+
+.studio-v2-quick-seo-toggle-grid span {
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (max-width: 620px) {
+  .studio-v2-quick-seo-toggle-grid {
+    grid-template-columns: 1fr;
+  }
+}

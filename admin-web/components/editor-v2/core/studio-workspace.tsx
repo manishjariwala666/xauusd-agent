@@ -809,6 +809,83 @@ export function StudioWorkspace() {
             </p>
           </section>
 
+          <section className="studio-v2-quick-seo-advanced-controls">
+            <label>
+              <span>Canonical URL</span>
+
+              <input
+                value={document.seo.canonicalUrl}
+                placeholder={
+                  document.slug
+                    ? `https://venusrealm.net/${document.slug}`
+                    : "https://venusrealm.net/article-slug"
+                }
+                onChange={event =>
+                  setDocument(current =>
+                    current
+                      ? {
+                          ...current,
+                          seo: {
+                            ...current.seo,
+                            canonicalUrl:
+                              event.target.value,
+                          },
+                        }
+                      : current,
+                  )
+                }
+              />
+            </label>
+
+            <div className="studio-v2-quick-seo-toggle-grid">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={document.seo.robotsIndex}
+                  onChange={event =>
+                    setDocument(current =>
+                      current
+                        ? {
+                            ...current,
+                            seo: {
+                              ...current.seo,
+                              robotsIndex:
+                                event.target.checked,
+                            },
+                          }
+                        : current,
+                    )
+                  }
+                />
+
+                <span>Allow search indexing</span>
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={document.seo.robotsFollow}
+                  onChange={event =>
+                    setDocument(current =>
+                      current
+                        ? {
+                            ...current,
+                            seo: {
+                              ...current.seo,
+                              robotsFollow:
+                                event.target.checked,
+                            },
+                          }
+                        : current,
+                    )
+                  }
+                />
+
+                <span>Allow link following</span>
+              </label>
+            </div>
+          </section>
+
           <section className="studio-v2-live-seo-score">
             <header>
               <div>
