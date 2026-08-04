@@ -7,6 +7,7 @@ from typing import Any
 
 from loguru import logger
 from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 
 from core.database import session_scope
 from services.production_agents import RUNNERS
@@ -27,38 +28,54 @@ AI_AGENT_CONTROL_NUMBERS: tuple[tuple[int, str, str], ...] = (
 
 def list_ai_agents() -> list[dict[str, Any]]:
     """Return agent status records in their configured display order."""
-    with session_scope() as session:
-        rows = (
-            session.execute(
-                text(
-                    """
-                    SELECT a.agent_key, a.display_name, a.is_enabled,
-                           a.status, a.last_run_at, a.last_error,
-                           a.schedule_minutes,
-                           s.next_run_at AS next_scheduled_run_at,
-                           a.success_count, a.failure_count,
-                           COUNT(j.id) FILTER (
-                               WHERE j.status = 'QUEUED'
-                           ) AS queue_size,
-                           MAX(r.duration_ms) AS last_duration_ms
-                    FROM public.ai_agents a
-                    LEFT JOIN public.ai_agent_schedules s
-                      ON s.agent_id = a.id
-                    LEFT JOIN public.ai_agent_jobs j ON j.agent_id = a.id
-                    LEFT JOIN LATERAL (
-                        SELECT duration_ms
-                        FROM public.ai_agent_runs ar
-                        WHERE ar.agent_id = a.id
-                        ORDER BY ar.started_at DESC LIMIT 1
-                    ) r ON TRUE
-                    GROUP BY a.id, s.next_run_at
-                    ORDER BY a.display_order, a.display_name
-                    """
+    try:
+        with session_scope() as session:
+            rows = (
+                session.execute(
+                    text(
+                        """
+                        SELECT a.agent_key, a.display_name, a.is_enabled,
+                               a.status, a.last_run_at, a.last_error,
+                               a.schedule_minutes,
+                               s.next_run_at AS next_scheduled_run_at,
+                               a.success_count, a.failure_count,
+                               COUNT(j.id) FILTER (
+                                   WHERE j.status = 'QUEUED'
+                               ) AS queue_size,
+                               MAX(r.duration_ms) AS last_duration_ms
+                        FROM public.ai_agents a
+                        LEFT JOIN public.ai_agent_schedules s
+                          ON s.agent_id = a.id
+                        LEFT JOIN public.ai_agent_jobs j
+                          ON j.agent_id = a.id
+                        LEFT JOIN LATERAL (
+                            SELECT duration_ms
+                            FROM public.ai_agent_runs ar
+                            WHERE ar.agent_id = a.id
+                            ORDER BY ar.started_at DESC
+                            LIMIT 1
+                        ) r ON TRUE
+                        GROUP BY a.id, s.next_run_at
+                        ORDER BY a.display_order, a.display_name
+                        """
+                    )
                 )
+                .mappings()
+                .all()
             )
-            .mappings()
-            .all()
-        )
+    except ProgrammingError as exc:
+        original = getattr(exc, "orig", None)
+        sqlstate = getattr(original, "sqlstate", None)
+
+        if sqlstate == "42P01":
+            logger.warning(
+                "AI-agent runtime tables are unavailable; "
+                "returning read-only registry fallback."
+            )
+            return []
+
+        raise
+
     return [dict(row) for row in rows]
 
 
