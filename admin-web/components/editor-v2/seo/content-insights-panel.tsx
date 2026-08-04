@@ -619,6 +619,76 @@ export function ContentInsightsPanel({
         )}
       </section>
 
+      <section className="studio-insight-card studio-schema-health-card">
+        <header>
+          <div>
+            <span>SCHEMA HEALTH</span>
+            <h2>{analysis.schemaHealth.score}/100</h2>
+          </div>
+
+          <strong>
+            {analysis.schemaHealth.passed}/
+            {analysis.schemaHealth.total}
+          </strong>
+        </header>
+
+        <div className="studio-schema-health-summary">
+          <div>
+            <span>Schema</span>
+            <strong>
+              {analysis.schemaHealth.present
+                ? "Present"
+                : "Missing"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Type</span>
+            <strong>
+              {analysis.schemaHealth.schemaType ||
+                "Not set"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Object</span>
+            <strong>
+              {analysis.schemaHealth.validObject
+                ? "Valid"
+                : "Invalid"}
+            </strong>
+          </div>
+        </div>
+
+        <div className="studio-schema-checks">
+          {analysis.schemaHealth.checks.map(check => (
+            <article
+              key={check.id}
+              className={
+                check.passed
+                  ? "schema-check-passed"
+                  : check.required
+                    ? "schema-check-required"
+                    : "schema-check-optional"
+              }
+            >
+              <span>{check.passed ? "✓" : "!"}</span>
+
+              <div>
+                <strong>{check.label}</strong>
+                <small>{check.detail}</small>
+              </div>
+
+              <em>
+                {check.required
+                  ? "Required"
+                  : "Recommended"}
+              </em>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section className="studio-insight-card studio-link-audit-card">
         <header>
           <div>

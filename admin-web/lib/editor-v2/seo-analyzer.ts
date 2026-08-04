@@ -136,6 +136,24 @@ export type ImageSeoAnalysis = {
   records: ImageSeoRecord[];
 };
 
+export type SchemaHealthCheck = {
+  id: string;
+  label: string;
+  passed: boolean;
+  required: boolean;
+  detail: string;
+};
+
+export type SchemaHealthAnalysis = {
+  score: number;
+  present: boolean;
+  validObject: boolean;
+  schemaType: string;
+  passed: number;
+  total: number;
+  checks: SchemaHealthCheck[];
+};
+
 export type SeoDocumentAnalysis = {
   seoScore: number;
   contentScore: number;
@@ -149,6 +167,7 @@ export type SeoDocumentAnalysis = {
   readability: ReadabilityAnalysis;
   publishChecklist: PublishChecklist;
   imageSeo: ImageSeoAnalysis;
+  schemaHealth: SchemaHealthAnalysis;
 };
 
 function looksLikeHtml(value: string): boolean {
@@ -866,6 +885,240 @@ export function analyzeSeoDocument(
   const canonical =
     document.seo.canonicalUrl.trim();
 
+  const schemaValue = document.seo.schemaJsonLd;
+
+  const schemaPresent =
+    schemaValue !== null &&
+    typeof schemaValue === "object";
+
+  const schemaObject =
+    schemaPresent &&
+    !Array.isArray(schemaValue)
+      ? schemaValue as Record<string, unknown>
+      : null;
+
+  const schemaString = (key: string): string =>
+    typeof schemaObject?.[key] === "string"
+      ? String(schemaObject[key]).trim()
+      : "";
+
+  const schemaContext = schemaString("@context");
+  const schemaType = schemaString("@type");
+  const schemaHeadline = schemaString("headline");
+  const schemaDescription = schemaString("description");
+  const schemaUrl = schemaString("url");
+
+  const schemaAuthor = schemaObject?.author;
+  const schemaPublisher = schemaObject?.publisher;
+  const schemaImage = schemaObject?.image;
+  const schemaDatePublished = schemaString("datePublished");
+  const schemaDateModified = schemaString("dateModified");
+
+  const normalizedSchemaType = schemaType.toLowerCase();
+
+  const schemaChecks: SchemaHealthCheck[] = [
+    {
+      id: "schema-present",
+      label: "Schema present",
+      passed: schemaPresent,
+      required: true,
+      detail: schemaPresent
+        ? "JSON-LD schema object is present."
+        : "Generate or add JSON-LD schema.",
+    },
+    {
+      id: "schema-object",
+      label: "Valid schema object",
+      passed: schemaObject !== null,
+      required: true,
+      detail:
+        schemaObject !== null
+          ? "Schema is a valid object."
+          : "Schema must be a JSON object, not an array.",
+    },
+    {
+      id: "schema-context",
+      label: "@context",
+      passed:
+        schemaContext === "https://schema.org" ||
+        schemaContext === "http://schema.org",
+      required: true,
+      detail:
+        schemaContext
+          ? `Context: ${schemaContext}`
+          : "Add https://schema.org as @context.",
+    },
+    {
+      id: "schema-type",
+      label: "@type",
+      passed:
+        normalizedSchemaType === "article" ||
+        normalizedSchemaType === "newsarticle" ||
+        normalizedSchemaType === "blogposting",
+      required: true,
+      detail:
+        schemaType
+          ? `Schema type: ${schemaType}`
+          : "Use Article, NewsArticle, or BlogPosting.",
+    },
+    {
+      id: "schema-headline",
+      label: "Headline",
+      passed:
+        schemaHeadline.length > 0 &&
+        (
+          schemaHeadline.toLowerCase() ===
+            title.toLowerCase() ||
+          schemaHeadline.toLowerCase() ===
+            metaTitle.toLowerCase()
+        ),
+      required: true,
+      detail:
+        !schemaHeadline
+          ? "Add a schema headline."
+          : schemaHeadline.toLowerCase() ===
+                title.toLowerCase() ||
+              schemaHeadline.toLowerCase() ===
+                metaTitle.toLowerCase()
+            ? "Headline matches title or meta title."
+            : "Schema headline differs from title metadata.",
+    },
+    {
+      id: "schema-description",
+      label: "Description",
+      passed:
+        schemaDescription.length > 0 &&
+        (
+          schemaDescription.toLowerCase() ===
+            metaDescription.toLowerCase() ||
+          schemaDescription.toLowerCase() ===
+            document.excerpt.trim().toLowerCase()
+        ),
+      required: true,
+      detail:
+        !schemaDescription
+          ? "Add a schema description."
+          : schemaDescription.toLowerCase() ===
+                metaDescription.toLowerCase() ||
+              schemaDescription.toLowerCase() ===
+                document.excerpt.trim().toLowerCase()
+            ? "Description matches article metadata."
+            : "Schema description differs from metadata.",
+    },
+    {
+      id: "schema-url",
+      label: "Canonical URL consistency",
+      passed:
+        schemaUrl.length > 0 &&
+        canonical.length > 0 &&
+        schemaUrl.toLowerCase() === canonical.toLowerCase(),
+      required: true,
+      detail:
+        !schemaUrl
+          ? "Add the canonical URL as schema url."
+          : schemaUrl.toLowerCase() ===
+              canonical.toLowerCase()
+            ? "Schema URL matches canonical URL."
+            : "Schema URL does not match canonical URL.",
+    },
+    {
+      id: "schema-author",
+      label: "Author",
+      passed:
+        typeof schemaAuthor === "string" ||
+        (
+          schemaAuthor !== null &&
+          typeof schemaAuthor === "object"
+        ),
+      required: false,
+      detail:
+        schemaAuthor
+          ? "Author data is present."
+          : "Add author data for stronger Article schema.",
+    },
+    {
+      id: "schema-publisher",
+      label: "Publisher",
+      passed:
+        schemaPublisher !== null &&
+        typeof schemaPublisher === "object",
+      required: false,
+      detail:
+        schemaPublisher
+          ? "Publisher data is present."
+          : "Add VenusRealm publisher data.",
+    },
+    {
+      id: "schema-image",
+      label: "Image",
+      passed:
+        typeof schemaImage === "string" ||
+        Array.isArray(schemaImage) ||
+        (
+          schemaImage !== null &&
+          typeof schemaImage === "object"
+        ),
+      required: false,
+      detail:
+        schemaImage
+          ? "Schema image data is present."
+          : "Add a representative article image.",
+    },
+    {
+      id: "schema-date-published",
+      label: "Date published",
+      passed: schemaDatePublished.length > 0,
+      required: false,
+      detail:
+        schemaDatePublished
+          ? "datePublished is present."
+          : "Add datePublished when publishing.",
+    },
+    {
+      id: "schema-date-modified",
+      label: "Date modified",
+      passed: schemaDateModified.length > 0,
+      required: false,
+      detail:
+        schemaDateModified
+          ? "dateModified is present."
+          : "Add dateModified for updated content.",
+    },
+  ];
+
+  const schemaPassed = schemaChecks.filter(
+    check => check.passed,
+  ).length;
+
+  const schemaRequiredChecks = schemaChecks.filter(
+    check => check.required,
+  );
+
+  const schemaRequiredPassed =
+    schemaRequiredChecks.filter(
+      check => check.passed,
+    ).length;
+
+  const schemaOptionalChecks = schemaChecks.filter(
+    check => !check.required,
+  );
+
+  const schemaOptionalPassed =
+    schemaOptionalChecks.filter(
+      check => check.passed,
+    ).length;
+
+  const schemaHealthScore = Math.round(
+    (
+      schemaRequiredPassed /
+      Math.max(1, schemaRequiredChecks.length)
+    ) * 80 +
+    (
+      schemaOptionalPassed /
+      Math.max(1, schemaOptionalChecks.length)
+    ) * 20,
+  );
+
   const checks: SeoCheck[] = [
     {
       id: "single-h1",
@@ -1401,6 +1654,15 @@ export function analyzeSeoDocument(
       largeDimensions: largeDimensionImages,
       issueCount: imageIssueCount,
       records: imageSeoRecords,
+    },
+    schemaHealth: {
+      score: schemaHealthScore,
+      present: schemaPresent,
+      validObject: schemaObject !== null,
+      schemaType,
+      passed: schemaPassed,
+      total: schemaChecks.length,
+      checks: schemaChecks,
     },
   };
 }

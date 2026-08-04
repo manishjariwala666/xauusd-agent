@@ -4587,3 +4587,126 @@ button,a,input,select,textarea { outline-offset:2px; }
     flex-direction: column;
   }
 }
+
+/* ===== SCHEMA HEALTH ===== */
+
+.studio-schema-health-card {
+  display: grid;
+  gap: 14px;
+}
+
+.studio-schema-health-summary {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.studio-schema-health-summary > div {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.studio-schema-health-summary span {
+  color: #64748b;
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.studio-schema-health-summary strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.studio-schema-checks {
+  display: grid;
+  gap: 8px;
+}
+
+.studio-schema-checks article {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto 1fr auto;
+  padding: 10px;
+}
+
+.studio-schema-checks article > span {
+  align-items: center;
+  border-radius: 999px;
+  color: #ffffff;
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+.studio-schema-checks article > div {
+  display: grid;
+  gap: 2px;
+}
+
+.studio-schema-checks article strong {
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.studio-schema-checks article small {
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.studio-schema-checks em {
+  color: #64748b;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.schema-check-passed {
+  background: #f0fdf4;
+  border-color: #bbf7d0 !important;
+}
+
+.schema-check-passed > span {
+  background: #22c55e;
+}
+
+.schema-check-required {
+  background: #fff1f2;
+  border-color: #fecdd3 !important;
+}
+
+.schema-check-required > span {
+  background: #ef4444;
+}
+
+.schema-check-optional {
+  background: #fff7ed;
+  border-color: #fed7aa !important;
+}
+
+.schema-check-optional > span {
+  background: #f97316;
+}
+
+@media (max-width: 720px) {
+  .studio-schema-health-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-schema-checks article {
+    grid-template-columns: auto 1fr;
+  }
+
+  .studio-schema-checks em {
+    grid-column: 2;
+  }
+}
