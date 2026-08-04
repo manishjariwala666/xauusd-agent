@@ -899,7 +899,10 @@ export function StudioWorkspace() {
           }
         />
 
-        <ContentInsightsPanel document={document} />
+        <ContentInsightsPanel
+          document={document}
+          drafts={drafts}
+        />
       </div>
 
       {previewOpen ? (

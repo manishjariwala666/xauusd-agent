@@ -1,5 +1,145 @@
 "use client";
 
+type InternalLinkDraft = {
+  id: number;
+  title: string;
+  slug: string;
+  status: string;
+  updated_at: string | null;
+};
+
+type InternalLinkSuggestion = {
+  id: number;
+  title: string;
+  url: string;
+  anchorText: string;
+  confidence: number;
+  matchedTerms: string[];
+};
+
+const INTERNAL_LINK_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "for",
+  "from",
+  "how",
+  "in",
+  "is",
+  "it",
+  "of",
+  "on",
+  "or",
+  "the",
+  "to",
+  "today",
+  "what",
+  "when",
+  "why",
+  "with",
+]);
+
+function internalLinkTokens(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, " ")
+        .replace(/-/g, " ")
+        .split(/\s+/)
+        .map(token => token.trim())
+        .filter(
+          token =>
+            token.length >= 3 &&
+            !INTERNAL_LINK_STOP_WORDS.has(token),
+        ),
+    ),
+  );
+}
+
+function buildInternalLinkSuggestions(
+  document: CmsDocument,
+  drafts: InternalLinkDraft[],
+  linkedUrls: string[],
+): InternalLinkSuggestion[] {
+  const currentTokens = new Set(
+    internalLinkTokens(
+      [
+        document.title,
+        document.slug,
+        document.excerpt,
+        document.seo.focusKeyword,
+      ].join(" "),
+    ),
+  );
+
+  const normalizedLinkedUrls = new Set(
+    linkedUrls.map(url =>
+      url
+        .trim()
+        .toLowerCase()
+        .replace(/^https?:\/\/(?:www\.)?venusrealm\.net/i, ""),
+    ),
+  );
+
+  return drafts
+    .filter(draft => draft.id !== document.id)
+    .filter(draft => draft.slug.trim())
+    .map(draft => {
+      const url = `/blog/${draft.slug.trim()}`;
+      const draftTokens = internalLinkTokens(
+        `${draft.title} ${draft.slug}`,
+      );
+
+      const matchedTerms = draftTokens.filter(token =>
+        currentTokens.has(token),
+      );
+
+      const overlapBase = Math.max(
+        1,
+        Math.min(currentTokens.size, draftTokens.length),
+      );
+
+      const confidence = Math.min(
+        100,
+        Math.round(
+          (matchedTerms.length / overlapBase) * 100,
+        ),
+      );
+
+      return {
+        id: draft.id,
+        title: draft.title || "Untitled article",
+        url,
+        anchorText:
+          draft.title.trim() ||
+          draft.slug.replace(/-/g, " "),
+        confidence,
+        matchedTerms,
+      };
+    })
+    .filter(
+      suggestion =>
+        suggestion.matchedTerms.length > 0 &&
+        !normalizedLinkedUrls.has(
+          suggestion.url.toLowerCase(),
+        ),
+    )
+    .sort(
+      (left, right) =>
+        right.confidence - left.confidence ||
+        right.matchedTerms.length -
+          left.matchedTerms.length ||
+        left.title.localeCompare(right.title),
+    )
+    .slice(0, 5);
+}
+
 import {
   analyzeSeoDocument,
 } from "@/lib/editor-v2/seo-analyzer";
@@ -9,14 +149,23 @@ import type {
 
 export function ContentInsightsPanel({
   document,
+  drafts,
 }: {
   document: CmsDocument;
+  drafts: InternalLinkDraft[];
 }) {
   const analysis = analyzeSeoDocument(document);
 
   const passedChecks = analysis.checks.filter(
     check => check.passed,
   ).length;
+
+  const internalLinkSuggestions =
+    buildInternalLinkSuggestions(
+      document,
+      drafts,
+      analysis.links.records.map(link => link.url),
+    );
 
   return (
     <aside className="studio-insights-panel">
@@ -416,6 +565,56 @@ export function ContentInsightsPanel({
         ) : (
           <p className="studio-image-empty">
             No image blocks detected in this article.
+          </p>
+        )}
+      </section>
+
+      <section className="studio-insight-card studio-internal-suggestions-card">
+        <header>
+          <div>
+            <span>INTERNAL LINK SUGGESTIONS</span>
+            <h2>{internalLinkSuggestions.length}</h2>
+          </div>
+
+          <strong>
+            {internalLinkSuggestions.length > 0
+              ? "Available"
+              : "No matches"}
+          </strong>
+        </header>
+
+        {internalLinkSuggestions.length > 0 ? (
+          <div className="studio-internal-suggestions">
+            {internalLinkSuggestions.map(suggestion => (
+              <article key={suggestion.id}>
+                <header>
+                  <strong>{suggestion.title}</strong>
+
+                  <span>
+                    {suggestion.confidence}% match
+                  </span>
+                </header>
+
+                <code>{suggestion.url}</code>
+
+                <p>
+                  Suggested anchor:{" "}
+                  <strong>
+                    {suggestion.anchorText}
+                  </strong>
+                </p>
+
+                <small>
+                  Matching terms:{" "}
+                  {suggestion.matchedTerms.join(", ")}
+                </small>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="studio-internal-suggestions-empty">
+            No relevant saved drafts found, or matching
+            articles are already linked.
           </p>
         )}
       </section>
