@@ -175,6 +175,191 @@ export function ContentInsightsPanel({
     );
   }
 
+  function safeReportFilename(): string {
+    const base =
+      document.slug.trim() ||
+      document.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") ||
+      "untitled-article";
+
+    return `${base}-seo-report`;
+  }
+
+  function triggerDownload(
+    content: string,
+    mimeType: string,
+    extension: string,
+  ) {
+    const blob = new Blob([content], {
+      type: `${mimeType};charset=utf-8`,
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = window.document.createElement("a");
+
+    link.href = url;
+    link.download = `${safeReportFilename()}.${extension}`;
+
+    window.document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(url);
+  }
+
+  function buildSeoReport() {
+    return {
+      generatedAt: new Date().toISOString(),
+      article: {
+        id: document.id,
+        title: document.title,
+        slug: document.slug,
+        status: document.status,
+        excerpt: document.excerpt,
+        canonicalUrl: document.seo.canonicalUrl,
+        focusKeyword: document.seo.focusKeyword,
+      },
+      health: analysis.advancedHealth,
+      seo: {
+        score: analysis.seoScore,
+        breakdown: analysis.scoreBreakdown,
+      },
+      content: {
+        score: analysis.contentScore,
+        wordCount: analysis.wordCount,
+        readingTimeMinutes:
+          analysis.readingTimeMinutes,
+        checks: analysis.checks,
+      },
+      keyword: analysis.keywordAnalysis,
+      readability: analysis.readability,
+      publishChecklist: analysis.publishChecklist,
+      imageSeo: analysis.imageSeo,
+      schemaHealth: analysis.schemaHealth,
+      socialPreview: analysis.socialPreview,
+      links: analysis.links,
+      internalLinkSuggestions,
+    };
+  }
+
+  function downloadSeoReportJson() {
+    triggerDownload(
+      JSON.stringify(buildSeoReport(), null, 2),
+      "application/json",
+      "json",
+    );
+  }
+
+  function csvCell(value: unknown): string {
+    const normalized =
+      value === null || value === undefined
+        ? ""
+        : typeof value === "object"
+          ? JSON.stringify(value)
+          : String(value);
+
+    return `"${normalized.replace(/"/g, '""')}"`;
+  }
+
+  function downloadSeoReportCsv() {
+    const rows: Array<[string, string, unknown]> = [
+      ["Article", "Title", document.title],
+      ["Article", "Slug", document.slug],
+      ["Article", "Status", document.status],
+      [
+        "Article",
+        "Canonical URL",
+        document.seo.canonicalUrl,
+      ],
+      [
+        "Article",
+        "Focus Keyword",
+        document.seo.focusKeyword,
+      ],
+      [
+        "Overall Health",
+        "Score",
+        analysis.advancedHealth.score,
+      ],
+      [
+        "Overall Health",
+        "Grade",
+        analysis.advancedHealth.grade,
+      ],
+      [
+        "Overall Health",
+        "Ready",
+        analysis.advancedHealth.ready,
+      ],
+      ["SEO", "Score", analysis.seoScore],
+      ["Content", "Score", analysis.contentScore],
+      [
+        "Readability",
+        "Score",
+        analysis.readability.score,
+      ],
+      ["Image SEO", "Score", analysis.imageSeo.score],
+      [
+        "Schema Health",
+        "Score",
+        analysis.schemaHealth.score,
+      ],
+      [
+        "Social Preview",
+        "Score",
+        analysis.socialPreview.score,
+      ],
+      [
+        "Publish Checklist",
+        "Passed",
+        `${analysis.publishChecklist.passed}/${analysis.publishChecklist.total}`,
+      ],
+      ["Links", "Total", analysis.links.total],
+      ["Links", "Issues", analysis.links.issueCount],
+    ];
+
+    for (const category of analysis.advancedHealth.categories) {
+      rows.push([
+        "Category",
+        category.label,
+        category.score,
+      ]);
+    }
+
+    for (const issue of analysis.advancedHealth.priorityIssues) {
+      rows.push([
+        `Priority Issue (${issue.severity})`,
+        issue.label,
+        `${issue.detail} [${issue.source}]`,
+      ]);
+    }
+
+    for (const item of analysis.publishChecklist.items) {
+      rows.push([
+        "Publish Checklist",
+        item.label,
+        `${item.passed ? "PASS" : "FAIL"} - ${item.detail}`,
+      ]);
+    }
+
+    const csv = [
+      ["Section", "Metric", "Value"]
+        .map(csvCell)
+        .join(","),
+      ...rows.map(row =>
+        row.map(csvCell).join(","),
+      ),
+    ].join("\n");
+
+    triggerDownload(
+      `\uFEFF${csv}`,
+      "text/csv",
+      "csv",
+    );
+  }
+
   return (
     <aside className="studio-insights-panel">
       <section className="studio-insight-card studio-advanced-health-card">
@@ -189,6 +374,24 @@ export function ContentInsightsPanel({
             <small>{analysis.advancedHealth.label}</small>
           </div>
         </header>
+
+        <div className="studio-seo-export-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={downloadSeoReportJson}
+          >
+            Export JSON
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={downloadSeoReportCsv}
+          >
+            Export CSV
+          </button>
+        </div>
 
         <div className="studio-health-status-row">
           <span

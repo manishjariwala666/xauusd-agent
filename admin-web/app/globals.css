@@ -5134,3 +5134,15 @@ button,a,input,select,textarea { outline-offset:2px; }
     animation: none;
   }
 }
+
+/* ===== SEO EXPORT REPORT ===== */
+
+.studio-seo-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.studio-seo-export-actions .secondary-button {
+  margin: 0;
+}
