@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from services.admin_auth_api import router as admin_auth_router
+from services.admin_agents_api import router as admin_agents_router
 from services.admin_content_api import router as admin_content_router
 from services.admin_media_api import router as admin_media_router
 
@@ -31,6 +32,7 @@ app = FastAPI(
     openapi_url=None,
 )
 app.include_router(admin_auth_router)
+app.include_router(admin_agents_router)
 app.include_router(admin_content_router)
 app.include_router(admin_media_router)
 
