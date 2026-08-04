@@ -689,6 +689,82 @@ export function ContentInsightsPanel({
         </div>
       </section>
 
+      <section className="studio-insight-card studio-social-preview-card">
+        <header>
+          <div>
+            <span>SOCIAL PREVIEW</span>
+            <h2>{analysis.socialPreview.score}/100</h2>
+          </div>
+
+          <strong>
+            {analysis.socialPreview.passed}/
+            {analysis.socialPreview.total}
+          </strong>
+        </header>
+
+        <div className="studio-social-preview-card-box">
+          {analysis.socialPreview.image ? (
+            <img
+              src={analysis.socialPreview.image}
+              alt=""
+            />
+          ) : (
+            <div className="studio-social-preview-image-empty">
+              No preview image
+            </div>
+          )}
+
+          <div>
+            <small>venusrealm.net</small>
+
+            <strong>
+              {analysis.socialPreview.title ||
+                "Untitled article"}
+            </strong>
+
+            <p>
+              {analysis.socialPreview.description ||
+                "Add a useful preview description."}
+            </p>
+
+            <code>
+              {analysis.socialPreview.url ||
+                "Preview URL unavailable"}
+            </code>
+          </div>
+        </div>
+
+        <div className="studio-social-platforms">
+          {analysis.socialPreview.platforms.length > 0 ? (
+            analysis.socialPreview.platforms.map(platform => (
+              <span key={platform}>{platform}</span>
+            ))
+          ) : (
+            <small>No platforms selected</small>
+          )}
+        </div>
+
+        <div className="studio-social-preview-checks">
+          {analysis.socialPreview.checks.map(check => (
+            <article
+              key={check.id}
+              className={
+                check.passed
+                  ? "social-preview-check-passed"
+                  : "social-preview-check-warning"
+              }
+            >
+              <span>{check.passed ? "✓" : "!"}</span>
+
+              <div>
+                <strong>{check.label}</strong>
+                <small>{check.detail}</small>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section className="studio-insight-card studio-link-audit-card">
         <header>
           <div>

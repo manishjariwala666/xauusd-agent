@@ -154,6 +154,26 @@ export type SchemaHealthAnalysis = {
   checks: SchemaHealthCheck[];
 };
 
+export type SocialPreviewCheck = {
+  id: string;
+  label: string;
+  passed: boolean;
+  detail: string;
+};
+
+export type SocialPreviewAnalysis = {
+  score: number;
+  title: string;
+  description: string;
+  url: string;
+  image: string;
+  sharingEnabled: boolean;
+  platforms: string[];
+  passed: number;
+  total: number;
+  checks: SocialPreviewCheck[];
+};
+
 export type SeoDocumentAnalysis = {
   seoScore: number;
   contentScore: number;
@@ -168,6 +188,7 @@ export type SeoDocumentAnalysis = {
   publishChecklist: PublishChecklist;
   imageSeo: ImageSeoAnalysis;
   schemaHealth: SchemaHealthAnalysis;
+  socialPreview: SocialPreviewAnalysis;
 };
 
 function looksLikeHtml(value: string): boolean {
@@ -1119,6 +1140,131 @@ export function analyzeSeoDocument(
     ) * 20,
   );
 
+  const socialPreviewTitle =
+    metaTitle ||
+    title;
+
+  const socialPreviewDescription =
+    metaDescription ||
+    document.excerpt.trim();
+
+  const socialPreviewUrl =
+    canonical ||
+    (
+      slug
+        ? `https://venusrealm.net/${slug}`
+        : ""
+    );
+
+  const socialPreviewImage =
+    imageSeoRecords.find(image => image.src)?.src || "";
+
+  const socialPreviewChecks: SocialPreviewCheck[] = [
+    {
+      id: "social-title",
+      label: "Preview title",
+      passed:
+        socialPreviewTitle.length >= 30 &&
+        socialPreviewTitle.length <= 70,
+      detail:
+        socialPreviewTitle.length >= 30 &&
+        socialPreviewTitle.length <= 70
+          ? "Title length is suitable for search and social previews."
+          : `${socialPreviewTitle.length} characters; use 30–70.`,
+    },
+    {
+      id: "social-description",
+      label: "Preview description",
+      passed:
+        socialPreviewDescription.length >= 100 &&
+        socialPreviewDescription.length <= 200,
+      detail:
+        socialPreviewDescription.length >= 100 &&
+        socialPreviewDescription.length <= 200
+          ? "Description length is suitable."
+          : `${socialPreviewDescription.length} characters; use 100–200.`,
+    },
+    {
+      id: "social-url",
+      label: "Preview URL",
+      passed:
+        /^https:\/\/(?:www\.)?venusrealm\.net(?:\/|$)/i.test(
+          socialPreviewUrl,
+        ),
+      detail:
+        socialPreviewUrl
+          ? "VenusRealm preview URL is available."
+          : "Add a canonical URL or valid slug.",
+    },
+    {
+      id: "social-image",
+      label: "Preview image",
+      passed: socialPreviewImage.length > 0,
+      detail:
+        socialPreviewImage
+          ? "Article image is available for social cards."
+          : "Add an image block for richer social previews.",
+    },
+    {
+      id: "social-sharing",
+      label: "Social sharing enabled",
+      passed: document.socialSharing.enabled,
+      detail:
+        document.socialSharing.enabled
+          ? "Social sharing is enabled."
+          : "Enable social sharing for this article.",
+    },
+    {
+      id: "social-platforms",
+      label: "Sharing platforms",
+      passed:
+        document.socialSharing.enabled &&
+        document.socialSharing.platforms.length > 0,
+      detail:
+        document.socialSharing.platforms.length > 0
+          ? `${document.socialSharing.platforms.length} platforms selected.`
+          : "Select at least one sharing platform.",
+    },
+    {
+      id: "facebook-platform",
+      label: "Facebook sharing",
+      passed:
+        !document.socialSharing.enabled ||
+        document.socialSharing.platforms.includes(
+          "facebook",
+        ),
+      detail:
+        document.socialSharing.platforms.includes(
+          "facebook",
+        )
+          ? "Facebook sharing is selected."
+          : "Facebook is not selected.",
+    },
+    {
+      id: "x-platform",
+      label: "X sharing",
+      passed:
+        !document.socialSharing.enabled ||
+        document.socialSharing.platforms.includes("x"),
+      detail:
+        document.socialSharing.platforms.includes("x")
+          ? "X sharing is selected."
+          : "X is not selected.",
+    },
+  ];
+
+  const socialPreviewPassed =
+    socialPreviewChecks.filter(
+      check => check.passed,
+    ).length;
+
+  const socialPreviewScore = Math.round(
+    (
+      socialPreviewPassed /
+      Math.max(1, socialPreviewChecks.length)
+    ) * 100,
+  );
+
   const checks: SeoCheck[] = [
     {
       id: "single-h1",
@@ -1663,6 +1809,18 @@ export function analyzeSeoDocument(
       passed: schemaPassed,
       total: schemaChecks.length,
       checks: schemaChecks,
+    },
+    socialPreview: {
+      score: socialPreviewScore,
+      title: socialPreviewTitle,
+      description: socialPreviewDescription,
+      url: socialPreviewUrl,
+      image: socialPreviewImage,
+      sharingEnabled: document.socialSharing.enabled,
+      platforms: document.socialSharing.platforms,
+      passed: socialPreviewPassed,
+      total: socialPreviewChecks.length,
+      checks: socialPreviewChecks,
     },
   };
 }
