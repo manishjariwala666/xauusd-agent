@@ -609,6 +609,61 @@ export function StudioWorkspace() {
             }
           />
         </label>
+
+        <section
+          className="studio-v2-quick-seo-description"
+          data-seo-target="seo"
+        >
+          <header>
+            <div>
+              <span className="section-kicker">
+                QUICK SEO
+              </span>
+              <strong>Meta description</strong>
+            </div>
+
+            <small
+              className={
+                document.seo.metaDescription.length > 160
+                  ? "is-over-limit"
+                  : document.seo.metaDescription.length >= 120
+                    ? "is-recommended"
+                    : ""
+              }
+            >
+              {document.seo.metaDescription.length}
+              {" / "}160
+            </small>
+          </header>
+
+          <textarea
+            value={document.seo.metaDescription}
+            rows={4}
+            maxLength={200}
+            placeholder="Write a concise search result description"
+            aria-describedby="studio-v2-meta-description-help"
+            onChange={event =>
+              setDocument(current =>
+                current
+                  ? {
+                      ...current,
+                      seo: {
+                        ...current.seo,
+                        metaDescription:
+                          event.target.value,
+                      },
+                    }
+                  : current,
+              )
+            }
+          />
+
+          <small id="studio-v2-meta-description-help">
+            Recommended length: 120–160 characters.
+            This value is included in autosave and
+            database draft saving.
+          </small>
+        </section>
       </section>
 
       <section className="studio-v2-publishing-features">

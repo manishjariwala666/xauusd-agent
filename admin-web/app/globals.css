@@ -5762,3 +5762,62 @@ button,a,input,select,textarea { outline-offset:2px; }
     display: none !important;
   }
 }
+
+/* ===== CONTENT STUDIO QUICK SEO DESCRIPTION ===== */
+
+.studio-v2-quick-seo-description {
+  background: #f8fafc;
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.studio-v2-quick-seo-description > header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.studio-v2-quick-seo-description > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.studio-v2-quick-seo-description > header strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.studio-v2-quick-seo-description > header small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.studio-v2-quick-seo-description > header small.is-recommended {
+  color: #15803d;
+}
+
+.studio-v2-quick-seo-description > header small.is-over-limit {
+  color: #b91c1c;
+}
+
+.studio-v2-quick-seo-description textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.studio-v2-quick-seo-description > small {
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .studio-v2-quick-seo-description {
+    padding: 12px;
+  }
+}
