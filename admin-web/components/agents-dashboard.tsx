@@ -45,9 +45,13 @@ function ActionList({
 function AgentCard({
   agent,
   onOpen,
+  onToggle,
+  busy,
 }: {
   agent: AgentDashboardRecord;
   onOpen: (agent: AgentDashboardRecord) => void;
+  onToggle: (agent: AgentDashboardRecord) => void;
+  busy: boolean;
 }) {
   return (
     <article className="agent-card">
@@ -153,13 +157,43 @@ function AgentCard({
       </div>
 
       <footer className="agent-card-footer">
-        <span>Read-only dashboard</span>
-        <button
-          type="button"
-          onClick={() => onOpen(agent)}
-        >
-          View details
-        </button>
+        <span>
+          {agent.agent_key === "ai_blog_agent"
+            ? "Guarded control enabled"
+            : "Read-only dashboard"}
+        </span>
+
+        <div className="agent-card-footer-actions">
+          {agent.agent_key === "ai_blog_agent" ? (
+            <button
+              type="button"
+              className={
+                agent.is_enabled
+                  ? "agent-toggle-button agent-toggle-disable"
+                  : "agent-toggle-button agent-toggle-enable"
+              }
+              disabled={
+                busy ||
+                agent.is_enabled === null ||
+                !agent.is_configured
+              }
+              onClick={() => onToggle(agent)}
+            >
+              {busy
+                ? "Updating…"
+                : agent.is_enabled
+                  ? "Turn OFF"
+                  : "Turn ON"}
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => onOpen(agent)}
+          >
+            View details
+          </button>
+        </div>
       </footer>
     </article>
   );
@@ -177,25 +211,31 @@ export function AgentsDashboard({
   const [sort, setSort] = useState("NAME_ASC");
   const [selectedAgent, setSelectedAgent] =
     useState<AgentDashboardRecord | null>(null);
+  const [agentItems, setAgentItems] =
+    useState<AgentDashboardRecord[]>(data.items);
+  const [toggleBusy, setToggleBusy] =
+    useState<string | null>(null);
+  const [controlMessage, setControlMessage] =
+    useState("");
 
-  const configured = data.items.filter(
+  const configured = agentItems.filter(
     agent => agent.brain_configured,
   ).length;
 
-  const highRisk = data.items.filter(
+  const highRisk = agentItems.filter(
     agent =>
       agent.default_risk === "HIGH" ||
       agent.default_risk === "CRITICAL",
   ).length;
 
-  const approvalGated = data.items.filter(
+  const approvalGated = agentItems.filter(
     agent => agent.approval_required_actions.length > 0,
   ).length;
 
   const statuses = useMemo(
     () =>
       Array.from(
-        new Set(data.items.map(agent => agent.status)),
+        new Set(agentItems.map(agent => agent.status)),
       ).sort(),
     [data.items],
   );
@@ -211,7 +251,7 @@ export function AgentsDashboard({
       UNKNOWN: 1,
     };
 
-    return data.items
+    return agentItems
       .filter(agent => {
         const searchable = [
           agent.agent_key,
@@ -283,7 +323,7 @@ export function AgentsDashboard({
           right.short_name,
         );
       });
-  }, [brain, data.items, risk, search, sort, status]);
+  }, [agentItems, brain, risk, search, sort, status]);
 
   function clearFilters() {
     setSearch("");
@@ -291,6 +331,96 @@ export function AgentsDashboard({
     setStatus("ALL");
     setBrain("ALL");
     setSort("NAME_ASC");
+  }
+
+  async function toggleBlogAgent(
+    agent: AgentDashboardRecord,
+  ) {
+    if (
+      agent.agent_key !== "ai_blog_agent" ||
+      agent.is_enabled === null ||
+      toggleBusy
+    ) {
+      return;
+    }
+
+    const nextEnabled = !agent.is_enabled;
+    const confirmed = window.confirm(
+      nextEnabled
+        ? "Turn AI Blog Agent ON in local staging?"
+        : "Turn AI Blog Agent OFF in local staging?",
+    );
+
+    if (!confirmed) return;
+
+    setToggleBusy(agent.agent_key);
+    setControlMessage("Updating AI Blog Agent…");
+
+    try {
+      const csrfResponse = await fetch(
+        "/api/admin/auth/csrf",
+        { cache: "no-store" },
+      );
+
+      if (!csrfResponse.ok) {
+        throw new Error("CSRF token could not be loaded.");
+      }
+
+      const csrfData = await csrfResponse.json() as {
+        csrfToken: string;
+      };
+
+      const response = await fetch(
+        `/api/admin/agents/${agent.agent_key}/enabled`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfData.csrfToken,
+          },
+          body: JSON.stringify({
+            enabled: nextEnabled,
+          }),
+        },
+      );
+
+      const result = await response.json() as {
+        enabled?: boolean;
+        message?: string;
+        detail?: string;
+      };
+
+      if (!response.ok || typeof result.enabled !== "boolean") {
+        throw new Error(
+          result.detail ||
+          result.message ||
+          "Agent state could not be updated.",
+        );
+      }
+
+      setAgentItems(current =>
+        current.map(item =>
+          item.agent_key === agent.agent_key
+            ? {
+                ...item,
+                is_enabled: result.enabled ?? item.is_enabled,
+              }
+            : item,
+        ),
+      );
+
+      setControlMessage(
+        result.message || "AI Blog Agent state updated.",
+      );
+    } catch (error) {
+      setControlMessage(
+        error instanceof Error
+          ? error.message
+          : "Agent control service is temporarily unavailable.",
+      );
+    } finally {
+      setToggleBusy(null);
+    }
   }
 
   return (
@@ -332,11 +462,16 @@ export function AgentsDashboard({
       </section>
 
       <aside className="agents-readonly-notice" role="status">
-        <strong>Read-only safety mode</strong>
+        <strong>Guarded control mode</strong>
         <p>
-          No agent can be started, stopped, retried or used to send
-          real signals or messages from this page.
+          Only AI Blog Agent can be enabled or disabled in local
+          staging. All other agents and execution actions remain locked.
         </p>
+        {controlMessage ? (
+          <p className="agent-control-message">
+            {controlMessage}
+          </p>
+        ) : null}
       </aside>
 
       <section
@@ -434,6 +569,8 @@ export function AgentsDashboard({
               agent={agent}
               key={agent.agent_key}
               onOpen={setSelectedAgent}
+              onToggle={toggleBlogAgent}
+              busy={toggleBusy === agent.agent_key}
             />
           ))}
         </section>

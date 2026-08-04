@@ -6593,3 +6593,49 @@ button,a,input,select,textarea { outline-offset:2px; }
     gap: 10px;
   }
 }
+
+.agent-card-footer-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-toggle-button {
+  border: 1px solid transparent !important;
+  cursor: pointer;
+}
+
+.agent-toggle-enable {
+  background: #ecfdf3 !important;
+  border-color: #a6f4c5 !important;
+  color: #067647;
+}
+
+.agent-toggle-disable {
+  background: #fff1f3 !important;
+  border-color: #fda4af !important;
+  color: #be123c;
+}
+
+.agent-toggle-button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.agent-control-message {
+  border-top: 1px solid #bfdbfe;
+  margin-top: 10px !important;
+  padding-top: 10px;
+}
+
+@media (max-width: 680px) {
+  .agent-card-footer-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .agent-card-footer-actions button {
+    width: 100%;
+  }
+}
