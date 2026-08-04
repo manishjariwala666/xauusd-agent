@@ -174,6 +174,40 @@ export type SocialPreviewAnalysis = {
   checks: SocialPreviewCheck[];
 };
 
+export type SeoHealthCategory = {
+  id:
+    | "seo"
+    | "content"
+    | "readability"
+    | "images"
+    | "schema"
+    | "social"
+    | "publish";
+  label: string;
+  score: number;
+  weight: number;
+  status: "good" | "warning" | "critical";
+};
+
+export type SeoHealthPriorityIssue = {
+  id: string;
+  label: string;
+  detail: string;
+  source: string;
+  severity: "critical" | "warning";
+};
+
+export type AdvancedSeoHealthAnalysis = {
+  score: number;
+  grade: "A+" | "A" | "B" | "C" | "D" | "F";
+  label: "Excellent" | "Good" | "Improve" | "Critical";
+  ready: boolean;
+  criticalCount: number;
+  warningCount: number;
+  categories: SeoHealthCategory[];
+  priorityIssues: SeoHealthPriorityIssue[];
+};
+
 export type SeoDocumentAnalysis = {
   seoScore: number;
   contentScore: number;
@@ -189,6 +223,7 @@ export type SeoDocumentAnalysis = {
   imageSeo: ImageSeoAnalysis;
   schemaHealth: SchemaHealthAnalysis;
   socialPreview: SocialPreviewAnalysis;
+  advancedHealth: AdvancedSeoHealthAnalysis;
 };
 
 function looksLikeHtml(value: string): boolean {
@@ -1746,6 +1781,185 @@ export function analyzeSeoDocument(
     (passedChecks / checks.length) * 100,
   );
 
+  const publishReadinessScore = Math.round(
+    (
+      publishChecklist.passed /
+      Math.max(1, publishChecklist.total)
+    ) * 100,
+  );
+
+  const healthStatus = (
+    score: number,
+  ): SeoHealthCategory["status"] =>
+    score >= 80
+      ? "good"
+      : score >= 60
+        ? "warning"
+        : "critical";
+
+  const healthCategories: SeoHealthCategory[] = [
+    {
+      id: "seo",
+      label: "SEO",
+      score: Math.min(seoScore, 100),
+      weight: 25,
+      status: healthStatus(Math.min(seoScore, 100)),
+    },
+    {
+      id: "content",
+      label: "Content",
+      score: contentScore,
+      weight: 15,
+      status: healthStatus(contentScore),
+    },
+    {
+      id: "readability",
+      label: "Readability",
+      score: roundedReadabilityScore,
+      weight: 10,
+      status: healthStatus(roundedReadabilityScore),
+    },
+    {
+      id: "images",
+      label: "Image SEO",
+      score: imageSeoScore,
+      weight: 10,
+      status: healthStatus(imageSeoScore),
+    },
+    {
+      id: "schema",
+      label: "Schema",
+      score: schemaHealthScore,
+      weight: 15,
+      status: healthStatus(schemaHealthScore),
+    },
+    {
+      id: "social",
+      label: "Social",
+      score: socialPreviewScore,
+      weight: 10,
+      status: healthStatus(socialPreviewScore),
+    },
+    {
+      id: "publish",
+      label: "Publish",
+      score: publishReadinessScore,
+      weight: 15,
+      status: healthStatus(publishReadinessScore),
+    },
+  ];
+
+  const advancedHealthScore = Math.round(
+    healthCategories.reduce(
+      (total, category) =>
+        total +
+        category.score * (category.weight / 100),
+      0,
+    ),
+  );
+
+  const advancedHealthGrade:
+    AdvancedSeoHealthAnalysis["grade"] =
+      advancedHealthScore >= 95
+        ? "A+"
+        : advancedHealthScore >= 90
+          ? "A"
+          : advancedHealthScore >= 80
+            ? "B"
+            : advancedHealthScore >= 70
+              ? "C"
+              : advancedHealthScore >= 60
+                ? "D"
+                : "F";
+
+  const advancedHealthLabel:
+    AdvancedSeoHealthAnalysis["label"] =
+      advancedHealthScore >= 90
+        ? "Excellent"
+        : advancedHealthScore >= 80
+          ? "Good"
+          : advancedHealthScore >= 60
+            ? "Improve"
+            : "Critical";
+
+  const healthIssueCandidates: SeoHealthPriorityIssue[] = [
+    ...publishChecklist.items
+      .filter(item => !item.passed && item.required)
+      .map(item => ({
+        id: `publish-${item.id}`,
+        label: item.label,
+        detail: item.detail,
+        source: "Publish checklist",
+        severity: "critical" as const,
+      })),
+    ...schemaChecks
+      .filter(check => !check.passed && check.required)
+      .map(check => ({
+        id: `schema-${check.id}`,
+        label: check.label,
+        detail: check.detail,
+        source: "Schema health",
+        severity: "critical" as const,
+      })),
+    ...checks
+      .filter(check => !check.passed)
+      .map(check => ({
+        id: `content-${check.id}`,
+        label: check.label,
+        detail: check.detail,
+        source: "Content checker",
+        severity:
+          check.severity === "error"
+            ? "critical" as const
+            : "warning" as const,
+      })),
+    ...socialPreviewChecks
+      .filter(check => !check.passed)
+      .map(check => ({
+        id: `social-${check.id}`,
+        label: check.label,
+        detail: check.detail,
+        source: "Social preview",
+        severity: "warning" as const,
+      })),
+  ];
+
+  if (imageIssueCount > 0) {
+    healthIssueCandidates.push({
+      id: "image-seo-issues",
+      label: "Image SEO issues",
+      detail: `${imageIssueCount} image issues detected.`,
+      source: "Image SEO",
+      severity:
+        missingAltImages.length > 0 ||
+        missingSourceImages > 0
+          ? "critical"
+          : "warning",
+    });
+  }
+
+  const uniqueHealthIssues = Array.from(
+    new Map(
+      healthIssueCandidates.map(issue => [
+        `${issue.label}|${issue.detail}`,
+        issue,
+      ]),
+    ).values(),
+  );
+
+  const criticalHealthIssues = uniqueHealthIssues.filter(
+    issue => issue.severity === "critical",
+  );
+
+  const warningHealthIssues = uniqueHealthIssues.filter(
+    issue => issue.severity === "warning",
+  );
+
+  const priorityHealthIssues = [
+    ...criticalHealthIssues,
+    ...warningHealthIssues,
+  ].slice(0, 5);
+
   return {
     seoScore: Math.min(seoScore, 100),
     contentScore,
@@ -1821,6 +2035,19 @@ export function analyzeSeoDocument(
       passed: socialPreviewPassed,
       total: socialPreviewChecks.length,
       checks: socialPreviewChecks,
+    },
+    advancedHealth: {
+      score: advancedHealthScore,
+      grade: advancedHealthGrade,
+      label: advancedHealthLabel,
+      ready:
+        publishChecklist.ready &&
+        criticalHealthIssues.length === 0 &&
+        advancedHealthScore >= 80,
+      criticalCount: criticalHealthIssues.length,
+      warningCount: warningHealthIssues.length,
+      categories: healthCategories,
+      priorityIssues: priorityHealthIssues,
     },
   };
 }

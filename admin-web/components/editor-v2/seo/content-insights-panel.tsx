@@ -169,6 +169,102 @@ export function ContentInsightsPanel({
 
   return (
     <aside className="studio-insights-panel">
+      <section className="studio-insight-card studio-advanced-health-card">
+        <header>
+          <div>
+            <span>ADVANCED SEO HEALTH</span>
+            <h2>{analysis.advancedHealth.score}/100</h2>
+          </div>
+
+          <div className="studio-health-grade">
+            <strong>{analysis.advancedHealth.grade}</strong>
+            <small>{analysis.advancedHealth.label}</small>
+          </div>
+        </header>
+
+        <div className="studio-health-status-row">
+          <span
+            className={
+              analysis.advancedHealth.ready
+                ? "health-ready"
+                : "health-needs-work"
+            }
+          >
+            {analysis.advancedHealth.ready
+              ? "Publish ready"
+              : "Needs work"}
+          </span>
+
+          <small>
+            {analysis.advancedHealth.criticalCount} critical
+            {" · "}
+            {analysis.advancedHealth.warningCount} warnings
+          </small>
+        </div>
+
+        <div className="studio-health-categories">
+          {analysis.advancedHealth.categories.map(
+            category => (
+              <article
+                key={category.id}
+                className={`health-category-${category.status}`}
+              >
+                <header>
+                  <strong>{category.label}</strong>
+                  <span>{category.score}/100</span>
+                </header>
+
+                <div className="studio-health-progress">
+                  <span
+                    style={{
+                      width: `${category.score}%`,
+                    }}
+                  />
+                </div>
+
+                <small>
+                  Weight {category.weight}%
+                </small>
+              </article>
+            ),
+          )}
+        </div>
+
+        <div className="studio-health-priority">
+          <h3>Priority Issues</h3>
+
+          {analysis.advancedHealth.priorityIssues.length >
+          0 ? (
+            analysis.advancedHealth.priorityIssues.map(
+              issue => (
+                <article
+                  key={issue.id}
+                  className={
+                    issue.severity === "critical"
+                      ? "health-issue-critical"
+                      : "health-issue-warning"
+                  }
+                >
+                  <span>
+                    {issue.severity === "critical"
+                      ? "!"
+                      : "⚠"}
+                  </span>
+
+                  <div>
+                    <strong>{issue.label}</strong>
+                    <small>{issue.detail}</small>
+                    <em>{issue.source}</em>
+                  </div>
+                </article>
+              ),
+            )
+          ) : (
+            <p>No priority SEO issues detected.</p>
+          )}
+        </div>
+      </section>
+
       <section className="studio-insight-card">
         <header>
           <div>
