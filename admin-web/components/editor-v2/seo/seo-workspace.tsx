@@ -40,62 +40,6 @@ export function SeoWorkspace() {
     );
   }, []);
 
-  if (!document) {
-    return (
-      <div className="studio-v2-module-placeholder">
-        {message || "Loading SEO data…"}
-      </div>
-    );
-  }
-
-  const analysis = analyzeSeoDocument(document);
-  const score = analysis.seoScore;
-
-  function updateSeo<
-    Key extends keyof CmsDocument["seo"],
-  >(
-    key: Key,
-    value: CmsDocument["seo"][Key],
-  ) {
-    setDocument(current =>
-      current
-        ? {
-            ...current,
-            seo: {
-              ...current.seo,
-              [key]: value,
-            },
-          }
-        : current,
-    );
-  }
-
-  function saveSeoSettings() {
-    if (!document) return;
-
-    const savedDocument: CmsDocument = {
-      ...document,
-      updatedAt: new Date().toISOString(),
-    };
-
-    window.localStorage.setItem(
-      DRAFT_KEY,
-      JSON.stringify(savedDocument),
-    );
-
-    window.dispatchEvent(
-      new CustomEvent("venusrealm:cms-draft-updated", {
-        detail: savedDocument,
-      }),
-    );
-
-    setDocument(savedDocument);
-
-    setMessage(
-      "SEO settings current draft me save ho gayi.",
-    );
-  }
-
   useEffect(() => {
     function handleSeoQuickAction(event: Event) {
       const customEvent = event as CustomEvent<{
@@ -156,6 +100,63 @@ export function SeoWorkspace() {
       );
     };
   }, []);
+
+  if (!document) {
+    return (
+      <div className="studio-v2-module-placeholder">
+        {message || "Loading SEO data…"}
+      </div>
+    );
+  }
+
+  const analysis = analyzeSeoDocument(document);
+  const score = analysis.seoScore;
+
+  function updateSeo<
+    Key extends keyof CmsDocument["seo"],
+  >(
+    key: Key,
+    value: CmsDocument["seo"][Key],
+  ) {
+    setDocument(current =>
+      current
+        ? {
+            ...current,
+            seo: {
+              ...current.seo,
+              [key]: value,
+            },
+          }
+        : current,
+    );
+  }
+
+  function saveSeoSettings() {
+    if (!document) return;
+
+    const savedDocument: CmsDocument = {
+      ...document,
+      updatedAt: new Date().toISOString(),
+    };
+
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify(savedDocument),
+    );
+
+    window.dispatchEvent(
+      new CustomEvent("venusrealm:cms-draft-updated", {
+        detail: savedDocument,
+      }),
+    );
+
+    setDocument(savedDocument);
+
+    setMessage(
+      "SEO settings current draft me save ho gayi.",
+    );
+  }
+
 
   function generateBasicSchema() {
     if (!document) return;
