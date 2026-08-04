@@ -315,6 +315,24 @@ export function StudioWorkspace() {
       return;
     }
 
+    const saveSeoAnalysis =
+      analyzeSeoDocument(document);
+
+    const seoWarningItems =
+      saveSeoAnalysis.publishChecklist.items.filter(
+        item =>
+          item.required &&
+          !item.passed &&
+          [
+            "meta-title",
+            "meta-description",
+            "focus-keyword",
+            "canonical",
+            "links",
+            "image-alt",
+          ].includes(item.id),
+      );
+
     setSaving(true);
     setSaveMessage("Saving draft to database…");
 
@@ -383,10 +401,15 @@ export function StudioWorkspace() {
       );
 
       void loadSavedDrafts();
+
+      const savedMessage = document.id
+        ? `Draft #${result.id} updated`
+        : `Draft #${result.id} saved to database`;
+
       setSaveMessage(
-        document.id
-          ? `Draft #${result.id} updated`
-          : `Draft #${result.id} saved to database`,
+        seoWarningItems.length > 0
+          ? `${savedMessage}. SEO warning: ${seoWarningItems.length} required item${seoWarningItems.length === 1 ? "" : "s"} need attention.`
+          : `${savedMessage}. SEO checks passed.`,
       );
     } catch (error) {
       setSaveMessage(
