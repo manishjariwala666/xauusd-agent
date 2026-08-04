@@ -1,3 +1,7 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
 import type {
   AgentDashboardRecord,
   AgentsDashboardPayload,
@@ -157,17 +161,126 @@ export function AgentsDashboard({
 }: {
   data: AgentsDashboardPayload;
 }) {
+  const [search, setSearch] = useState("");
+  const [risk, setRisk] = useState("ALL");
+  const [status, setStatus] = useState("ALL");
+  const [brain, setBrain] = useState("ALL");
+  const [sort, setSort] = useState("NAME_ASC");
+
   const configured = data.items.filter(
-    (agent) => agent.brain_configured,
+    agent => agent.brain_configured,
   ).length;
+
   const highRisk = data.items.filter(
-    (agent) =>
+    agent =>
       agent.default_risk === "HIGH" ||
       agent.default_risk === "CRITICAL",
   ).length;
+
   const approvalGated = data.items.filter(
-    (agent) => agent.approval_required_actions.length > 0,
+    agent => agent.approval_required_actions.length > 0,
   ).length;
+
+  const statuses = useMemo(
+    () =>
+      Array.from(
+        new Set(data.items.map(agent => agent.status)),
+      ).sort(),
+    [data.items],
+  );
+
+  const filteredAgents = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    const riskOrder: Record<string, number> = {
+      CRITICAL: 5,
+      HIGH: 4,
+      LOW: 3,
+      READ_ONLY: 2,
+      UNKNOWN: 1,
+    };
+
+    return data.items
+      .filter(agent => {
+        const searchable = [
+          agent.agent_key,
+          agent.short_name,
+          agent.official_name,
+          agent.purpose,
+          agent.description,
+          ...agent.aliases,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        if (
+          normalizedSearch &&
+          !searchable.includes(normalizedSearch)
+        ) {
+          return false;
+        }
+
+        if (
+          risk !== "ALL" &&
+          agent.default_risk !== risk
+        ) {
+          return false;
+        }
+
+        if (
+          status !== "ALL" &&
+          agent.status !== status
+        ) {
+          return false;
+        }
+
+        if (
+          brain === "READY" &&
+          !agent.brain_configured
+        ) {
+          return false;
+        }
+
+        if (
+          brain === "MISSING" &&
+          agent.brain_configured
+        ) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((left, right) => {
+        if (sort === "NAME_DESC") {
+          return right.short_name.localeCompare(
+            left.short_name,
+          );
+        }
+
+        if (sort === "RISK_DESC") {
+          return (
+            (riskOrder[right.default_risk] || 0) -
+            (riskOrder[left.default_risk] || 0)
+          );
+        }
+
+        if (sort === "STATUS") {
+          return left.status.localeCompare(right.status);
+        }
+
+        return left.short_name.localeCompare(
+          right.short_name,
+        );
+      });
+  }, [brain, data.items, risk, search, sort, status]);
+
+  function clearFilters() {
+    setSearch("");
+    setRisk("ALL");
+    setStatus("ALL");
+    setBrain("ALL");
+    setSort("NAME_ASC");
+  }
 
   return (
     <>
@@ -215,11 +328,118 @@ export function AgentsDashboard({
         </p>
       </aside>
 
-      <section className="agents-grid" aria-label="Registered agents">
-        {data.items.map((agent) => (
-          <AgentCard agent={agent} key={agent.agent_key} />
-        ))}
+      <section
+        className="agent-registry-toolbar"
+        aria-label="Agent registry filters"
+      >
+        <label className="agent-search-field">
+          <span>Search agents</span>
+          <input
+            type="search"
+            value={search}
+            placeholder="Search name, key or purpose"
+            onChange={event => setSearch(event.target.value)}
+          />
+        </label>
+
+        <label>
+          <span>Risk</span>
+          <select
+            value={risk}
+            onChange={event => setRisk(event.target.value)}
+          >
+            <option value="ALL">All risks</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="LOW">Low</option>
+            <option value="READ_ONLY">Read only</option>
+            <option value="UNKNOWN">Unknown</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Status</span>
+          <select
+            value={status}
+            onChange={event => setStatus(event.target.value)}
+          >
+            <option value="ALL">All statuses</option>
+            {statuses.map(item => (
+              <option value={item} key={item}>
+                {humanize(item)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Brain</span>
+          <select
+            value={brain}
+            onChange={event => setBrain(event.target.value)}
+          >
+            <option value="ALL">All brains</option>
+            <option value="READY">Configured</option>
+            <option value="MISSING">Missing</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Sort</span>
+          <select
+            value={sort}
+            onChange={event => setSort(event.target.value)}
+          >
+            <option value="NAME_ASC">Name A–Z</option>
+            <option value="NAME_DESC">Name Z–A</option>
+            <option value="RISK_DESC">Highest risk</option>
+            <option value="STATUS">Status</option>
+          </select>
+        </label>
+
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={clearFilters}
+        >
+          Clear
+        </button>
       </section>
+
+      <div className="agent-registry-results">
+        <strong>
+          {filteredAgents.length} of {data.count} agents
+        </strong>
+        <span>Read-only registry results</span>
+      </div>
+
+      {filteredAgents.length > 0 ? (
+        <section
+          className="agents-grid"
+          aria-label="Registered agents"
+        >
+          {filteredAgents.map(agent => (
+            <AgentCard
+              agent={agent}
+              key={agent.agent_key}
+            />
+          ))}
+        </section>
+      ) : (
+        <section className="agent-empty-results">
+          <strong>No matching agents</strong>
+          <p>
+            Search ya filters change karke dobara dekhein.
+          </p>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={clearFilters}
+          >
+            Clear filters
+          </button>
+        </section>
+      )}
     </>
   );
 }
