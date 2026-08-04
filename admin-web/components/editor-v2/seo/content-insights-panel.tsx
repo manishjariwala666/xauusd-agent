@@ -1,5 +1,28 @@
 "use client";
 
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+type SeoHistoryCategorySnapshot = {
+  id: string;
+  label: string;
+  score: number;
+};
+
+type SeoHistorySnapshot = {
+  articleKey: string;
+  savedAt: string;
+  score: number;
+  grade: string;
+  categories: SeoHistoryCategorySnapshot[];
+};
+
+const SEO_HISTORY_STORAGE_KEY =
+  "venusrealm-cms-v2-seo-history";
+
 type InternalLinkDraft = {
   id: number;
   title: string;
@@ -155,6 +178,137 @@ export function ContentInsightsPanel({
   drafts: InternalLinkDraft[];
 }) {
   const analysis = analyzeSeoDocument(document);
+
+  const [seoHistory, setSeoHistory] = useState<
+    SeoHistorySnapshot[]
+  >([]);
+
+  const articleHistoryKey =
+    document.id !== null
+      ? `id:${document.id}`
+      : `slug:${document.slug.trim() || "untitled"}`;
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(
+        SEO_HISTORY_STORAGE_KEY,
+      );
+
+      const parsed = raw
+        ? JSON.parse(raw)
+        : [];
+
+      setSeoHistory(
+        Array.isArray(parsed)
+          ? parsed.filter(
+              item =>
+                item &&
+                typeof item === "object" &&
+                typeof item.articleKey === "string" &&
+                typeof item.savedAt === "string" &&
+                typeof item.score === "number",
+            )
+          : [],
+      );
+    } catch {
+      setSeoHistory([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    function handleSeoSnapshot() {
+      const snapshot: SeoHistorySnapshot = {
+        articleKey: articleHistoryKey,
+        savedAt: new Date().toISOString(),
+        score: analysis.advancedHealth.score,
+        grade: analysis.advancedHealth.grade,
+        categories:
+          analysis.advancedHealth.categories.map(
+            category => ({
+              id: category.id,
+              label: category.label,
+              score: category.score,
+            }),
+          ),
+      };
+
+      setSeoHistory(current => {
+        const articleSnapshots = current
+          .filter(
+            item =>
+              item.articleKey === articleHistoryKey,
+          )
+          .concat(snapshot)
+          .slice(-10);
+
+        const next = [
+          ...current.filter(
+            item =>
+              item.articleKey !== articleHistoryKey,
+          ),
+          ...articleSnapshots,
+        ];
+
+        window.localStorage.setItem(
+          SEO_HISTORY_STORAGE_KEY,
+          JSON.stringify(next),
+        );
+
+        return next;
+      });
+    }
+
+    window.addEventListener(
+      "venusrealm:seo-snapshot",
+      handleSeoSnapshot,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "venusrealm:seo-snapshot",
+        handleSeoSnapshot,
+      );
+    };
+  }, [
+    analysis.advancedHealth.categories,
+    analysis.advancedHealth.grade,
+    analysis.advancedHealth.score,
+    articleHistoryKey,
+  ]);
+
+  const articleHistory = useMemo(
+    () =>
+      seoHistory
+        .filter(
+          item =>
+            item.articleKey === articleHistoryKey,
+        )
+        .sort(
+          (left, right) =>
+            new Date(left.savedAt).getTime() -
+            new Date(right.savedAt).getTime(),
+        ),
+    [articleHistoryKey, seoHistory],
+  );
+
+  const previousSeoSnapshot =
+    articleHistory.length > 1
+      ? articleHistory[articleHistory.length - 2]
+      : articleHistory[0] ?? null;
+
+  const latestSeoSnapshot =
+    articleHistory.length > 0
+      ? articleHistory[articleHistory.length - 1]
+      : null;
+
+  const scoreComparisonBase =
+    latestSeoSnapshot ?? previousSeoSnapshot;
+
+  const scoreDelta =
+    scoreComparisonBase
+      ? analysis.advancedHealth.score -
+        scoreComparisonBase.score
+      : 0;
 
   const passedChecks = analysis.checks.filter(
     check => check.passed,
@@ -486,6 +640,126 @@ export function ContentInsightsPanel({
             <p>No priority SEO issues detected.</p>
           )}
         </div>
+      </section>
+
+      <section className="studio-insight-card studio-seo-history-card">
+        <header>
+          <div>
+            <span>SEO HISTORY</span>
+            <h2>
+              {analysis.advancedHealth.score}/100
+            </h2>
+          </div>
+
+          <strong
+            className={
+              scoreDelta > 0
+                ? "seo-history-positive"
+                : scoreDelta < 0
+                  ? "seo-history-negative"
+                  : "seo-history-neutral"
+            }
+          >
+            {scoreComparisonBase
+              ? scoreDelta > 0
+                ? `+${scoreDelta}`
+                : `${scoreDelta}`
+              : "No history"}
+          </strong>
+        </header>
+
+        <div className="studio-seo-history-summary">
+          <div>
+            <span>Previous score</span>
+            <strong>
+              {scoreComparisonBase
+                ? `${scoreComparisonBase.score}/100`
+                : "Not available"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Current grade</span>
+            <strong>
+              {analysis.advancedHealth.grade}
+            </strong>
+          </div>
+
+          <div>
+            <span>Previous grade</span>
+            <strong>
+              {scoreComparisonBase?.grade ||
+                "Not available"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Snapshots</span>
+            <strong>{articleHistory.length}/10</strong>
+          </div>
+        </div>
+
+        {scoreComparisonBase ? (
+          <div className="studio-seo-history-categories">
+            {analysis.advancedHealth.categories.map(
+              category => {
+                const previousCategory =
+                  scoreComparisonBase.categories.find(
+                    item => item.id === category.id,
+                  );
+
+                const categoryDelta =
+                  previousCategory
+                    ? category.score -
+                      previousCategory.score
+                    : 0;
+
+                return (
+                  <article key={category.id}>
+                    <div>
+                      <strong>{category.label}</strong>
+                      <small>
+                        Previous{" "}
+                        {previousCategory?.score ??
+                          "N/A"}
+                      </small>
+                    </div>
+
+                    <span>{category.score}</span>
+
+                    <em
+                      className={
+                        categoryDelta > 0
+                          ? "seo-history-positive"
+                          : categoryDelta < 0
+                            ? "seo-history-negative"
+                            : "seo-history-neutral"
+                      }
+                    >
+                      {categoryDelta > 0
+                        ? `+${categoryDelta}`
+                        : `${categoryDelta}`}
+                    </em>
+                  </article>
+                );
+              },
+            )}
+          </div>
+        ) : (
+          <p className="studio-seo-history-empty">
+            Save this draft successfully to create the
+            first SEO history snapshot.
+          </p>
+        )}
+
+        {latestSeoSnapshot ? (
+          <small className="studio-seo-history-date">
+            Last saved snapshot:{" "}
+            {new Date(
+              latestSeoSnapshot.savedAt,
+            ).toLocaleString()}
+          </small>
+        ) : null}
       </section>
 
       <section className="studio-insight-card">

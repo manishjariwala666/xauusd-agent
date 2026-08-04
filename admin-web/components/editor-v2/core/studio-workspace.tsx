@@ -372,6 +372,13 @@ export function StudioWorkspace() {
       );
 
       setDocument(savedDocument);
+
+      window.dispatchEvent(
+        new CustomEvent("venusrealm:seo-snapshot", {
+          detail: savedDocument,
+        }),
+      );
+
       void loadSavedDrafts();
       setSaveMessage(
         document.id
