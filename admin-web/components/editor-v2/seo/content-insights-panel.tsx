@@ -183,6 +183,12 @@ export function ContentInsightsPanel({
     SeoHistorySnapshot[]
   >([]);
 
+  const [selectedSnapshotA, setSelectedSnapshotA] =
+    useState<string>("");
+
+  const [selectedSnapshotB, setSelectedSnapshotB] =
+    useState<string>("");
+
   const articleHistoryKey =
     document.id !== null
       ? `id:${document.id}`
@@ -309,6 +315,68 @@ export function ContentInsightsPanel({
       ? analysis.advancedHealth.score -
         scoreComparisonBase.score
       : 0;
+
+  const snapshotA =
+    articleHistory.find(
+      item => item.savedAt === selectedSnapshotA,
+    ) ?? null;
+
+  const snapshotB =
+    articleHistory.find(
+      item => item.savedAt === selectedSnapshotB,
+    ) ?? null;
+
+  const selectedScoreDelta =
+    snapshotA && snapshotB
+      ? snapshotB.score - snapshotA.score
+      : null;
+
+  function persistSeoHistory(
+    next: SeoHistorySnapshot[],
+  ) {
+    window.localStorage.setItem(
+      SEO_HISTORY_STORAGE_KEY,
+      JSON.stringify(next),
+    );
+
+    setSeoHistory(next);
+  }
+
+  function clearCurrentArticleHistory() {
+    if (articleHistory.length === 0) return;
+
+    const confirmed = window.confirm(
+      "Clear SEO history for this article only?",
+    );
+
+    if (!confirmed) return;
+
+    const next = seoHistory.filter(
+      item => item.articleKey !== articleHistoryKey,
+    );
+
+    persistSeoHistory(next);
+    setSelectedSnapshotA("");
+    setSelectedSnapshotB("");
+  }
+
+  function clearAllSeoHistory() {
+    if (seoHistory.length === 0) return;
+
+    const confirmed = window.confirm(
+      "Clear all locally stored SEO history?",
+    );
+
+    if (!confirmed) return;
+
+    window.localStorage.removeItem(
+      SEO_HISTORY_STORAGE_KEY,
+    );
+
+    setSeoHistory([]);
+    setSelectedSnapshotA("");
+    setSelectedSnapshotB("");
+  }
 
   const passedChecks = analysis.checks.filter(
     check => check.passed,
@@ -760,6 +828,166 @@ export function ContentInsightsPanel({
             ).toLocaleString()}
           </small>
         ) : null}
+
+        <div className="studio-seo-snapshot-management">
+          <div className="studio-seo-snapshot-selectors">
+            <label>
+              <span>Snapshot A</span>
+
+              <select
+                value={selectedSnapshotA}
+                onChange={event =>
+                  setSelectedSnapshotA(
+                    event.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  Select older snapshot
+                </option>
+
+                {articleHistory.map(snapshot => (
+                  <option
+                    key={`a-${snapshot.savedAt}`}
+                    value={snapshot.savedAt}
+                  >
+                    {new Date(
+                      snapshot.savedAt,
+                    ).toLocaleString()}
+                    {" — "}
+                    {snapshot.score}/100
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span>Snapshot B</span>
+
+              <select
+                value={selectedSnapshotB}
+                onChange={event =>
+                  setSelectedSnapshotB(
+                    event.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  Select newer snapshot
+                </option>
+
+                {articleHistory.map(snapshot => (
+                  <option
+                    key={`b-${snapshot.savedAt}`}
+                    value={snapshot.savedAt}
+                  >
+                    {new Date(
+                      snapshot.savedAt,
+                    ).toLocaleString()}
+                    {" — "}
+                    {snapshot.score}/100
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {snapshotA && snapshotB ? (
+            <div className="studio-seo-selected-comparison">
+              <div>
+                <span>Selected score change</span>
+
+                <strong
+                  className={
+                    selectedScoreDelta &&
+                    selectedScoreDelta > 0
+                      ? "seo-history-positive"
+                      : selectedScoreDelta &&
+                          selectedScoreDelta < 0
+                        ? "seo-history-negative"
+                        : "seo-history-neutral"
+                  }
+                >
+                  {selectedScoreDelta &&
+                  selectedScoreDelta > 0
+                    ? `+${selectedScoreDelta}`
+                    : `${selectedScoreDelta ?? 0}`}
+                </strong>
+              </div>
+
+              <div>
+                <span>Grade change</span>
+                <strong>
+                  {snapshotA.grade}
+                  {" → "}
+                  {snapshotB.grade}
+                </strong>
+              </div>
+
+              <div className="studio-seo-selected-categories">
+                {snapshotB.categories.map(category => {
+                  const older =
+                    snapshotA.categories.find(
+                      item =>
+                        item.id === category.id,
+                    );
+
+                  const delta =
+                    category.score -
+                    (older?.score ?? category.score);
+
+                  return (
+                    <article key={category.id}>
+                      <strong>
+                        {category.label}
+                      </strong>
+
+                      <span>
+                        {older?.score ?? "N/A"}
+                        {" → "}
+                        {category.score}
+                      </span>
+
+                      <em
+                        className={
+                          delta > 0
+                            ? "seo-history-positive"
+                            : delta < 0
+                              ? "seo-history-negative"
+                              : "seo-history-neutral"
+                        }
+                      >
+                        {delta > 0
+                          ? `+${delta}`
+                          : `${delta}`}
+                      </em>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="studio-seo-history-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={articleHistory.length === 0}
+              onClick={clearCurrentArticleHistory}
+            >
+              Clear article history
+            </button>
+
+            <button
+              type="button"
+              className="text-button danger-link"
+              disabled={seoHistory.length === 0}
+              onClick={clearAllSeoHistory}
+            >
+              Clear all history
+            </button>
+          </div>
+        </div>
       </section>
 
       <section className="studio-insight-card">

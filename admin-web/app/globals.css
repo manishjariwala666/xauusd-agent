@@ -5258,3 +5258,131 @@ button,a,input,select,textarea { outline-offset:2px; }
     grid-column: 2;
   }
 }
+
+/* ===== SEO SNAPSHOT MANAGEMENT ===== */
+
+.studio-seo-snapshot-management {
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+}
+
+.studio-seo-snapshot-selectors {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.studio-seo-snapshot-selectors label {
+  display: grid;
+  gap: 6px;
+}
+
+.studio-seo-snapshot-selectors label > span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.studio-seo-snapshot-selectors select {
+  min-width: 0;
+}
+
+.studio-seo-selected-comparison {
+  background: #f8fafc;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.studio-seo-selected-comparison > div:not(
+  .studio-seo-selected-categories
+) {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.studio-seo-selected-comparison span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.studio-seo-selected-comparison strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.studio-seo-selected-categories {
+  display: grid;
+  gap: 8px;
+}
+
+.studio-seo-selected-categories article {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr auto auto;
+  padding: 9px;
+}
+
+.studio-seo-selected-categories article strong {
+  color: #1e293b;
+  font-size: 12px;
+}
+
+.studio-seo-selected-categories article span {
+  color: #475569;
+  font-size: 11px;
+}
+
+.studio-seo-selected-categories article em {
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  min-width: 34px;
+  text-align: right;
+}
+
+.studio-seo-history-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.studio-seo-history-actions .secondary-button {
+  margin: 0;
+}
+
+.studio-seo-history-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 720px) {
+  .studio-seo-snapshot-selectors {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-seo-selected-categories article {
+    grid-template-columns: 1fr auto;
+  }
+
+  .studio-seo-selected-categories article em {
+    grid-column: 2;
+  }
+
+  .studio-seo-history-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
