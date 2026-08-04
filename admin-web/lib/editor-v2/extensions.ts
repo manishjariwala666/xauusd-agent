@@ -3,7 +3,6 @@ import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
-import Underline from "@tiptap/extension-underline";
 import { Table } from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
@@ -62,7 +61,6 @@ export function createEditorV2Extensions(placeholder: string) {
       autolink: true,
       defaultProtocol: "https",
     }),
-    Underline,
     Image.configure({
       allowBase64: false,
       inline: false,
