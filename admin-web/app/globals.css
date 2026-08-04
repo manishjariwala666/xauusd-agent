@@ -6347,7 +6347,7 @@ button,a,input,select,textarea { outline-offset:2px; }
   color: #ffffff;
   display: grid;
   gap: 4px;
-  margin-top: auto;
+  margin-top: 0;
   padding: 14px;
 }
 
