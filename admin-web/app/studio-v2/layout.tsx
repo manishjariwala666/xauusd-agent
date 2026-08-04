@@ -48,6 +48,9 @@ export default async function StudioV2Layout({
 
           <Link href="/studio-v2/ai">AI Tools</Link>
           <Link href="/studio-v2/agents">Agents</Link>
+          <Link href="/studio-v2/approvals">
+            Approvals
+          </Link>
         </nav>
 
         <div className="studio-v2-environment">
