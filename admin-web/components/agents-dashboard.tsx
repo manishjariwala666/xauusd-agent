@@ -46,11 +46,15 @@ function AgentCard({
   agent,
   onOpen,
   onToggle,
+  onPreviewToggle,
+  previewEnabled,
   busy,
 }: {
   agent: AgentDashboardRecord;
   onOpen: (agent: AgentDashboardRecord) => void;
   onToggle: (agent: AgentDashboardRecord) => void;
+  onPreviewToggle: (agent: AgentDashboardRecord) => void;
+  previewEnabled: boolean;
   busy: boolean;
 }) {
   return (
@@ -160,7 +164,9 @@ function AgentCard({
         <span>
           {agent.can_toggle
             ? "Guarded control enabled"
-            : "Read-only dashboard"}
+            : previewEnabled
+              ? "Preview ON · execution locked"
+              : "Preview mode · execution locked"}
         </span>
 
         <div className="agent-card-footer-actions">
@@ -185,7 +191,19 @@ function AgentCard({
                   ? "Turn OFF"
                   : "Turn ON"}
             </button>
-          ) : null}
+          ) : (
+            <button
+              type="button"
+              className={
+                previewEnabled
+                  ? "agent-toggle-button agent-toggle-disable"
+                  : "agent-toggle-button agent-toggle-enable"
+              }
+              onClick={() => onPreviewToggle(agent)}
+            >
+              {previewEnabled ? "Preview OFF" : "Preview ON"}
+            </button>
+          )}
 
           <button
             type="button"
@@ -217,6 +235,8 @@ export function AgentsDashboard({
     useState<string | null>(null);
   const [controlMessage, setControlMessage] =
     useState("");
+  const [previewEnabledAgents, setPreviewEnabledAgents] =
+    useState<Set<string>>(() => new Set());
 
   const configured = agentItems.filter(
     agent => agent.brain_configured,
@@ -331,6 +351,28 @@ export function AgentsDashboard({
     setStatus("ALL");
     setBrain("ALL");
     setSort("NAME_ASC");
+  }
+
+  function toggleAgentPreview(
+    agent: AgentDashboardRecord,
+  ) {
+    if (agent.can_toggle) return;
+
+    setPreviewEnabledAgents(current => {
+      const next = new Set(current);
+
+      if (next.has(agent.agent_key)) {
+        next.delete(agent.agent_key);
+      } else {
+        next.add(agent.agent_key);
+      }
+
+      return next;
+    });
+
+    setControlMessage(
+      "Preview state changed. No agent job, message, signal, schedule or publishing action was executed.",
+    );
   }
 
   async function toggleBlogAgent(
@@ -579,6 +621,8 @@ export function AgentsDashboard({
               key={agent.agent_key}
               onOpen={setSelectedAgent}
               onToggle={toggleBlogAgent}
+              onPreviewToggle={toggleAgentPreview}
+              previewEnabled={previewEnabledAgents.has(agent.agent_key)}
               busy={toggleBusy === agent.agent_key}
             />
           ))}
