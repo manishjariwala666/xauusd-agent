@@ -104,7 +104,10 @@ def generate_master_ai_reply(message: str) -> str:
     model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
 
     if not api_key:
-        return "⚠️ Master AI API key configure nahi hai."
+        return (
+            _generate_gemini_reply(clean_message)
+            or "⚠️ Master AI API key configure nahi hai."
+        )
 
     try:
         with httpx.Client(timeout=45.0) as client:
