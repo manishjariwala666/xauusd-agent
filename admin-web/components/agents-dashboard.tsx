@@ -42,7 +42,13 @@ function ActionList({
   );
 }
 
-function AgentCard({ agent }: { agent: AgentDashboardRecord }) {
+function AgentCard({
+  agent,
+  onOpen,
+}: {
+  agent: AgentDashboardRecord;
+  onOpen: (agent: AgentDashboardRecord) => void;
+}) {
   return (
     <article className="agent-card">
       <header className="agent-card-header">
@@ -148,8 +154,11 @@ function AgentCard({ agent }: { agent: AgentDashboardRecord }) {
 
       <footer className="agent-card-footer">
         <span>Read-only dashboard</span>
-        <button type="button" disabled>
-          Controls coming later
+        <button
+          type="button"
+          onClick={() => onOpen(agent)}
+        >
+          View details
         </button>
       </footer>
     </article>
@@ -166,6 +175,8 @@ export function AgentsDashboard({
   const [status, setStatus] = useState("ALL");
   const [brain, setBrain] = useState("ALL");
   const [sort, setSort] = useState("NAME_ASC");
+  const [selectedAgent, setSelectedAgent] =
+    useState<AgentDashboardRecord | null>(null);
 
   const configured = data.items.filter(
     agent => agent.brain_configured,
@@ -422,6 +433,7 @@ export function AgentsDashboard({
             <AgentCard
               agent={agent}
               key={agent.agent_key}
+              onOpen={setSelectedAgent}
             />
           ))}
         </section>
@@ -440,6 +452,172 @@ export function AgentsDashboard({
           </button>
         </section>
       )}
+
+      {selectedAgent ? (
+        <div
+          className="agent-detail-overlay"
+          role="presentation"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) {
+              setSelectedAgent(null);
+            }
+          }}
+        >
+          <aside
+            className="agent-detail-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="agent-detail-title"
+          >
+            <header className="agent-detail-header">
+              <div>
+                <small>{selectedAgent.agent_key}</small>
+                <h2 id="agent-detail-title">
+                  {selectedAgent.short_name}
+                </h2>
+                <p>{selectedAgent.official_name}</p>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Close agent details"
+                onClick={() => setSelectedAgent(null)}
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="agent-detail-badges">
+              <span className={riskClass(selectedAgent.default_risk)}>
+                {humanize(selectedAgent.default_risk)}
+              </span>
+
+              <span
+                className={
+                  selectedAgent.brain_configured
+                    ? "agent-brain agent-brain-ready"
+                    : "agent-brain agent-brain-missing"
+                }
+              >
+                {selectedAgent.brain_configured
+                  ? "Brain ready"
+                  : "Brain missing"}
+              </span>
+            </div>
+
+            <section className="agent-detail-section">
+              <h3>Purpose</h3>
+              <p>{selectedAgent.purpose}</p>
+              <p>{selectedAgent.description}</p>
+            </section>
+
+            <dl className="agent-detail-summary">
+              <div>
+                <dt>Status</dt>
+                <dd>{humanize(selectedAgent.status)}</dd>
+              </div>
+              <div>
+                <dt>Enabled</dt>
+                <dd>
+                  {selectedAgent.is_enabled === null
+                    ? "Not configured"
+                    : selectedAgent.is_enabled
+                      ? "Yes"
+                      : "No"}
+                </dd>
+              </div>
+              <div>
+                <dt>Queue</dt>
+                <dd>{selectedAgent.queue_size}</dd>
+              </div>
+              <div>
+                <dt>Success / failure</dt>
+                <dd>
+                  {selectedAgent.success_count}
+                  {" / "}
+                  {selectedAgent.failure_count}
+                </dd>
+              </div>
+              <div>
+                <dt>Last run</dt>
+                <dd>{selectedAgent.last_run_at || "Never"}</dd>
+              </div>
+              <div>
+                <dt>Next run</dt>
+                <dd>
+                  {selectedAgent.next_scheduled_run_at ||
+                    "Not scheduled"}
+                </dd>
+              </div>
+              <div>
+                <dt>Direct run</dt>
+                <dd>
+                  {selectedAgent.run_action
+                    ? humanize(selectedAgent.run_action)
+                    : "Not registered"}
+                </dd>
+              </div>
+              <div>
+                <dt>Last duration</dt>
+                <dd>
+                  {selectedAgent.last_duration_ms === null
+                    ? "Unknown"
+                    : `${selectedAgent.last_duration_ms} ms`}
+                </dd>
+              </div>
+            </dl>
+
+            {selectedAgent.aliases.length > 0 ? (
+              <section className="agent-detail-section">
+                <h3>Aliases</h3>
+                <div className="agent-detail-tags">
+                  {selectedAgent.aliases.map(alias => (
+                    <span key={alias}>{alias}</span>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <ActionList
+              title="Automatic actions"
+              items={selectedAgent.automatic_actions}
+              emptyLabel="No automatic actions."
+            />
+
+            <ActionList
+              title="Approval required"
+              items={selectedAgent.approval_required_actions}
+              emptyLabel="No approval-gated actions."
+            />
+
+            <ActionList
+              title="Forbidden actions"
+              items={selectedAgent.forbidden_actions}
+              emptyLabel="No forbidden actions listed."
+            />
+
+            <ActionList
+              title="Output schema"
+              items={selectedAgent.output_schema}
+              emptyLabel="No output schema configured."
+            />
+
+            {selectedAgent.last_error ? (
+              <section className="agent-detail-section agent-detail-error">
+                <h3>Last safe error</h3>
+                <p>{selectedAgent.last_error}</p>
+              </section>
+            ) : null}
+
+            <footer className="agent-detail-footer">
+              <strong>Read-only safety mode</strong>
+              <span>
+                No agent action can be executed from this drawer.
+              </span>
+            </footer>
+          </aside>
+        </div>
+      ) : null}
     </>
   );
 }
