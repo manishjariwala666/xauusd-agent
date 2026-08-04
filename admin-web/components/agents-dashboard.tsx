@@ -158,13 +158,13 @@ function AgentCard({
 
       <footer className="agent-card-footer">
         <span>
-          {agent.agent_key === "ai_blog_agent"
+          {agent.can_toggle
             ? "Guarded control enabled"
             : "Read-only dashboard"}
         </span>
 
         <div className="agent-card-footer-actions">
-          {agent.agent_key === "ai_blog_agent" ? (
+          {agent.can_toggle ? (
             <button
               type="button"
               className={
@@ -337,7 +337,7 @@ export function AgentsDashboard({
     agent: AgentDashboardRecord,
   ) {
     if (
-      agent.agent_key !== "ai_blog_agent" ||
+      !agent.can_toggle ||
       agent.is_enabled === null ||
       toggleBusy
     ) {
@@ -756,7 +756,7 @@ export function AgentsDashboard({
             ) : null}
 
             <footer className="agent-detail-footer">
-              {selectedAgent.agent_key === "ai_blog_agent" ? (
+              {selectedAgent.can_toggle ? (
                 <>
                   <div>
                     <strong>Guarded AI Blog Agent control</strong>

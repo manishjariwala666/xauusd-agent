@@ -17,6 +17,7 @@ export type AgentDashboardRecord = {
   aliases: string[];
   run_action: string | null;
   brain_configured: boolean;
+  can_toggle: boolean;
   purpose: string;
   default_risk: AgentRisk;
   automatic_actions: string[];

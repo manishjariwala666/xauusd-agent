@@ -178,6 +178,7 @@ def get_agent_dashboard_record(agent: RegisteredAgent) -> dict[str, Any]:
         "aliases": list(agent.aliases),
         "run_action": agent.run_action,
         "brain_configured": brain is not None,
+        "can_toggle": agent.agent_key == "ai_blog_agent",
     }
 
     if brain is None:
