@@ -15,6 +15,7 @@ from services.admin_agents_api import router as admin_agents_router
 from services.admin_agent_approvals_api import router as admin_agent_approvals_router
 from services.admin_content_api import router as admin_content_router
 from services.admin_media_api import router as admin_media_router
+from services.admin_master_ai_api import router as admin_master_ai_router
 
 
 def _staging_enabled() -> bool:
@@ -37,6 +38,7 @@ app.include_router(admin_agents_router)
 app.include_router(admin_agent_approvals_router)
 app.include_router(admin_content_router)
 app.include_router(admin_media_router)
+app.include_router(admin_master_ai_router)
 
 _media_root = Path(
     os.getenv("ADMIN_MEDIA_LOCAL_ROOT", "/tmp/xauusd-admin-media")

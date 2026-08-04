@@ -47,6 +47,9 @@ export default async function StudioV2Layout({
           <span className="studio-v2-nav-label">INTELLIGENCE</span>
 
           <Link href="/studio-v2/ai">AI Tools</Link>
+          <Link href="/studio-v2/master-ai">
+            Master AI Console
+          </Link>
           <Link href="/studio-v2/agents">Agents</Link>
           <Link href="/studio-v2/approvals">
             Approvals
