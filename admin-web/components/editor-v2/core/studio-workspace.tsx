@@ -619,24 +619,17 @@ export function StudioWorkspace() {
           <label>
             <span>Status</span>
             <select
-              value={document.status}
-              onChange={event =>
-                setDocument(current =>
-                  current
-                    ? {
-                        ...current,
-                        status:
-                          event.target.value as CmsDocument["status"],
-                      }
-                    : current,
-                )
-              }
+              value="draft"
+              disabled
+              aria-describedby="studio-v2-draft-status-help"
             >
               <option value="draft">Draft</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="published">Published</option>
-              <option value="trash">Trash</option>
             </select>
+
+            <small id="studio-v2-draft-status-help">
+              Publishing and scheduling are not enabled in
+              this draft-only workspace yet.
+            </small>
           </label>
         </div>
 
