@@ -6639,3 +6639,28 @@ button,a,input,select,textarea { outline-offset:2px; }
     width: 100%;
   }
 }
+
+.agent-detail-footer {
+  align-items: center;
+  gap: 12px;
+}
+
+.agent-detail-footer > div {
+  display: grid;
+  gap: 4px;
+}
+
+.agent-detail-footer > button {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .agent-detail-footer {
+    align-items: stretch;
+  }
+
+  .agent-detail-footer > button {
+    width: 100%;
+  }
+}

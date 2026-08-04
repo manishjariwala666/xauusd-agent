@@ -409,6 +409,15 @@ export function AgentsDashboard({
         ),
       );
 
+      setSelectedAgent(current =>
+        current?.agent_key === agent.agent_key
+          ? {
+              ...current,
+              is_enabled: result.enabled ?? current.is_enabled,
+            }
+          : current,
+      );
+
       setControlMessage(
         result.message || "AI Blog Agent state updated.",
       );
@@ -747,10 +756,44 @@ export function AgentsDashboard({
             ) : null}
 
             <footer className="agent-detail-footer">
-              <strong>Read-only safety mode</strong>
-              <span>
-                No agent action can be executed from this drawer.
-              </span>
+              {selectedAgent.agent_key === "ai_blog_agent" ? (
+                <>
+                  <div>
+                    <strong>Guarded AI Blog Agent control</strong>
+                    <span>
+                      Enable or disable only this agent in local staging.
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className={
+                      selectedAgent.is_enabled
+                        ? "agent-toggle-button agent-toggle-disable"
+                        : "agent-toggle-button agent-toggle-enable"
+                    }
+                    disabled={
+                      toggleBusy === selectedAgent.agent_key ||
+                      selectedAgent.is_enabled === null ||
+                      !selectedAgent.is_configured
+                    }
+                    onClick={() => toggleBlogAgent(selectedAgent)}
+                  >
+                    {toggleBusy === selectedAgent.agent_key
+                      ? "Updating…"
+                      : selectedAgent.is_enabled
+                        ? "Turn AI Blog Agent OFF"
+                        : "Turn AI Blog Agent ON"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <strong>Read-only safety mode</strong>
+                  <span>
+                    This agent remains locked in the current phase.
+                  </span>
+                </>
+              )}
             </footer>
           </aside>
         </div>
