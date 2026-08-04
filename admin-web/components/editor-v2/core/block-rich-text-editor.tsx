@@ -168,6 +168,9 @@ export function BlockRichTextEditor({
 
     if (linkSelectionEmpty) {
       const chain = editor.chain().focus();
+      const visibleText =
+        settings.text.trim() ||
+        settings.href.trim();
 
       if (savedRange) {
         chain.setTextSelection(savedRange.from);
@@ -176,7 +179,7 @@ export function BlockRichTextEditor({
       chain
         .insertContent({
           type: "text",
-          text: settings.text.trim(),
+          text: visibleText,
           marks: [
             {
               type: "link",

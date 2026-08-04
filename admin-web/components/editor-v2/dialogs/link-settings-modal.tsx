@@ -81,8 +81,7 @@ export function LinkSettingsModal({
   const urlKind = classifyUrl(value.href);
   const canSave =
     value.href.trim().length > 0 &&
-    urlKind !== "invalid" &&
-    (!allowTextEditing || value.text.trim().length > 0);
+    urlKind !== "invalid";
 
   function toggle(
     key:
