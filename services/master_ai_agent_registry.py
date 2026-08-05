@@ -59,6 +59,22 @@ AGENTS: tuple[RegisteredAgent, ...] = (
         run_action="run_blog_agent",
     ),
     RegisteredAgent(
+        short_name="VCEA",
+        official_name="Venus CMS Editor Agent",
+        agent_key="cms_editor_agent",
+        aliases=(
+            "cms editor",
+            "cms editor agent",
+            "content editor agent",
+            "studio v2 agent",
+        ),
+        description=(
+            "Converts approved article content into structured "
+            "Studio V2 drafts."
+        ),
+        run_action="run_cms_editor_agent",
+    ),
+    RegisteredAgent(
         short_name="VIA",
         official_name="Venus Image Agent",
         agent_key="image_agent",

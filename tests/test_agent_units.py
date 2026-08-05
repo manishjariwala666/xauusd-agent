@@ -36,6 +36,7 @@ def test_all_production_agent_runners_exist() -> None:
 
     assert set(RUNNERS) == {
         "ai_blog_agent",
+        "cms_editor_agent",
         "telegram_reply_agent",
         "whatsapp_reply_agent",
         "signal_agent",

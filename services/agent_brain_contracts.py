@@ -186,6 +186,70 @@ AGENT_BRAINS: dict[str, AgentBrainContract] = {
         safe_error_policy="Do not expose provider credentials or internal prompts containing secrets.",
         default_risk=AgentRisk.LOW,
     ),
+    "cms_editor_agent": AgentBrainContract(
+        agent_key="cms_editor_agent",
+        display_name="Venus CMS Editor Agent",
+        purpose=(
+            "Convert approved article content into structured "
+            "Studio V2 drafts."
+        ),
+        allowed_inputs=(
+            "approved_article_draft",
+            "approved_seo_metadata",
+            "approved_media_references",
+        ),
+        allowed_tools=(
+            "cms_v2_converter",
+            "content_service",
+            "document_validator",
+        ),
+        automatic_actions=(
+            "convert_to_structured_blocks",
+            "validate_cms_document",
+            "save_draft",
+        ),
+        approval_required_actions=(
+            "publish_content",
+            "modify_published_content",
+            "external_article_delivery",
+        ),
+        forbidden_actions=(
+            "auto_publish",
+            "schedule_publish",
+            "delete_content",
+            "overwrite_published_content",
+            "send_telegram_message",
+            "send_whatsapp_message",
+        ),
+        output_schema=(
+            "status",
+            "content_id",
+            "slug",
+            "draft_state",
+            "master_ai_review_state",
+            "safe_summary",
+        ),
+        idempotency_strategy=(
+            "Stable slug plus content record identity."
+        ),
+        retry_policy=(
+            "Retry conversion only before draft persistence; "
+            "never create duplicate published content."
+        ),
+        human_takeover_policy=(
+            "Admin edits, Master AI review, and owner approval "
+            "override generated structure."
+        ),
+        audit_policy=(
+            "Record source draft, conversion result, content ID, "
+            "and review state."
+        ),
+        safe_error_policy=(
+            "Do not expose prompts, credentials, private paths, "
+            "or raw tracebacks."
+        ),
+        default_risk=AgentRisk.LOW,
+    ),
     "image_agent": AgentBrainContract(
         agent_key="image_agent",
         display_name="Venus Image Agent",
