@@ -1314,6 +1314,16 @@ export function StudioWorkspace() {
         <ContentInsightsPanel
           document={document}
           drafts={drafts}
+          onFeaturedMediaChange={mediaId =>
+            setDocument(current =>
+              current
+                ? {
+                    ...current,
+                    featuredMediaId: mediaId,
+                  }
+                : current,
+            )
+          }
         />
       </div>
 

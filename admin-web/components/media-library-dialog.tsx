@@ -49,6 +49,7 @@ export function MediaLibraryDialog({
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState("");
   const [uploadAlt, setUploadAlt] = useState("");
   const [uploadCaption, setUploadCaption] = useState("");
   const [dragActive, setDragActive] = useState(false);
@@ -121,6 +122,20 @@ export function MediaLibraryDialog({
     void loadMedia();
   }, [open]);
 
+  useEffect(() => {
+    if (!uploadFile) {
+      setUploadPreviewUrl("");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(uploadFile);
+    setUploadPreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [uploadFile]);
+
   async function upload() {
     if (!uploadFile) {
       setMessage("Choose an image before uploading.");
@@ -163,6 +178,7 @@ export function MediaLibraryDialog({
 
       onSelect(payload);
       setUploadFile(null);
+      setUploadPreviewUrl("");
       setUploadAlt("");
       setUploadCaption("");
       setUploading(false);
@@ -285,6 +301,22 @@ export function MediaLibraryDialog({
 
               <small>JPEG, PNG, WebP or GIF · Maximum 8 MB</small>
             </button>
+
+            {uploadFile && uploadPreviewUrl ? (
+              <figure className="media-upload-preview">
+                <img
+                  src={uploadPreviewUrl}
+                  alt={uploadAlt || uploadFile.name}
+                />
+
+                <figcaption>
+                  <strong>{uploadFile.name}</strong>
+                  <span>
+                    Local preview — image is not uploaded yet
+                  </span>
+                </figcaption>
+              </figure>
+            ) : null}
 
             {uploadFile && (
               <button

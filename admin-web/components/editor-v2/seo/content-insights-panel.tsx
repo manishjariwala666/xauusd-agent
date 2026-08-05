@@ -164,18 +164,178 @@ function buildInternalLinkSuggestions(
 }
 
 import {
+  MediaLibraryDialog,
+  type MediaLibraryAsset,
+} from "../../media-library-dialog";
+import {
   analyzeSeoDocument,
 } from "@/lib/editor-v2/seo-analyzer";
 import type {
   CmsDocument,
 } from "@/lib/editor-v2/document-types";
 
+function FeaturedImageSidebarCard({
+  document,
+  onChange,
+}: {
+  document: CmsDocument;
+  onChange: (
+    mediaId: number | null,
+    asset?: MediaLibraryAsset,
+  ) => void;
+}) {
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [selectedAsset, setSelectedAsset] =
+    useState<MediaLibraryAsset | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSelectedAsset() {
+      if (!document.featuredMediaId) {
+        setSelectedAsset(null);
+        setImageFailed(false);
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const response = await fetch(
+          `/api/admin/media/${document.featuredMediaId}`,
+          {
+            cache: "no-store",
+            credentials: "same-origin",
+          },
+        );
+
+        if (!response.ok) return;
+
+        const asset =
+          (await response.json()) as MediaLibraryAsset;
+
+        if (!cancelled) {
+          setSelectedAsset(asset);
+          setImageFailed(false);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadSelectedAsset();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [document.featuredMediaId]);
+
+  function selectAsset(asset: MediaLibraryAsset) {
+    setSelectedAsset(asset);
+    setImageFailed(false);
+    onChange(asset.id, asset);
+  }
+
+  function removeAsset() {
+    setSelectedAsset(null);
+    setImageFailed(false);
+    onChange(null);
+  }
+
+  const previewUrl =
+    selectedAsset?.thumbnail_url ||
+    selectedAsset?.public_url ||
+    "";
+
+  return (
+    <section className="studio-insight-card studio-featured-image-card">
+      <header className="studio-featured-image-header">
+        <h2>Featured image</h2>
+
+        <span
+          className="studio-featured-image-chevron"
+          aria-hidden="true"
+        >
+         ⌃
+        </span>
+      </header>
+
+      {loading ? (
+        <div className="studio-featured-image-empty">
+          Loading featured image…
+        </div>
+      ) : previewUrl && !imageFailed ? (
+        <figure className="studio-featured-image-preview">
+          <img
+            src={previewUrl}
+            alt={selectedAsset?.alt_text || ""}
+            loading="lazy"
+            decoding="async"
+            onError={() => setImageFailed(true)}
+          />
+
+          <figcaption>
+            {selectedAsset?.original_filename ||
+              "Featured image"}
+          </figcaption>
+        </figure>
+      ) : (
+        <div className="studio-featured-image-empty">
+          <span
+            className="studio-featured-image-empty-icon"
+            aria-hidden="true"
+          >
+            ▧
+          </span>
+
+          <strong>Set featured image</strong>
+        </div>
+      )}
+
+      <div className="studio-featured-image-actions">
+        <button
+          type="button"
+          className="secondary-button studio-featured-image-select"
+          onClick={() => setMediaOpen(true)}
+        >
+          {document.featuredMediaId
+            ? "Replace image"
+            : "Select image"}
+        </button>
+
+        {document.featuredMediaId ? (
+          <button
+            type="button"
+            className="text-button danger-link"
+            onClick={removeAsset}
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
+
+      <MediaLibraryDialog
+        open={mediaOpen}
+        onClose={() => setMediaOpen(false)}
+        onSelect={selectAsset}
+      />
+    </section>
+  );
+}
+
 export function ContentInsightsPanel({
   document,
   drafts,
+  onFeaturedMediaChange,
 }: {
   document: CmsDocument;
   drafts: InternalLinkDraft[];
+  onFeaturedMediaChange: (
+    mediaId: number | null,
+    asset?: MediaLibraryAsset,
+  ) => void;
 }) {
   const analysis = analyzeSeoDocument(document);
 
@@ -1010,6 +1170,11 @@ export function ContentInsightsPanel({
       </section>
 
       <aside className="studio-insights-panel">
+        <FeaturedImageSidebarCard
+          document={document}
+          onChange={onFeaturedMediaChange}
+        />
+
       <section className="studio-insight-card studio-advanced-health-card">
         <header>
           <div>
