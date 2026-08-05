@@ -172,3 +172,39 @@ def test_admin_agents_routes_are_registered(monkeypatch) -> None:
     assert listing.json()["count"] == 12
     assert detail.status_code == 200
     assert detail.json()["item"]["agent_key"] == "report_agent"
+
+
+def test_admin_master_ai_chat_route_is_registered(
+    monkeypatch,
+) -> None:
+    from fastapi.testclient import TestClient
+    from backend import app
+
+    monkeypatch.setattr(
+        "services.admin_master_ai_api._require_bff",
+        lambda value: None,
+    )
+    monkeypatch.setattr(
+        "services.admin_master_ai_api._require_identity",
+        lambda token: object(),
+    )
+    monkeypatch.setattr(
+        "services.admin_master_ai_api.generate_master_ai_reply",
+        lambda message: f"ECHO:{message}",
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/admin/master-ai/chat",
+        json={"message": "hello"},
+        headers={
+            "Authorization": "Bearer test-admin-token",
+            "X-Admin-BFF-Key": "test-bff-key",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["reply"] == "ECHO:hello"
+    assert payload["mode"] == "CONVERSATION_ONLY"
+    assert payload["execution"] == "LOCKED"
