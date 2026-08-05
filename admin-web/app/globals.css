@@ -6984,14 +6984,3 @@ button,a,input,select,textarea { outline-offset:2px; }
     width: 54px;
   }
 }
-
-.wp-add-youtube-button {
-  background: #dc2626;
-  border-color: #dc2626;
-  color: #ffffff;
-}
-
-.wp-add-youtube-button:hover:not(:disabled) {
-  background: #b91c1c;
-  border-color: #b91c1c;
-}
