@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { AgentBuilderModal } from "@/components/agent-builder/agent-builder-modal";
 import type {
   AgentDashboardRecord,
   AgentsDashboardPayload,
@@ -237,6 +238,8 @@ export function AgentsDashboard({
     useState("");
   const [previewEnabledAgents, setPreviewEnabledAgents] =
     useState<Set<string>>(() => new Set());
+  const [agentBuilderOpen, setAgentBuilderOpen] =
+    useState(false);
 
   const configured = agentItems.filter(
     agent => agent.brain_configured,
@@ -476,14 +479,24 @@ export function AgentsDashboard({
 
   return (
     <>
-      <section className="page-heading agents-heading">
-        <small className="eyebrow">AGENT OPERATIONS</small>
-        <h1>VenusRealm Agents</h1>
-        <p>
-          Mobile-ready overview of registered agent brains,
-          permissions and safety boundaries. Operational controls
-          remain disabled in this read-only phase.
-        </p>
+      <section className="page-heading agents-heading agent-heading-row">
+        <div>
+          <small className="eyebrow">AGENT OPERATIONS</small>
+          <h1>VenusRealm Agents</h1>
+          <p>
+            Mobile-ready overview of registered agent brains,
+            permissions and safety boundaries. Operational controls
+            remain disabled in this read-only phase.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="primary-button agent-create-button"
+          onClick={() => setAgentBuilderOpen(true)}
+        >
+          ＋ Create Agent
+        </button>
       </section>
 
       <section
@@ -642,6 +655,11 @@ export function AgentsDashboard({
           </button>
         </section>
       )}
+
+      <AgentBuilderModal
+        open={agentBuilderOpen}
+        onClose={() => setAgentBuilderOpen(false)}
+      />
 
       {selectedAgent ? (
         <div
