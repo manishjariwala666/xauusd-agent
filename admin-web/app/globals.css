@@ -6903,3 +6903,84 @@ button,a,input,select,textarea { outline-offset:2px; }
     max-width: 94%;
   }
 }
+
+/* ===== SAVED ARTICLE YOUTUBE CARD ===== */
+
+.cms-youtube-card {
+  margin: 28px auto;
+  max-width: 900px;
+  width: 100%;
+}
+
+.cms-youtube-link {
+  color: inherit;
+  display: grid;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.cms-youtube-thumbnail {
+  aspect-ratio: 16 / 9;
+  background: #0f172a;
+  border-radius: 14px;
+  display: block;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.cms-youtube-thumbnail img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.cms-youtube-play {
+  align-items: center;
+  background: rgb(220 38 38 / 94%);
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgb(15 23 42 / 35%);
+  color: #ffffff;
+  display: flex;
+  font-size: 25px;
+  height: 68px;
+  justify-content: center;
+  left: 50%;
+  padding-left: 5px;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  transition:
+    transform 160ms ease,
+    background 160ms ease;
+  width: 68px;
+}
+
+.cms-youtube-link:hover .cms-youtube-play {
+  background: #dc2626;
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.cms-youtube-card figcaption {
+  color: #334155;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+@media (max-width: 620px) {
+  .cms-youtube-card {
+    margin: 20px auto;
+  }
+
+  .cms-youtube-thumbnail {
+    border-radius: 10px;
+  }
+
+  .cms-youtube-play {
+    font-size: 20px;
+    height: 54px;
+    width: 54px;
+  }
+}

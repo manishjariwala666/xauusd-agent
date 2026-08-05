@@ -25,6 +25,39 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
+function extractYoutubeId(value: string): string {
+  try {
+    const url = new URL(value.trim());
+
+    if (url.hostname === "youtu.be") {
+      return url.pathname.split("/").filter(Boolean)[0] || "";
+    }
+
+    if (
+      url.hostname === "youtube.com" ||
+      url.hostname.endsWith(".youtube.com")
+    ) {
+      if (url.pathname === "/watch") {
+        return url.searchParams.get("v") || "";
+      }
+
+      const parts = url.pathname.split("/").filter(Boolean);
+
+      if (
+        parts[0] === "embed" ||
+        parts[0] === "shorts" ||
+        parts[0] === "live"
+      ) {
+        return parts[1] || "";
+      }
+    }
+  } catch {
+    return "";
+  }
+
+  return "";
+}
+
 function renderBlock(block: CmsBlock): string {
   switch (block.type) {
     case "paragraph":
@@ -112,13 +145,42 @@ function renderBlock(block: CmsBlock): string {
         "</div>",
       ].join("");
 
-    case "youtube":
+    case "youtube": {
+      const videoId = extractYoutubeId(block.url);
+      const safeUrl = escapeHtml(block.url);
+      const safeTitle = escapeHtml(
+        block.title || "YouTube video",
+      );
+
+      if (!videoId) {
+        return [
+          `<div data-cms-block="youtube">`,
+          `<a href="${safeUrl}" target="_blank"`,
+          ` rel="noopener noreferrer">`,
+          safeTitle,
+          "</a></div>",
+        ].join("");
+      }
+
+      const thumbnailUrl = escapeHtml(
+        `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+      );
+
       return [
-        `<div data-cms-block="youtube">`,
-        `<a href="${escapeHtml(block.url)}">`,
-        escapeHtml(block.title || block.url),
-        "</a></div>",
+        `<figure data-cms-block="youtube" class="cms-youtube-card">`,
+        `<a class="cms-youtube-link" href="${safeUrl}"`,
+        ` target="_blank" rel="noopener noreferrer"`,
+        ` aria-label="Open YouTube video: ${safeTitle}">`,
+        `<span class="cms-youtube-thumbnail">`,
+        `<img src="${thumbnailUrl}" alt="${safeTitle}"`,
+        ` loading="lazy" decoding="async" />`,
+        `<span class="cms-youtube-play" aria-hidden="true">▶</span>`,
+        `</span>`,
+        `<figcaption>${safeTitle}</figcaption>`,
+        `</a>`,
+        `</figure>`,
       ].join("");
+    }
   }
 }
 
