@@ -78,6 +78,18 @@ export function DocumentCanvas({
 
           <button
             type="button"
+            className="wp-add-block-button wp-add-youtube-button"
+            disabled={disabled}
+            onClick={() => {
+              setInsertAfterBlockId(undefined);
+              insert("youtube");
+            }}
+          >
+            + YouTube
+          </button>
+
+          <button
+            type="button"
             className="wp-add-block-button"
             disabled={disabled}
             onClick={() => openInserter()}
