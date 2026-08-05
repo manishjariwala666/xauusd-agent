@@ -22,6 +22,7 @@ from config import ConfigurationError, get_settings
 from core.database import session_scope
 from services.ai_provider import AIProvider
 from services.cms_editor_agent import run_cms_editor_agent
+from services.master_ai_content_review_agent import run_master_ai_content_review_agent
 from services.content_service import get_site_setting, save_content
 from services.google_sheets_service import append_message_log
 from services.google_sheets import GoogleSheetsService
@@ -1286,6 +1287,7 @@ def _master_optional_agent(agent_key: str, handler):
 RUNNERS = {
     "ai_blog_agent": run_blog_agent,
     "cms_editor_agent": run_cms_editor_agent,
+    "master_content_review_agent": run_master_ai_content_review_agent,
     "telegram_reply_agent": run_telegram_reply_agent,
     "whatsapp_reply_agent": run_whatsapp_reply_agent,
     "signal_agent": _master_optional_agent("signal_agent", run_signal_agent),

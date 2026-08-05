@@ -186,6 +186,72 @@ AGENT_BRAINS: dict[str, AgentBrainContract] = {
         safe_error_policy="Do not expose provider credentials or internal prompts containing secrets.",
         default_risk=AgentRisk.LOW,
     ),
+    "master_content_review_agent": AgentBrainContract(
+        agent_key="master_content_review_agent",
+        display_name="Venus Master Content Review Agent",
+        purpose=(
+            "Review structured CMS drafts and recommend "
+            "APPROVE, NEEDS_CHANGES, or REJECT."
+        ),
+        allowed_inputs=(
+            "structured_cms_draft",
+            "seo_metadata",
+            "media_metadata",
+            "content_safety_context",
+        ),
+        allowed_tools=(
+            "cms_document_reader",
+            "deterministic_content_checks",
+            "seo_review",
+            "safety_review",
+        ),
+        automatic_actions=(
+            "review_draft",
+            "classify_publish_readiness",
+            "prepare_safe_findings",
+        ),
+        approval_required_actions=(
+            "publish_content",
+            "external_article_delivery",
+            "modify_draft",
+        ),
+        forbidden_actions=(
+            "auto_publish",
+            "schedule_publish",
+            "delete_content",
+            "modify_content",
+            "send_telegram_message",
+            "send_whatsapp_message",
+            "bypass_owner_approval",
+        ),
+        output_schema=(
+            "status",
+            "decision",
+            "critical_issues",
+            "warnings",
+            "passed_checks",
+            "owner_approval_required",
+            "safe_summary",
+        ),
+        idempotency_strategy=(
+            "Content identity plus deterministic draft fingerprint."
+        ),
+        retry_policy=(
+            "Repeat review only when draft content changes."
+        ),
+        human_takeover_policy=(
+            "Owner approval remains mandatory even after APPROVE."
+        ),
+        audit_policy=(
+            "Record review decision and safe findings without "
+            "changing content."
+        ),
+        safe_error_policy=(
+            "Do not expose prompts, credentials, private data, "
+            "or raw tracebacks."
+        ),
+        default_risk=AgentRisk.READ_ONLY,
+    ),
     "cms_editor_agent": AgentBrainContract(
         agent_key="cms_editor_agent",
         display_name="Venus CMS Editor Agent",

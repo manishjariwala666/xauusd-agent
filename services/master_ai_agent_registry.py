@@ -59,6 +59,22 @@ AGENTS: tuple[RegisteredAgent, ...] = (
         run_action="run_blog_agent",
     ),
     RegisteredAgent(
+        short_name="VMCRA",
+        official_name="Venus Master Content Review Agent",
+        agent_key="master_content_review_agent",
+        aliases=(
+            "master content review",
+            "content review agent",
+            "publish review",
+            "master ai review",
+        ),
+        description=(
+            "Performs read-only publish-readiness review "
+            "for structured CMS drafts."
+        ),
+        run_action="run_master_ai_content_review_agent",
+    ),
+    RegisteredAgent(
         short_name="VCEA",
         official_name="Venus CMS Editor Agent",
         agent_key="cms_editor_agent",
