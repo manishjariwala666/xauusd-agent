@@ -59,6 +59,23 @@ AGENTS: tuple[RegisteredAgent, ...] = (
         run_action="run_blog_agent",
     ),
     RegisteredAgent(
+        short_name="VMDA",
+        official_name="Venus Market Data Agent",
+        agent_key="market_data_agent",
+        aliases=(
+            "market data",
+            "live price",
+            "xauusd price",
+            "google finance price",
+            "gold price",
+        ),
+        description=(
+            "Validates current XAUUSD market snapshots from "
+            "Google Finance sheets or approved broker feeds."
+        ),
+        run_action="run_market_data_agent",
+    ),
+    RegisteredAgent(
         short_name="VCSA",
         official_name="Venus Customer Support Agent",
         agent_key="customer_support_agent",

@@ -186,6 +186,94 @@ AGENT_BRAINS: dict[str, AgentBrainContract] = {
         safe_error_policy="Do not expose provider credentials or internal prompts containing secrets.",
         default_risk=AgentRisk.LOW,
     ),
+    "market_data_agent": AgentBrainContract(
+        agent_key="market_data_agent",
+        display_name="Venus Market Data Agent",
+        purpose=(
+            "Validate and return current XAUUSD reference or "
+            "broker market data without generating signals."
+        ),
+        allowed_inputs=(
+            "symbol",
+            "google_finance_sheet_price",
+            "approved_broker_price",
+            "bid",
+            "ask",
+            "source",
+            "updated_at",
+        ),
+        allowed_tools=(
+            "google_sheets_reader",
+            "google_finance_reference_reader",
+            "market_data_validator",
+            "timestamp_freshness_validator",
+            "symbol_normalizer",
+        ),
+        automatic_actions=(
+            "normalize_market_symbol",
+            "read_approved_price_snapshot",
+            "validate_numeric_price",
+            "validate_source",
+            "validate_timestamp_freshness",
+            "format_verified_market_snapshot",
+        ),
+        approval_required_actions=(
+            "publish_market_price",
+            "send_market_price_externally",
+            "modify_google_sheet",
+            "change_market_data_source",
+        ),
+        forbidden_actions=(
+            "invent_market_price",
+            "present_stale_price_as_current",
+            "label_google_finance_as_live_broker_data",
+            "generate_buy_signal",
+            "generate_sell_signal",
+            "provide_entry_price",
+            "provide_stop_loss",
+            "provide_take_profit",
+            "provide_trading_advice",
+            "place_trade",
+            "send_telegram_message",
+            "send_whatsapp_message",
+        ),
+        output_schema=(
+            "status",
+            "symbol",
+            "price",
+            "bid",
+            "ask",
+            "spread",
+            "source",
+            "source_label",
+            "data_class",
+            "updated_at",
+            "age_seconds",
+            "fresh",
+            "safe_summary",
+        ),
+        idempotency_strategy=(
+            "Symbol, source and source timestamp identify one "
+            "market-data snapshot."
+        ),
+        retry_policy=(
+            "Retry transient read failures only; never reuse stale "
+            "data as current."
+        ),
+        human_takeover_policy=(
+            "Owner may override source preference, but freshness "
+            "and no-invention rules remain mandatory."
+        ),
+        audit_policy=(
+            "Record symbol, source, timestamp, freshness result "
+            "and safe response classification."
+        ),
+        safe_error_policy=(
+            "Return unavailable or stale status without exposing "
+            "credentials, sheet identifiers or raw tracebacks."
+        ),
+        default_risk=AgentRisk.READ_ONLY,
+    ),
     "customer_support_agent": AgentBrainContract(
         agent_key="customer_support_agent",
         display_name="Venus Customer Support Agent",
