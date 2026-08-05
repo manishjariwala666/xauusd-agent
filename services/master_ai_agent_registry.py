@@ -59,6 +59,22 @@ AGENTS: tuple[RegisteredAgent, ...] = (
         run_action="run_blog_agent",
     ),
     RegisteredAgent(
+        short_name="VMSA",
+        official_name="Venus Marketing Strategy Agent",
+        agent_key="marketing_strategy_agent",
+        aliases=(
+            "marketing strategist",
+            "marketing strategy agent",
+            "campaign planner",
+            "marketing team leader",
+        ),
+        description=(
+            "Creates approval-ready marketing campaign plans "
+            "for published VenusRealm content."
+        ),
+        run_action="run_marketing_strategy_agent",
+    ),
+    RegisteredAgent(
         short_name="VMPAA",
         official_name="Venus Master Publish Approval Agent",
         agent_key="master_publish_approval_agent",

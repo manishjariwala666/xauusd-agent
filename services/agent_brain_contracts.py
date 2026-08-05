@@ -186,6 +186,81 @@ AGENT_BRAINS: dict[str, AgentBrainContract] = {
         safe_error_policy="Do not expose provider credentials or internal prompts containing secrets.",
         default_risk=AgentRisk.LOW,
     ),
+    "marketing_strategy_agent": AgentBrainContract(
+        agent_key="marketing_strategy_agent",
+        display_name="Venus Marketing Strategy Agent",
+        purpose=(
+            "Plan multi-channel marketing campaigns for "
+            "published VenusRealm content."
+        ),
+        allowed_inputs=(
+            "published_article",
+            "public_url",
+            "target_audience",
+            "campaign_goal",
+            "keywords",
+            "approved_channels",
+        ),
+        allowed_tools=(
+            "campaign_planner",
+            "channel_selector",
+            "kpi_planner",
+            "risk_classifier",
+        ),
+        automatic_actions=(
+            "prepare_campaign_plan",
+            "recommend_channels",
+            "recommend_marketing_agents",
+            "define_kpis",
+        ),
+        approval_required_actions=(
+            "start_campaign",
+            "publish_social_content",
+            "send_outreach",
+            "create_external_backlink",
+        ),
+        forbidden_actions=(
+            "auto_post_social_media",
+            "send_email",
+            "send_telegram_message",
+            "send_whatsapp_message",
+            "mass_forum_posting",
+            "create_fake_account",
+            "buy_backlinks",
+            "guarantee_dofollow_backlink",
+            "bypass_platform_policy",
+        ),
+        output_schema=(
+            "status",
+            "campaign_id",
+            "campaign_name",
+            "goal",
+            "priority",
+            "channels",
+            "recommended_agents",
+            "kpis",
+            "owner_approval_required",
+            "safe_summary",
+        ),
+        idempotency_strategy=(
+            "Published article URL plus campaign goal and target audience."
+        ),
+        retry_policy=(
+            "Regenerate only when campaign inputs change."
+        ),
+        human_takeover_policy=(
+            "Owner approval is mandatory before any external action."
+        ),
+        audit_policy=(
+            "Record campaign inputs, recommendations, risk level, "
+            "and approval state."
+        ),
+        safe_error_policy=(
+            "Do not expose credentials, private audience data, "
+            "prompts, or raw tracebacks."
+        ),
+        default_risk=AgentRisk.LOW,
+    ),
     "master_publish_approval_agent": AgentBrainContract(
         agent_key="master_publish_approval_agent",
         display_name="Venus Master Publish Approval Agent",

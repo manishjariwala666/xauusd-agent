@@ -39,6 +39,7 @@ def test_all_production_agent_runners_exist() -> None:
         "cms_editor_agent",
         "master_content_review_agent",
         "master_publish_approval_agent",
+        "marketing_strategy_agent",
         "telegram_reply_agent",
         "whatsapp_reply_agent",
         "signal_agent",
