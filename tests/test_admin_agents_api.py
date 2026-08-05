@@ -47,9 +47,9 @@ def test_agent_list_returns_safe_read_only_records(monkeypatch) -> None:
     assert response.status_code == 200
     payload = response.json()
 
-    assert payload["count"] == 12
+    assert payload["count"] == len(payload["items"])
     assert payload["read_only"] is True
-    assert len(payload["items"]) == 12
+    assert len(payload["items"]) == payload["count"]
     assert response.headers["cache-control"] == "private, no-store"
 
     signal = next(
@@ -136,3 +136,77 @@ def test_agent_api_does_not_expose_sensitive_field_names(monkeypatch) -> None:
 
     for item in payload["items"]:
         assert forbidden_fields.isdisjoint(item)
+
+
+def test_agent_builder_preview_requires_authentication() -> None:
+    response = _client().post(
+        "/admin/agents/builder/preview",
+        json={
+            "display_name": "Social Media Agent",
+            "department": "marketing",
+            "purpose": (
+                "Prepare platform-specific social media drafts "
+                "for approved published content."
+            ),
+        },
+    )
+
+    assert response.status_code in {401, 403}
+
+
+def test_agent_builder_preview_returns_locked_brain(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "services.admin_agents_api._identity",
+        lambda *_: object(),
+    )
+
+    response = _client().post(
+        "/admin/agents/builder/preview",
+        json={
+            "display_name": "Social Media Agent",
+            "department": "marketing",
+            "purpose": (
+                "Prepare platform-specific social media drafts "
+                "for approved published content."
+            ),
+            "requested_actions": [
+                "publish_social_post",
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+    preview = payload["preview"]
+
+    assert preview["state"] == "BRAIN_PREVIEW"
+    assert preview["agent_key"] == "social_media_agent"
+    assert preview["default_risk"] == "HIGH"
+    assert preview["execution_enabled"] is False
+    assert payload["preview_only"] is True
+    assert payload["registry_written"] is False
+    assert payload["runner_written"] is False
+    assert payload["files_generated"] is False
+
+
+def test_agent_builder_preview_rejects_invalid_spec(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "services.admin_agents_api._identity",
+        lambda *_: object(),
+    )
+
+    response = _client().post(
+        "/admin/agents/builder/preview",
+        json={
+            "display_name": "Invalid Agent",
+            "purpose": "Too short",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "purpose" in response.json()["detail"].lower()

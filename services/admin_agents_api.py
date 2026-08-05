@@ -17,6 +17,7 @@ from services.ai_agent_service import (
     list_ai_agents,
     set_blog_agent_enabled_guarded,
 )
+from services.agent_brain_generator import generate_brain_preview
 from services.master_ai_agent_registry import (
     get_agent_dashboard_record,
     list_agent_dashboard_records,
@@ -76,6 +77,40 @@ def admin_agent_list(
         "items": items,
         "count": len(items),
         "read_only": True,
+    }
+
+
+@router.post("/admin/agents/builder/preview")
+def admin_agent_builder_preview(
+    payload: dict[str, Any],
+    response: Response,
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Generate a non-executable Agent Brain preview."""
+    _identity(authorization, x_admin_bff_key)
+    response.headers["Cache-Control"] = "private, no-store"
+
+    try:
+        preview = generate_brain_preview(payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Agent brain preview service is temporarily unavailable.",
+        ) from exc
+
+    return {
+        "preview": preview,
+        "preview_only": True,
+        "execution_enabled": False,
+        "registry_written": False,
+        "runner_written": False,
+        "files_generated": False,
     }
 
 
