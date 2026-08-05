@@ -59,6 +59,22 @@ AGENTS: tuple[RegisteredAgent, ...] = (
         run_action="run_blog_agent",
     ),
     RegisteredAgent(
+        short_name="VMPAA",
+        official_name="Venus Master Publish Approval Agent",
+        agent_key="master_publish_approval_agent",
+        aliases=(
+            "publish approval",
+            "publish approval agent",
+            "owner approved publish",
+            "master publish agent",
+        ),
+        description=(
+            "Publishes one reviewed draft only after explicit "
+            "owner approval."
+        ),
+        run_action="run_master_ai_publish_approval_agent",
+    ),
+    RegisteredAgent(
         short_name="VMCRA",
         official_name="Venus Master Content Review Agent",
         agent_key="master_content_review_agent",

@@ -186,6 +186,70 @@ AGENT_BRAINS: dict[str, AgentBrainContract] = {
         safe_error_policy="Do not expose provider credentials or internal prompts containing secrets.",
         default_risk=AgentRisk.LOW,
     ),
+    "master_publish_approval_agent": AgentBrainContract(
+        agent_key="master_publish_approval_agent",
+        display_name="Venus Master Publish Approval Agent",
+        purpose=(
+            "Publish one reviewed draft only after explicit "
+            "owner approval."
+        ),
+        allowed_inputs=(
+            "content_id",
+            "master_review_decision",
+            "owner_approved_publish",
+            "actor_id",
+            "request_id",
+        ),
+        allowed_tools=(
+            "content_reader",
+            "content_transition_service",
+            "audit_log",
+            "public_url_builder",
+        ),
+        automatic_actions=(),
+        approval_required_actions=(
+            "publish_approved_content",
+        ),
+        forbidden_actions=(
+            "publish_without_master_review",
+            "publish_without_owner_approval",
+            "publish_scheduled_content",
+            "duplicate_publish",
+            "delete_content",
+            "unpublish_content",
+            "send_telegram_message",
+            "send_whatsapp_message",
+            "bypass_approval",
+        ),
+        output_schema=(
+            "status",
+            "content_id",
+            "slug",
+            "public_url",
+            "owner_approval_confirmed",
+            "safe_summary",
+        ),
+        idempotency_strategy=(
+            "Content identity, draft lifecycle state, and request ID."
+        ),
+        retry_policy=(
+            "Never retry a successful publication. Recheck current "
+            "content state before every attempt."
+        ),
+        human_takeover_policy=(
+            "Owner may cancel before execution; explicit approval "
+            "is mandatory."
+        ),
+        audit_policy=(
+            "Record actor, request ID, content ID, review decision, "
+            "and publication transition."
+        ),
+        safe_error_policy=(
+            "Do not expose credentials, private content, database "
+            "details, or raw tracebacks."
+        ),
+        default_risk=AgentRisk.HIGH,
+    ),
     "master_content_review_agent": AgentBrainContract(
         agent_key="master_content_review_agent",
         display_name="Venus Master Content Review Agent",
