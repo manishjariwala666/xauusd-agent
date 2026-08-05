@@ -23,7 +23,7 @@ const securityHeaders = [
       "form-action 'self'",
       "frame-ancestors 'none'",
       "object-src 'none'",
-      "img-src 'self' data: http://127.0.0.1:8001 http://localhost:8001:",
+      "img-src 'self' data: http://127.0.0.1:8001 http://localhost:8001: https://img.youtube.com https://i.ytimg.com",
       "font-src 'self'",
       "style-src 'self' 'unsafe-inline'",
       `script-src ${scriptSources}`,

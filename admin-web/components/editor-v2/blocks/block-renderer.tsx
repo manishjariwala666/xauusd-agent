@@ -20,6 +20,11 @@ type Props = {
   total: number;
   disabled?: boolean;
   onChange: (block: CmsBlock) => void;
+  onAutoEmbed?: (input: {
+    url: string;
+    beforeHtml: string;
+    afterHtml: string;
+  }) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDuplicate: () => void;
@@ -32,6 +37,7 @@ export function BlockRenderer({
   total,
   disabled = false,
   onChange,
+  onAutoEmbed,
   onMoveUp,
   onMoveDown,
   onDuplicate,
@@ -46,6 +52,7 @@ export function BlockRenderer({
           block={block}
           disabled={disabled}
           onChange={onChange}
+          onAutoEmbed={onAutoEmbed}
         />
       );
       break;

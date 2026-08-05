@@ -65,6 +65,68 @@ export function DocumentCanvas({
     setInsertAfterBlockId(undefined);
   }
 
+  function replaceParagraphWithYoutube(
+    blockId: string,
+    input: {
+      url: string;
+      beforeHtml: string;
+      afterHtml: string;
+    },
+  ) {
+    const blockIndex = document.blocks.findIndex(
+      block => block.id === blockId,
+    );
+
+    if (blockIndex === -1) return;
+
+    const replacements: CmsDocument["blocks"] = [];
+
+    if (input.beforeHtml.trim()) {
+      const beforeBlock = createBlock("paragraph");
+
+      if (beforeBlock.type !== "paragraph") return;
+
+      replacements.push({
+        ...beforeBlock,
+        html: input.beforeHtml,
+      });
+    }
+
+    const youtubeBlock = createBlock("youtube");
+
+    if (youtubeBlock.type !== "youtube") return;
+
+    replacements.push({
+      ...youtubeBlock,
+      url: input.url,
+      title: "",
+    });
+
+    if (input.afterHtml.trim()) {
+      const afterBlock = createBlock("paragraph");
+
+      if (afterBlock.type !== "paragraph") return;
+
+      replacements.push({
+        ...afterBlock,
+        html: input.afterHtml,
+      });
+    }
+
+    const blocks = [...document.blocks];
+
+    blocks.splice(
+      blockIndex,
+      1,
+      ...replacements,
+    );
+
+    commit({
+      ...document,
+      blocks,
+    });
+  }
+
   return (
     <section className="wp-editor-canvas">
       <header className="wp-editor-topbar">
@@ -119,6 +181,12 @@ export function DocumentCanvas({
                         block.id,
                         () => nextBlock,
                       ),
+                    )
+                  }
+                  onAutoEmbed={input =>
+                    replaceParagraphWithYoutube(
+                      block.id,
+                      input,
                     )
                   }
                   onMoveUp={() =>
