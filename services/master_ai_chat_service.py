@@ -7,6 +7,8 @@ from typing import Any
 
 import httpx
 
+from services.master_ai_router import route_master_ai_request
+
 SAFE_CHAT_ERROR = "⚠️ Master AI abhi response nahi de pa raha. Thodi der baad try karein."
 
 SYSTEM_INSTRUCTIONS = """
@@ -91,7 +93,7 @@ def _generate_gemini_reply(message: str) -> str:
 
 
 def generate_master_ai_reply(message: str) -> str:
-    """Generate one safe reply with OpenAI primary and Gemini fallback."""
+    """Generate one safe reply with deterministic routing and LLM fallback."""
     clean_message = str(message or "").strip()
 
     if not clean_message:
@@ -99,6 +101,23 @@ def generate_master_ai_reply(message: str) -> str:
 
     if len(clean_message) > 4000:
         return "Message bahut lamba hai. Kripya 4000 characters ke andar bhejein."
+
+    route = route_master_ai_request(clean_message)
+
+    if route.intent == "MARKET_DATA":
+        return (
+            "Market Data Agent route detect hua hai, lekin Google Sheet "
+            "price reader abhi connect nahi hua. Main current XAUUSD price "
+            "guess nahi karunga. Next step me verified Sheet reader connect "
+            "karke source aur timestamp ke saath price return karenge."
+        )
+
+    if route.intent == "PUBLISH":
+        return (
+            "Publish request detect hui hai, lekin publishing approval-locked "
+            "hai. Master AI review aur explicit owner approval ke bina draft "
+            "publish nahi hoga."
+        )
 
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
