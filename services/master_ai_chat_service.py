@@ -8,6 +8,10 @@ from typing import Any
 import httpx
 
 from services.master_ai_router import route_master_ai_request
+from services.master_ai_signal_reader import (
+    MasterAISignalSnapshot,
+    get_today_signal_snapshot,
+)
 
 SAFE_CHAT_ERROR = "⚠️ Master AI abhi response nahi de pa raha. Thodi der baad try karein."
 
@@ -92,6 +96,61 @@ def _generate_gemini_reply(message: str) -> str:
         return ""
 
 
+def _format_market_snapshot(
+    snapshot: MasterAISignalSnapshot | None,
+) -> str:
+    """Format verified read-only Sheet1 market data for admin chat."""
+    if snapshot is None:
+        return (
+            "Aaj ka XAUUSD Google Sheet snapshot available nahi hai. "
+            "Main current price guess nahi karunga. Sheet1 ka DATE block "
+            "aur LIVE CMP value verify kijiye."
+        )
+
+    if snapshot.live_cmp is None:
+        return (
+            f"XAUUSD Sheet snapshot {snapshot.signal_date.isoformat()} ke "
+            "liye mila, lekin LIVE CMP available nahi hai. Main missing "
+            "price invent nahi karunga."
+        )
+
+    def value(item: object) -> str:
+        return str(item) if item is not None else "N/A"
+
+    return "\n".join(
+        (
+            "📊 XAUUSD — Google Sheet Reference",
+            f"Current Price: {snapshot.live_cmp}",
+            f"Date: {snapshot.signal_date.isoformat()}",
+            f"Latest Slot: {snapshot.latest_slot or 'N/A'}",
+            f"Day High: {value(snapshot.day_high)}",
+            f"Day Low: {value(snapshot.day_low)}",
+            f"Source: {snapshot.source} / Sheet1",
+            "",
+            "Read-only reference data.",
+            "Koi buy/sell signal, trade recommendation ya execution nahi hua.",
+        )
+    )
+
+
+def _market_data_reply() -> str:
+    """Read today's verified Sheet1 snapshot without LLM fallback."""
+    try:
+        snapshot = get_today_signal_snapshot()
+    except Exception as exc:
+        print(
+            "[master-ai-chat] Market snapshot error "
+            f"type={type(exc).__name__}"
+        )
+        return (
+            "Google Sheet market-data reader temporarily unavailable hai. "
+            "Main XAUUSD price guess nahi karunga. Sheet configuration aur "
+            "Sheet1 access verify kijiye."
+        )
+
+    return _format_market_snapshot(snapshot)
+
+
 def generate_master_ai_reply(message: str) -> str:
     """Generate one safe reply with deterministic routing and LLM fallback."""
     clean_message = str(message or "").strip()
@@ -105,12 +164,7 @@ def generate_master_ai_reply(message: str) -> str:
     route = route_master_ai_request(clean_message)
 
     if route.intent == "MARKET_DATA":
-        return (
-            "Market Data Agent route detect hua hai, lekin Google Sheet "
-            "price reader abhi connect nahi hua. Main current XAUUSD price "
-            "guess nahi karunga. Next step me verified Sheet reader connect "
-            "karke source aur timestamp ke saath price return karenge."
-        )
+        return _market_data_reply()
 
     if route.intent == "PUBLISH":
         return (
