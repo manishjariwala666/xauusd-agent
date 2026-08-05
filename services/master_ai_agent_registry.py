@@ -59,6 +59,22 @@ AGENTS: tuple[RegisteredAgent, ...] = (
         run_action="run_blog_agent",
     ),
     RegisteredAgent(
+        short_name="VCSA",
+        official_name="Venus Customer Support Agent",
+        agent_key="customer_support_agent",
+        aliases=(
+            "customer support",
+            "website support agent",
+            "client guidance agent",
+            "lead support agent",
+        ),
+        description=(
+            "Guides website visitors, qualifies new-client leads "
+            "and prepares safe support escalation."
+        ),
+        run_action="run_customer_support_agent",
+    ),
+    RegisteredAgent(
         short_name="VMSA",
         official_name="Venus Marketing Strategy Agent",
         agent_key="marketing_strategy_agent",

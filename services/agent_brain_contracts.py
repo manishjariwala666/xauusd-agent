@@ -186,6 +186,86 @@ AGENT_BRAINS: dict[str, AgentBrainContract] = {
         safe_error_policy="Do not expose provider credentials or internal prompts containing secrets.",
         default_risk=AgentRisk.LOW,
     ),
+    "customer_support_agent": AgentBrainContract(
+        agent_key="customer_support_agent",
+        display_name="Venus Customer Support Agent",
+        purpose=(
+            "Guide website visitors, qualify new-client leads "
+            "and prepare safe human escalation."
+        ),
+        allowed_inputs=(
+            "customer_message",
+            "customer_name",
+            "email",
+            "phone",
+            "country",
+            "website_context",
+        ),
+        allowed_tools=(
+            "intent_classifier",
+            "knowledge_base_reader",
+            "lead_qualifier",
+            "support_triage",
+        ),
+        automatic_actions=(
+            "answer_general_questions",
+            "provide_onboarding_guidance",
+            "qualify_lead",
+            "prepare_support_summary",
+        ),
+        approval_required_actions=(
+            "create_crm_lead",
+            "send_customer_message",
+            "escalate_to_human",
+            "modify_account",
+            "process_billing_request",
+        ),
+        forbidden_actions=(
+            "provide_buy_signal",
+            "provide_sell_signal",
+            "provide_trading_advice",
+            "guarantee_profit",
+            "place_trade",
+            "reset_password",
+            "collect_password",
+            "collect_otp",
+            "collect_card_details",
+            "process_payment",
+            "process_refund",
+            "delete_account",
+            "send_email",
+            "send_telegram_message",
+            "send_whatsapp_message",
+        ),
+        output_schema=(
+            "status",
+            "intent",
+            "reply",
+            "lead",
+            "human_escalation_required",
+            "owner_review_required",
+            "safe_summary",
+        ),
+        idempotency_strategy=(
+            "Conversation identity plus normalized customer message."
+        ),
+        retry_policy=(
+            "Regenerate only if the customer message or support "
+            "context changes."
+        ),
+        human_takeover_policy=(
+            "Stop AI guidance immediately when a human agent takes over."
+        ),
+        audit_policy=(
+            "Record intent, lead score, escalation decision and safe "
+            "response without storing sensitive credentials."
+        ),
+        safe_error_policy=(
+            "Never expose credentials, tokens, internal prompts, "
+            "private customer data or raw tracebacks."
+        ),
+        default_risk=AgentRisk.LOW,
+    ),
     "marketing_strategy_agent": AgentBrainContract(
         agent_key="marketing_strategy_agent",
         display_name="Venus Marketing Strategy Agent",
