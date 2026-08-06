@@ -171,6 +171,37 @@ AGENTS: tuple[RegisteredAgent, ...] = (
         description="Manages announcement preparation and status.",
     ),
     RegisteredAgent(
+        short_name="VMAI",
+        official_name="Venus Macro AI",
+        agent_key="macro_ai_agent",
+        aliases=(
+            "macro ai",
+            "macro agent",
+            "market macro",
+            "gold macro intelligence",
+        ),
+        description=(
+            "Provides read-only XAUUSD macro bias using approved "
+            "market snapshots, correlations and deterministic scoring."
+        ),
+    ),
+    RegisteredAgent(
+        short_name="VECA",
+        official_name="Venus Economic Calendar AI",
+        agent_key="economic_calendar_ai_agent",
+        aliases=(
+            "economic calendar",
+            "calendar ai",
+            "news lock",
+            "usa canada news",
+            "high impact news",
+        ),
+        description=(
+            "Classifies approved USA and Canada economic events, "
+            "calculates event surprise and provides read-only news-lock guidance."
+        ),
+    ),
+    RegisteredAgent(
         short_name="VWHA",
         official_name="Venus Website Health Agent",
         agent_key="website_health_agent",

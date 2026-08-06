@@ -713,6 +713,135 @@ AGENT_BRAINS: dict[str, AgentBrainContract] = {
         safe_error_policy="Hide service-account details, tokens, and private targets.",
         default_risk=AgentRisk.READ_ONLY,
     ),
+    "macro_ai_agent": AgentBrainContract(
+        agent_key="macro_ai_agent",
+        display_name="Venus Macro AI",
+        purpose=(
+            "Provide deterministic, read-only XAUUSD macro confirmation "
+            "from approved normalized market snapshots."
+        ),
+        allowed_inputs=(
+            "normalized_market_snapshots",
+            "approved_instrument_registry",
+            "signal_direction_for_comparison",
+        ),
+        allowed_tools=(
+            "macro_scoring_engine",
+            "correlation_calculator",
+            "read_only_market_repository",
+        ),
+        automatic_actions=(
+            "calculate_macro_bias",
+            "calculate_confidence",
+            "identify_missing_sources",
+            "report_signal_conflict",
+        ),
+        approval_required_actions=(
+            "connect_new_market_provider",
+            "change_instrument_weights",
+            "use_macro_result_for_signal_blocking",
+        ),
+        forbidden_actions=(
+            "execute_trade",
+            "publish_signal",
+            "send_telegram",
+            "send_whatsapp",
+            "modify_signal_engine",
+            "write_production_market_data",
+        ),
+        output_schema=(
+            "bias",
+            "confidence",
+            "total_score",
+            "drivers",
+            "conflicts",
+            "observed_at",
+        ),
+        idempotency_strategy=(
+            "Snapshot timestamp plus normalized instrument set."
+        ),
+        retry_policy=(
+            "Retry only when missing or stale market snapshots are refreshed."
+        ),
+        human_takeover_policy=(
+            "Owner approval is required before macro output can block "
+            "or confirm production signals."
+        ),
+        audit_policy=(
+            "Record assessment inputs, score, confidence and conflicts."
+        ),
+        safe_error_policy=(
+            "Return NEUTRAL or incomplete assessment when data is missing; "
+            "never guess market values."
+        ),
+        default_risk=AgentRisk.READ_ONLY,
+    ),
+    "economic_calendar_ai_agent": AgentBrainContract(
+        agent_key="economic_calendar_ai_agent",
+        display_name="Venus Economic Calendar AI",
+        purpose=(
+            "Provide read-only USA and Canada economic-event classification, "
+            "event-surprise assessment and news-lock recommendations."
+        ),
+        allowed_inputs=(
+            "approved_economic_events",
+            "actual_forecast_previous_values",
+            "event_schedule",
+            "current_timestamp",
+        ),
+        allowed_tools=(
+            "economic_calendar_engine",
+            "approved_event_registry",
+            "read_only_event_repository",
+        ),
+        automatic_actions=(
+            "classify_event_impact",
+            "calculate_event_surprise",
+            "calculate_gold_bias",
+            "recommend_news_lock",
+        ),
+        approval_required_actions=(
+            "connect_external_calendar_provider",
+            "activate_production_news_lock",
+            "publish_news_article",
+            "change_event_rules",
+        ),
+        forbidden_actions=(
+            "scrape_unauthorized_sources",
+            "execute_trade",
+            "publish_signal",
+            "send_telegram",
+            "send_whatsapp",
+            "modify_signal_engine",
+        ),
+        output_schema=(
+            "event_id",
+            "country",
+            "impact",
+            "bias",
+            "surprise",
+            "confidence",
+            "lock_recommended",
+            "rationale",
+        ),
+        idempotency_strategy=(
+            "Event identifier plus scheduled timestamp and actual-value revision."
+        ),
+        retry_policy=(
+            "Reassess only when actual, forecast or event timing changes."
+        ),
+        human_takeover_policy=(
+            "Owner approval is required before any production signal lock "
+            "or website publication."
+        ),
+        audit_policy=(
+            "Record event source, values, assessment and lock recommendation."
+        ),
+        safe_error_policy=(
+            "Return UNKNOWN when values or approved rules are missing."
+        ),
+        default_risk=AgentRisk.READ_ONLY,
+    ),
     "admin_support_agent": AgentBrainContract(
         agent_key="admin_support_agent",
         display_name="Venus Admin Support Agent",
