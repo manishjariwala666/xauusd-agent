@@ -3,8 +3,24 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function ContentActions({ kind, id, status, previewUrl, previewLabel = "Preview", compact = false }: {
-  kind: "posts" | "pages"; id: number; status: string; previewUrl?: string; previewLabel?: string; compact?: boolean;
+export function ContentActions({
+  kind,
+  id,
+  status,
+  previewUrl,
+  previewLabel = "Preview",
+  compact = false,
+  editHref,
+  readOnly = false,
+}: {
+  kind: "posts" | "pages";
+  id: number;
+  status: string;
+  previewUrl?: string;
+  previewLabel?: string;
+  compact?: boolean;
+  editHref?: string;
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -25,13 +41,51 @@ export function ContentActions({ kind, id, status, previewUrl, previewLabel = "P
     finally { setBusy(false); }
   }
   return <div className={`row-actions ${compact ? "compact" : ""}`}>
-    <a href={`/admin/${kind}/${id}/edit`}>{compact ? "Edit" : "Edit post"}</a>
-    {previewUrl && <a href={previewUrl} target="_blank" rel="noreferrer">{previewLabel}</a>}
-    {status === "published"
-      ? <button disabled={busy} onClick={() => action("unpublish")}>Unpublish</button>
-      : status !== "trash" && <button disabled={busy} onClick={() => action("publish")}>Publish</button>}
-    {kind === "posts" && <button disabled={busy} onClick={() => action("duplicate")}>Duplicate</button>}
-    {kind === "posts" && status !== "trash" && <button disabled={busy} onClick={() => action("trash")}>Trash</button>}
+    <a href={editHref || `/admin/${kind}/${id}/edit`}>
+      {compact ? "Edit" : "Edit post"}
+    </a>
+    {previewUrl && (
+      <a href={previewUrl} target="_blank" rel="noreferrer">
+        {previewLabel}
+      </a>
+    )}
+    {!readOnly && (
+      <>
+        {status === "published"
+          ? (
+            <button
+              disabled={busy}
+              onClick={() => action("unpublish")}
+            >
+              Unpublish
+            </button>
+          )
+          : status !== "trash" && (
+            <button
+              disabled={busy}
+              onClick={() => action("publish")}
+            >
+              Publish
+            </button>
+          )}
+        {kind === "posts" && (
+          <button
+            disabled={busy}
+            onClick={() => action("duplicate")}
+          >
+            Duplicate
+          </button>
+        )}
+        {kind === "posts" && status !== "trash" && (
+          <button
+            disabled={busy}
+            onClick={() => action("trash")}
+          >
+            Trash
+          </button>
+        )}
+      </>
+    )}
     {message && <small className="action-error" role="alert">{message}</small>}
   </div>;
 }

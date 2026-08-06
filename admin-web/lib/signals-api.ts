@@ -12,6 +12,7 @@ export type AdminSignal = {
   technical_reason: string | null; astrology_reason: string | null; risk_note: string | null;
   publication_status: string; lifecycle_status: string; published_at: string | null;
   scheduled_at: string | null; expires_at: string | null; closed_at: string | null;
+  signal_time: string | null;
   featured: boolean; updated_at: string;
 };
 

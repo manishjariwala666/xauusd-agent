@@ -7,11 +7,32 @@ const shortDate = (value: string | null) => value
   : "—";
 const number = (value: number) => new Intl.NumberFormat("en-IN").format(value);
 
-export function ContentList({ kind, data, categories, search, status, category, sort, publicWebsiteUrl }: {
-  kind: "posts" | "pages"; data: Paginated<ContentSummary>; categories: Category[];
-  search: string; status: string; category: string; sort: string; publicWebsiteUrl?: string;
+export function ContentList({
+  kind,
+  data,
+  categories,
+  search,
+  status,
+  category,
+  sort,
+  publicWebsiteUrl,
+  basePath,
+  readOnly = false,
+}: {
+  kind: "posts" | "pages";
+  data: Paginated<ContentSummary>;
+  categories: Category[];
+  search: string;
+  status: string;
+  category: string;
+  sort: string;
+  publicWebsiteUrl?: string;
+  basePath?: string;
+  readOnly?: boolean;
 }) {
   const isPosts = kind === "posts";
+  const routeBase = basePath || `/admin/${kind}`;
+  const isStudioV2 = routeBase.startsWith("/studio-v2");
   const label = isPosts ? "Blog Studio" : "Pages";
   const stats = data.stats || { total: data.total, published: 0, drafts: 0, scheduled: 0, trashed: 0, total_views: 0 };
   const query = new URLSearchParams({ search, status, sort });
@@ -24,7 +45,7 @@ export function ContentList({ kind, data, categories, search, status, category, 
         {isPosts && (
           <Link
             className="secondary-button studio-ai-button"
-            href="/admin/posts/ai-writer"
+            href={isStudioV2 ? "/studio-v2/ai" : "/admin/posts/ai-writer"}
           >
             <span aria-hidden="true">✦</span>
             Generate with AI
@@ -33,7 +54,7 @@ export function ContentList({ kind, data, categories, search, status, category, 
 
         <Link
           className="primary-button button-with-icon"
-          href={`/admin/${kind}/new`}
+          href={isStudioV2 ? "/studio-v2?new=1" : `/admin/${kind}/new`}
         >
           <span aria-hidden="true">＋</span>
           New {isPosts ? "Post" : "Page"}
@@ -58,7 +79,7 @@ export function ContentList({ kind, data, categories, search, status, category, 
         <label><span className="sr-only">Category</span><select name="category" defaultValue={category}><option value="">All categories</option>{categories.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
         <label><span className="sr-only">Sort</span><select name="sort" defaultValue={sort}><option value="updated_desc">Recently updated</option><option value="updated_asc">Oldest updated</option><option value="title_asc">Title A–Z</option><option value="title_desc">Title Z–A</option><option value="published_desc">Recently published</option></select></label>
         <button className="secondary-button">Apply filters</button>
-        {(search || status !== "all" || category || sort !== "updated_desc") && <Link className="clear-filter" href={`/admin/${kind}`}>Clear</Link>}
+        {(search || status !== "all" || category || sort !== "updated_desc") && <Link className="clear-filter" href={routeBase}>Clear</Link>}
       </form>
       {data.items.length ? <div className="table-wrap"><table className="cms-table studio-table">
         <thead><tr><th><input type="checkbox" disabled aria-label="Select all posts" /></th><th>Post</th><th>ID</th><th>Category</th><th>Status</th><th>Views</th><th>SEO</th><th>Slug</th><th>Author</th><th>Updated</th><th>Actions</th></tr></thead>
@@ -66,12 +87,40 @@ export function ContentList({ kind, data, categories, search, status, category, 
           const previewUrl = publicWebsiteUrl && item.status === "published" ? `${publicWebsiteUrl}/${isPosts ? "blog" : "page"}/${encodeURIComponent(item.slug)}` : undefined;
           return <tr key={item.id}>
             <td><input type="checkbox" aria-label={`Select ${item.title}`} disabled /></td>
-            <td className="post-cell"><Link className="post-thumbnail" href={`/admin/${kind}/${item.id}/edit`} aria-label={`Edit ${item.title}`} style={item.featured_image ? { backgroundImage: `url(${item.featured_image})` } : undefined}>{!item.featured_image && <span aria-hidden="true">VR</span>}</Link><div><Link className="post-title" href={`/admin/${kind}/${item.id}/edit`}>{item.title}</Link><small>{item.scheduled_at && item.status === "scheduled" ? `Scheduled ${shortDate(item.scheduled_at)}` : item.content_type.replace("_", " ")}</small></div></td>
+            <td className="post-cell"><Link
+              className="post-thumbnail"
+              href={
+                isStudioV2
+                  ? `/studio-v2?post_id=${item.id}`
+                  : `/admin/${kind}/${item.id}/edit`
+              } aria-label={`Edit ${item.title}`} style={item.featured_image ? { backgroundImage: `url(${item.featured_image})` } : undefined}>{!item.featured_image && <span aria-hidden="true">VR</span>}</Link><div><Link
+                className="post-title"
+                href={
+                  isStudioV2
+                    ? `/studio-v2?post_id=${item.id}`
+                    : `/admin/${kind}/${item.id}/edit`
+                }
+              >
+                {item.title}
+              </Link><small>{item.scheduled_at && item.status === "scheduled" ? `Scheduled ${shortDate(item.scheduled_at)}` : item.content_type.replace("_", " ")}</small></div></td>
             <td className="numeric">#{item.id}</td><td>{item.category || "Uncategorized"}</td>
             <td><span className={`status-badge ${item.status}`}><i aria-hidden="true" />{item.status}</span></td>
             <td className="numeric">{number(item.views || 0)}</td><td><span className={`seo-score ${item.seo_score >= 70 ? "good" : item.seo_score >= 40 ? "fair" : "low"}`}>{item.seo_score || 0}</span></td>
             <td><code className="slug-cell">/{item.slug}</code></td><td className="author-cell">{item.author || "System"}</td><td className="date-cell">{shortDate(item.updated_at)}</td>
-            <td><ContentActions kind={kind} id={item.id} status={item.status} previewUrl={previewUrl} previewLabel="Open preview" compact /></td>
+            <td><ContentActions
+              kind={kind}
+              id={item.id}
+              status={item.status}
+              previewUrl={previewUrl}
+              previewLabel="Open preview"
+              compact
+              readOnly={readOnly}
+              editHref={
+                isStudioV2
+                  ? `/studio-v2?post_id=${item.id}`
+                  : undefined
+              }
+            /></td>
           </tr>})}</tbody>
       </table></div> : <section className="state-panel empty-table"><strong>No {isPosts ? "posts" : "pages"} found</strong><p>Create a draft or change the current filters.</p></section>}
       <nav className="pagination" aria-label="Pagination"><span>Page {data.page} of {data.pages}</span><div>{data.page > 1 ? <Link href={pageHref(data.page - 1)}>← Previous</Link> : <span aria-disabled="true">← Previous</span>}{data.page < data.pages ? <Link href={pageHref(data.page + 1)}>Next →</Link> : <span aria-disabled="true">Next →</span>}</div></nav>

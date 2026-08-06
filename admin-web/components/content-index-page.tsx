@@ -4,9 +4,16 @@ import { fetchContentList } from "@/lib/content-api";
 import { fetchCategories } from "@/lib/content-api";
 import { ADMIN_SESSION_COOKIE } from "@/lib/session";
 
-export async function ContentIndexPage({ kind, searchParams }: {
+export async function ContentIndexPage({
+  kind,
+  searchParams,
+  basePath,
+  readOnly = false,
+}: {
   kind: "posts" | "pages";
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+  basePath?: string;
+  readOnly?: boolean;
 }) {
   const params = await searchParams;
   const query = new URLSearchParams({
@@ -25,5 +32,8 @@ export async function ContentIndexPage({ kind, searchParams }: {
   return <ContentList kind={kind} data={data} categories={categories?.items || []}
     search={query.get("search") || ""} status={query.get("status") || "all"}
     category={query.get("category_id") || ""} sort={query.get("sort") || "updated_desc"}
-    publicWebsiteUrl={publicWebsiteUrl || undefined} />;
+    publicWebsiteUrl={publicWebsiteUrl || undefined}
+    basePath={basePath}
+    readOnly={readOnly}
+  />;
 }

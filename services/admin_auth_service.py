@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
+import ipaddress
 import re
 import secrets
 from typing import Any
@@ -20,6 +21,7 @@ from core.database import session_scope
 
 ROLE_ADMIN = "ADMIN"
 STATUS_APPROVED = "APPROVED"
+_PREVIEW_SESSION_TYPE = "admin_preview_session"
 _EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _DUMMY_PASSWORD_HASH = (
     b"$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxmZ5Nn0p9vQm2Q7b9YFf6M8K7e"
@@ -82,6 +84,124 @@ def verify_bff_secret(provided_secret: str | None) -> None:
         raise AdminAccessForbidden("Admin BFF authorization failed.")
 
 
+def local_admin_preview_enabled() -> bool:
+    """Return True only for an explicitly enabled development preview."""
+    settings = get_settings()
+
+    return bool(
+        str(getattr(settings, "app_env", "") or "").strip().lower()
+        == "development"
+        and bool(getattr(settings, "local_admin_preview", False))
+        and str(
+            getattr(settings, "local_admin_preview_email", "") or ""
+        ).strip()
+        and len(
+            str(
+                getattr(
+                    settings,
+                    "local_admin_preview_password",
+                    "",
+                )
+                or ""
+            )
+        )
+        >= 16
+    )
+
+
+def _is_loopback_client(ip_address: str) -> bool:
+    """Accept only IPv4/IPv6 loopback addresses."""
+    candidate = str(ip_address or "").split(",", 1)[0].strip()
+
+    if candidate.startswith("[") and candidate.endswith("]"):
+        candidate = candidate[1:-1]
+
+    try:
+        address = ipaddress.ip_address(candidate)
+    except ValueError:
+        return False
+
+    return bool(address.is_loopback)
+
+
+def login_local_admin_preview(
+    *,
+    email: str,
+    password: str,
+    ip_address: str,
+) -> IssuedAdminSession:
+    """Issue a short database-free session for localhost development only."""
+    settings = get_settings()
+
+    if not local_admin_preview_enabled():
+        raise AdminAuthUnavailable(
+            "Local administrator preview is disabled."
+        )
+
+    if not _is_loopback_client(ip_address):
+        raise AdminAccessForbidden(
+            "Local administrator preview requires a loopback client."
+        )
+
+    expected_email = str(
+        settings.local_admin_preview_email or ""
+    ).strip().lower()
+    expected_password = str(
+        settings.local_admin_preview_password or ""
+    )
+
+    supplied_email = str(email or "").strip().lower()
+    supplied_password = str(password or "")
+
+    credentials_valid = bool(
+        _EMAIL_PATTERN.fullmatch(supplied_email)
+        and hmac.compare_digest(supplied_email, expected_email)
+        and hmac.compare_digest(
+            supplied_password,
+            expected_password,
+        )
+    )
+
+    if not credentials_valid:
+        raise AdminInvalidCredentials(
+            "Invalid email or password."
+        )
+
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(
+        minutes=min(
+            15,
+            max(5, int(settings.admin_session_ttl_minutes)),
+        )
+    )
+    token_id = secrets.token_urlsafe(32)
+
+    token = jwt.encode(
+        {
+            "sub": "-1",
+            "jti": token_id,
+            "typ": _PREVIEW_SESSION_TYPE,
+            "email": expected_email,
+            "iat": now,
+            "exp": expires_at,
+            "iss": settings.jwt_issuer,
+            "aud": "admin-web",
+        },
+        settings.jwt_secret,
+        algorithm="HS256",
+    )
+
+    return IssuedAdminSession(
+        token=token,
+        expires_at=expires_at,
+        identity=AdminIdentity(
+            user_id=-1,
+            email=expected_email,
+            role=ROLE_ADMIN,
+        ),
+    )
+
+
 def login_admin(
     *,
     email: str,
@@ -92,6 +212,14 @@ def login_admin(
 ) -> IssuedAdminSession:
     """Authenticate one approved administrator and persist a revocable session."""
     settings = get_settings()
+
+    if local_admin_preview_enabled():
+        return login_local_admin_preview(
+            email=email,
+            password=password,
+            ip_address=ip_address,
+        )
+
     normalized_email = str(email or "").strip().lower()
     normalized_password = str(password or "")
     email_hash = _identifier_hash(normalized_email, settings.jwt_secret)
@@ -256,6 +384,35 @@ def validate_admin_session(token: str) -> AdminIdentity:
     """Validate signature, persisted session state, and current database role."""
     settings = get_settings()
     claims = _decode_admin_token(token, verify_expiration=True)
+
+    if claims.get("typ") == _PREVIEW_SESSION_TYPE:
+        if not local_admin_preview_enabled():
+            raise AdminSessionInvalid(
+                "Local administrator preview session is disabled."
+            )
+
+        expected_email = str(
+            settings.local_admin_preview_email or ""
+        ).strip().lower()
+
+        if (
+            str(claims.get("sub") or "") != "-1"
+            or not expected_email
+            or not hmac.compare_digest(
+                str(claims.get("email") or "").strip().lower(),
+                expected_email,
+            )
+        ):
+            raise AdminSessionInvalid(
+                "Local administrator preview session is invalid."
+            )
+
+        return AdminIdentity(
+            user_id=-1,
+            email=expected_email,
+            role=ROLE_ADMIN,
+        )
+
     token_id_hash = _identifier_hash(str(claims["jti"]), settings.jwt_secret)
     with session_scope() as session:
         row = session.execute(
@@ -320,6 +477,14 @@ def logout_admin_session(
     """Revoke a persisted session while allowing already-expired logout calls."""
     settings = get_settings()
     claims = _decode_admin_token(token, verify_expiration=False)
+
+    if claims.get("typ") == _PREVIEW_SESSION_TYPE:
+        if not local_admin_preview_enabled():
+            raise AdminSessionInvalid(
+                "Local administrator preview session is disabled."
+            )
+        return
+
     token_id_hash = _identifier_hash(str(claims["jti"]), settings.jwt_secret)
     with session_scope() as session:
         user_id = session.execute(
@@ -363,7 +528,10 @@ def _decode_admin_token(token: str, *, verify_expiration: bool) -> dict[str, Any
         )
     except jwt.PyJWTError as exc:
         raise AdminSessionInvalid("Admin session is invalid or expired.") from exc
-    if claims.get("typ") != "admin_session":
+    if claims.get("typ") not in {
+        "admin_session",
+        _PREVIEW_SESSION_TYPE,
+    }:
         raise AdminSessionInvalid("Admin session type is invalid.")
     return dict(claims)
 

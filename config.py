@@ -199,6 +199,10 @@ class Settings:
     human_takeover_minutes: int
     worker_poll_seconds: int
     block_search_indexing: bool
+    app_env: str
+    local_admin_preview: bool
+    local_admin_preview_email: str
+    local_admin_preview_password: str
     admin_bff_shared_secret: str
     admin_session_ttl_minutes: int
     admin_login_window_seconds: int
@@ -360,6 +364,21 @@ class Settings:
             block_search_indexing=_read_bool_secret(
                 "BLOCK_SEARCH_INDEXING",
                 False,
+            ),
+            app_env=_read_secret(
+                "APP_ENV",
+                "production",
+            ).strip().lower(),
+            local_admin_preview=_read_bool_secret(
+                "LOCAL_ADMIN_PREVIEW",
+                False,
+            ),
+            local_admin_preview_email=_read_secret(
+                "LOCAL_ADMIN_PREVIEW_EMAIL",
+                "preview@localhost.invalid",
+            ).strip().lower(),
+            local_admin_preview_password=_read_secret(
+                "LOCAL_ADMIN_PREVIEW_PASSWORD",
             ),
             admin_bff_shared_secret=_read_secret("ADMIN_BFF_SHARED_SECRET"),
             admin_session_ttl_minutes=max(

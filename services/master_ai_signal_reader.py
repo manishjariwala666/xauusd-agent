@@ -111,6 +111,7 @@ def parse_signal_snapshot(
     )
     block = values[start_index:end_index]
 
+    summary_header: list[Any] | None = None
     summary_row: list[Any] | None = None
     hourly_header_index: int | None = None
 
@@ -126,26 +127,41 @@ def parse_signal_snapshot(
             and "sell base" in normalized
         ):
             if relative_index + 1 < len(block):
+                summary_header = row
                 summary_row = block[relative_index + 1]
 
         if normalized and normalized[0] == "time":
             hourly_header_index = relative_index
 
-    if summary_row is None:
+    if summary_header is None or summary_row is None:
         return None
 
-    open_price = _decimal(_cell(summary_row, 0))
-    high_price = _decimal(_cell(summary_row, 1))
-    low_price = _decimal(_cell(summary_row, 2))
-    close_price = _decimal(_cell(summary_row, 3))
+    header_indexes = {
+        _cell(summary_header, index).strip().lower(): index
+        for index in range(len(summary_header))
+        if _cell(summary_header, index)
+    }
 
-    day_high = _decimal(_cell(summary_row, 8))
-    day_low = _decimal(_cell(summary_row, 9))
-    step = _decimal(_cell(summary_row, 10))
-    range_value = _decimal(_cell(summary_row, 11))
-    buy_base = _decimal(_cell(summary_row, 12))
-    sell_base = _decimal(_cell(summary_row, 13))
-    mode = _cell(summary_row, 14)
+    def summary_value(header: str) -> str:
+        index = header_indexes.get(header.strip().lower())
+        if index is None:
+            return ""
+        return _cell(summary_row, index)
+
+    open_price = _decimal(summary_value("open"))
+    high_price = _decimal(summary_value("high"))
+    low_price = _decimal(summary_value("low"))
+    close_price = _decimal(summary_value("close"))
+
+    day_high = _decimal(summary_value("session high"))
+    day_low = _decimal(summary_value("session low"))
+    buy_base = _decimal(summary_value("buy base"))
+    sell_base = _decimal(summary_value("sell base"))
+    mode = summary_value("mode")
+
+    # Step and Range belong to the target table, not the daily summary row.
+    step = None
+    range_value = None
 
     latest_slot: str | None = None
     live_cmp: Decimal | None = None

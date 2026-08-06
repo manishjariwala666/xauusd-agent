@@ -40,9 +40,12 @@ export default async function StudioV2Layout({
           <span className="studio-v2-nav-label">CONTENT</span>
 
           <Link href="/studio-v2">Content Studio</Link>
+          <Link href="/studio-v2/posts">Posts</Link>
+          <Link href="/studio-v2/posts?status=draft">Drafts</Link>
           <Link href="/studio-v2/media">Media Library</Link>
           <Link href="/studio-v2/gallery">Gallery Manager</Link>
           <Link href="/studio-v2/seo">SEO Studio</Link>
+          <Link href="/studio-v2/signals">Signals</Link>
 
           <span className="studio-v2-nav-label">INTELLIGENCE</span>
 

@@ -169,7 +169,7 @@ def test_admin_agents_routes_are_registered(monkeypatch) -> None:
     detail = client.get("/admin/agents/report_agent")
 
     assert listing.status_code == 200
-    assert listing.json()["count"] == 12
+    assert listing.json()["count"] == 18
     assert detail.status_code == 200
     assert detail.json()["item"]["agent_key"] == "report_agent"
 

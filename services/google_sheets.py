@@ -9,6 +9,8 @@ import csv
 import hashlib
 from io import StringIO
 import json
+import os
+from pathlib import Path
 import re
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -17,7 +19,10 @@ import gspread
 from loguru import logger
 import requests
 
-from config import get_settings
+from config import (
+    get_settings,
+    parse_google_service_account_json,
+)
 
 
 @dataclass(frozen=True)
@@ -61,24 +66,52 @@ class GoogleSheetsService:
     def __init__(self) -> None:
         settings = get_settings()
         self._public_url = settings.google_sheet_public_url
-        if (
-            not settings.google_service_account_json
-            and not self._public_url
-        ):
+        raw_credentials = str(
+            settings.google_service_account_json or ""
+        ).strip()
+
+        credentials_path = str(
+            os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON_PATH", "")
+            or ""
+        ).strip()
+
+        if not raw_credentials and credentials_path:
+            path = Path(credentials_path).expanduser()
+
+            if not path.is_file():
+                raise GoogleSheetsConfigurationError(
+                    "GOOGLE_SERVICE_ACCOUNT_JSON_PATH does not exist."
+                )
+
+            try:
+                raw_credentials = path.read_text(
+                    encoding="utf-8"
+                ).strip()
+            except OSError as exc:
+                raise GoogleSheetsConfigurationError(
+                    "Unable to read Google service-account file."
+                ) from exc
+
+        if not raw_credentials and not self._public_url:
             raise GoogleSheetsConfigurationError(
                 "Google Sheets credentials or public URL are not configured."
             )
+
         self._client: Any | None = None
-        if settings.google_service_account_json:
+
+        if raw_credentials:
             try:
-                credentials = json.loads(
-                    settings.google_service_account_json
+                credentials = parse_google_service_account_json(
+                    raw_credentials
                 )
-            except json.JSONDecodeError as exc:
+                self._client = gspread.service_account_from_dict(
+                    credentials
+                )
+            except Exception as exc:
                 raise GoogleSheetsConfigurationError(
-                    "GOOGLE_SERVICE_ACCOUNT_JSON is invalid JSON."
+                    "Google service-account credentials could not be loaded."
                 ) from exc
-            self._client = gspread.service_account_from_dict(credentials)
+
         self._sheet_id = settings.google_sheet_id
         self._sheet_name = settings.google_sheet_name
         self._worksheet_name = settings.google_worksheet_name

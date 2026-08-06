@@ -12,7 +12,10 @@ from services.admin_auth_api import (
     _require_bff,
     _require_identity,
 )
-from services.admin_auth_service import AdminIdentity
+from services.admin_auth_service import (
+    AdminIdentity,
+    local_admin_preview_enabled,
+)
 from services.ai_agent_service import (
     list_ai_agents,
     set_blog_agent_enabled_guarded,
@@ -48,9 +51,20 @@ def admin_agent_list(
     response.headers["Cache-Control"] = "private, no-store"
 
     items = list_agent_dashboard_records()
+
+    try:
+        live_agents = list_ai_agents()
+    except Exception:
+        if not local_admin_preview_enabled():
+            raise
+
+        # Local preview may intentionally run without PostgreSQL.
+        # Registry metadata remains safe and read-only.
+        live_agents = []
+
     live_by_key = {
         str(item.get("agent_key") or ""): item
-        for item in list_ai_agents()
+        for item in live_agents
     }
 
     for item in items:
