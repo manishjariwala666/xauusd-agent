@@ -243,6 +243,16 @@ class GoogleSheetsService:
             if match:
                 session_indexes.append((index, match.group(1)))
         candidates: list[tuple[datetime, SheetSignal]] = []
+
+        # Track complete-session extremes. Initial risk must use the
+        # active session high/low, not only the immediately previous row.
+        # Keep extrema isolated by trading date and session.
+        # Historical rows from older Sheet blocks must never affect
+        # today's BUY/SELL stop loss.
+        session_extremes: dict[
+            tuple[str, str],
+            dict[str, Decimal | None],
+        ] = {}
         india = ZoneInfo("Asia/Kolkata")
         for position, (start_index, session_date) in enumerate(
             session_indexes
@@ -401,6 +411,26 @@ class GoogleSheetsService:
                     )
                     continue
 
+                session_key = (session_date, target_session)
+                extremes = session_extremes.setdefault(
+                    session_key,
+                    {"high": None, "low": None},
+                )
+
+                session_high = extremes["high"]
+                session_low = extremes["low"]
+
+                extremes["high"] = (
+                    high
+                    if session_high is None
+                    else max(session_high, high)
+                )
+                extremes["low"] = (
+                    low
+                    if session_low is None
+                    else min(session_low, low)
+                )
+
                 age = normalized_now - observed_at
                 if age < timedelta(minutes=-5) or age > max_age:
                     previous_row = (
@@ -440,14 +470,23 @@ class GoogleSheetsService:
                 if lower_low_buy:
                     direction = "BUY"
                     entry_price = current_average
-                    stop_loss = previous_low
-                    setup_name = "lower low + lower average"
+                    stop_loss = extremes["low"]
+                    setup_name = (
+                        "lower low + lower average + "
+                        "session low stop"
+                    )
                 elif higher_high_sell:
                     direction = "SELL"
                     entry_price = current_average
-                    stop_loss = previous_high
-                    setup_name = "higher high + higher average"
+                    stop_loss = extremes["high"]
+                    setup_name = (
+                        "higher high + higher average + "
+                        "session high stop"
+                    )
                 else:
+                    continue
+
+                if stop_loss is None:
                     continue
 
                 if (
