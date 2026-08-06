@@ -120,6 +120,10 @@ def test_chat_service_does_not_invent_missing_market_price(
         "services.master_ai_chat_service.get_today_signal_snapshot",
         lambda: None,
     )
+    monkeypatch.setattr(
+        "services.master_ai_signal_reader.get_signal_snapshot_for_date",
+        lambda _: None,
+    )
 
     reply = generate_master_ai_reply(
         "Current gold price?"
@@ -145,3 +149,48 @@ def test_chat_service_publish_request_remains_locked(
 
     assert "approval-locked" in reply
     assert "explicit owner approval" in reply
+
+
+def test_market_data_reply_uses_stale_reference_when_today_is_blank(
+    monkeypatch,
+) -> None:
+    from datetime import date
+    from decimal import Decimal
+
+    from services.master_ai_signal_reader import MasterAISignalSnapshot
+    from services.master_ai_chat_service import generate_master_ai_reply
+
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.get_today_signal_snapshot",
+        lambda: None,
+    )
+
+    stale = MasterAISignalSnapshot(
+        signal_date=date(2026, 8, 6),
+        open_price=None,
+        high_price=None,
+        low_price=None,
+        close_price=None,
+        day_high=None,
+        day_low=None,
+        step=None,
+        range_value=None,
+        buy_base=None,
+        sell_base=None,
+        mode="",
+        latest_slot="10:30 PM TO 11:30 PM",
+        live_cmp=Decimal("4246.65"),
+        buy_targets=(),
+        sell_targets=(),
+    )
+
+    monkeypatch.setattr(
+        "services.master_ai_signal_reader.get_signal_snapshot_for_date",
+        lambda _: stale,
+    )
+
+    result = generate_master_ai_reply("XAUUSD current price kya hai?")
+
+    assert "4246.65" in result
+    assert "STALE REFERENCE" in result
+    assert "not current live price" in result

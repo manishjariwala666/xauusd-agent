@@ -134,7 +134,7 @@ def _format_market_snapshot(
 
 
 def _market_data_reply() -> str:
-    """Read today's verified Sheet1 snapshot without LLM fallback."""
+    """Read today's verified Sheet1 snapshot with safe stale fallback."""
     try:
         snapshot = get_today_signal_snapshot()
     except Exception as exc:
@@ -146,6 +146,42 @@ def _market_data_reply() -> str:
             "Google Sheet market-data reader temporarily unavailable hai. "
             "Main XAUUSD price guess nahi karunga. Sheet configuration aur "
             "Sheet1 access verify kijiye."
+        )
+
+    if snapshot is not None and snapshot.live_cmp is not None:
+        return _format_market_snapshot(snapshot)
+
+    try:
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
+        from services.master_ai_signal_reader import (
+            get_signal_snapshot_for_date,
+        )
+
+        today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+
+        for days_back in range(1, 4):
+            candidate_date = today - timedelta(days=days_back)
+            candidate = get_signal_snapshot_for_date(candidate_date)
+
+            if candidate is None or candidate.live_cmp is None:
+                continue
+
+            return "\n".join(
+                [
+                    "Latest available XAUUSD Sheet reference:",
+                    f"Reference Price: {candidate.live_cmp}",
+                    f"Sheet Date: {candidate.signal_date.isoformat()}",
+                    f"Latest Slot: {candidate.latest_slot or 'N/A'}",
+                    "Status: STALE REFERENCE — this is not current live price.",
+                    "No signal or trading recommendation was generated.",
+                ]
+            )
+    except Exception as exc:
+        print(
+            "[master-ai-chat] Stale snapshot fallback error "
+            f"type={type(exc).__name__}"
         )
 
     return _format_market_snapshot(snapshot)
