@@ -5,9 +5,16 @@ import { getAdminServerConfig } from "./server-config";
 export type AgentRisk =
   | "READ_ONLY"
   | "LOW"
+  | "MEDIUM"
   | "HIGH"
   | "CRITICAL"
   | "UNKNOWN";
+
+export type CapabilityMode =
+  | "READ"
+  | "RUN"
+  | "APPROVAL"
+  | "BLOCKED";
 
 export type AgentDashboardRecord = {
   agent_key: string;
@@ -24,6 +31,12 @@ export type AgentDashboardRecord = {
   approval_required_actions: string[];
   forbidden_actions: string[];
   output_schema: string[];
+  capability_mode: CapabilityMode;
+  capability_risk: AgentRisk;
+  owner_approval_required: boolean;
+  capability_allowed_actions: string[];
+  capability_blocked_actions: string[];
+  capability_dependencies: string[];
   is_configured: boolean;
   is_enabled: boolean | null;
   status: string;

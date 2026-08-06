@@ -700,7 +700,11 @@ export function AgentsDashboard({
                 {humanize(selectedAgent.default_risk)}
               </span>
 
-              <span
+              <span className="agent-brain agent-brain-ready">
+            Master AI: {humanize(selectedAgent.capability_mode)}
+          </span>
+
+          <span
                 className={
                   selectedAgent.brain_configured
                     ? "agent-brain agent-brain-ready"
@@ -724,6 +728,25 @@ export function AgentsDashboard({
                 <dt>Status</dt>
                 <dd>{humanize(selectedAgent.status)}</dd>
               </div>
+
+          <div>
+            <dt>Master AI mode</dt>
+            <dd>{humanize(selectedAgent.capability_mode)}</dd>
+          </div>
+
+          <div>
+            <dt>Capability risk</dt>
+            <dd>{humanize(selectedAgent.capability_risk)}</dd>
+          </div>
+
+          <div>
+            <dt>Owner approval</dt>
+            <dd>
+              {selectedAgent.owner_approval_required
+                ? "Required"
+                : "Not required"}
+            </dd>
+          </div>
               <div>
                 <dt>Enabled</dt>
                 <dd>
@@ -787,6 +810,24 @@ export function AgentsDashboard({
             ) : null}
 
             <ActionList
+          title="Allowed by Master AI"
+          items={selectedAgent.capability_allowed_actions}
+          emptyLabel="No Master AI actions allowed."
+        />
+
+        <ActionList
+          title="Blocked for Master AI"
+          items={selectedAgent.capability_blocked_actions}
+          emptyLabel="No Master AI actions blocked."
+        />
+
+        <ActionList
+          title="Dependencies"
+          items={selectedAgent.capability_dependencies}
+          emptyLabel="No agent dependencies."
+        />
+
+        <ActionList
               title="Automatic actions"
               items={selectedAgent.automatic_actions}
               emptyLabel="No automatic actions."

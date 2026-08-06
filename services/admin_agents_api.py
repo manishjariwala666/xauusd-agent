@@ -21,6 +21,9 @@ from services.ai_agent_service import (
     set_blog_agent_enabled_guarded,
 )
 from services.agent_brain_generator import generate_brain_preview
+from services.master_ai_capability_matrix import (
+    get_agent_capability,
+)
 from services.master_ai_agent_registry import (
     get_agent_dashboard_record,
     list_agent_dashboard_records,
@@ -69,8 +72,40 @@ def admin_agent_list(
 
     for item in items:
         live = live_by_key.get(item["agent_key"], {})
+        capability = get_agent_capability(item["agent_key"])
+
         item.update(
             {
+                "capability_mode": (
+                    capability.mode.value
+                    if capability is not None
+                    else "BLOCKED"
+                ),
+                "capability_risk": (
+                    capability.risk.value
+                    if capability is not None
+                    else "CRITICAL"
+                ),
+                "owner_approval_required": (
+                    capability.owner_approval_required
+                    if capability is not None
+                    else True
+                ),
+                "capability_allowed_actions": (
+                    list(capability.allowed_actions)
+                    if capability is not None
+                    else []
+                ),
+                "capability_blocked_actions": (
+                    list(capability.blocked_actions)
+                    if capability is not None
+                    else ["No capability policy configured"]
+                ),
+                "capability_dependencies": (
+                    list(capability.dependencies)
+                    if capability is not None
+                    else []
+                ),
                 "is_configured": bool(live),
                 "is_enabled": live.get("is_enabled"),
                 "status": live.get("status") or "NOT_CONFIGURED",
