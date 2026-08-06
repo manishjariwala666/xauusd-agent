@@ -7,6 +7,12 @@ from typing import Any
 
 import httpx
 
+from services.ai_agents.economic_calendar.engine import (
+    EconomicCalendarAI,
+)
+from services.ai_agents.economic_calendar.provider import (
+    load_high_impact_events,
+)
 from services.ai_agents.macro_ai.provider import (
     load_macro_assessment,
 )
@@ -246,11 +252,43 @@ def _intelligence_reply(intent: str) -> str:
                 f"type={type(exc).__name__}"
             )
 
+    economic_assessments = ()
+    news_lock = None
+    economic_provider_configured = bool(
+        os.getenv("TRADING_ECONOMICS_API_KEY", "").strip()
+    )
+    economic_events_loaded = False
+
+    if intent in {
+        "MARKET_OUTLOOK",
+        "NEWS_RISK",
+        "WAIT_OR_TRADE",
+    }:
+        try:
+            events = load_high_impact_events()
+            calendar_ai = EconomicCalendarAI()
+            economic_events_loaded = bool(events)
+
+            economic_assessments = tuple(
+                calendar_ai.assess_event(event)
+                for event in events
+                if event.actual is not None
+                and event.forecast is not None
+            )
+
+            if events:
+                news_lock = calendar_ai.should_lock_signals(events)
+        except Exception as exc:
+            print(
+                "[master-ai-chat] Economic provider error "
+                f"type={type(exc).__name__}"
+            )
+
     assessment = synthesize_intelligence(
         market=market,
         macro=macro,
-        economic_assessments=(),
-        news_lock=None,
+        economic_assessments=economic_assessments,
+        news_lock=news_lock,
     )
 
     base = format_intelligence_response(assessment)
@@ -265,17 +303,34 @@ def _intelligence_reply(intent: str) -> str:
         return base
 
     if intent == "NEWS_RISK":
-        return (
-            base
-            + "\nEconomic calendar provider is not connected yet; "
-              "no news event was invented."
-        )
+        if not economic_provider_configured:
+            return (
+                base
+                + "\nEconomic calendar provider is unavailable or "
+                  "not configured; no news event was invented."
+            )
+
+        if not economic_events_loaded:
+            return (
+                base
+                + "\nConfigured economic provider returned no nearby "
+                  "USA/Canada high-impact events."
+            )
+
+        return base
 
     if intent == "WAIT_OR_TRADE":
+        if news_lock is not None and news_lock.locked:
+            return (
+                base
+                + "\nDecision support only: high-impact news window active hai, "
+                  "isliye WAIT recommended hai. No execution occurred."
+            )
+
         return (
             base
-            + "\nDecision support only: current data is incomplete, "
-              "so Master AI cannot say trading is safe."
+            + "\nDecision support only: Master AI trade execution ya "
+              "profit guarantee nahi deta."
         )
 
     return (

@@ -280,7 +280,7 @@ def test_news_risk_never_invents_calendar_event(
 
     reply = generate_master_ai_reply("Aaj high impact news risk kya hai?")
 
-    assert "Economic calendar provider is not connected yet" in reply
+    assert "unavailable or not configured" in reply
     assert "no news event was invented" in reply
 
 
@@ -339,3 +339,62 @@ def test_macro_provider_failure_remains_no_guess(
 
     assert "temporarily unavailable" in reply
     assert "no macro bias was guessed" in reply
+
+
+def test_news_risk_uses_calendar_provider(
+    monkeypatch,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from services.ai_agents.economic_calendar.models import (
+        EconomicEvent,
+        EventCountry,
+        EventImpact,
+    )
+    from services.master_ai_chat_service import generate_master_ai_reply
+
+    now = datetime.now(timezone.utc)
+
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.get_today_signal_snapshot",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.load_high_impact_events",
+        lambda: (
+            EconomicEvent(
+                event_id="us-nfp",
+                country=EventCountry.USA,
+                currency="USD",
+                title="Non-Farm Employment Change",
+                impact=EventImpact.HIGH,
+                scheduled_at=now + timedelta(minutes=5),
+            ),
+        ),
+    )
+
+    reply = generate_master_ai_reply("Aaj high impact news risk kya hai?")
+
+    assert "News Lock: ACTIVE" in reply
+    assert "Decision: WAIT" in reply
+    assert "No signal" in reply
+
+
+def test_news_provider_unavailable_remains_no_guess(
+    monkeypatch,
+) -> None:
+    from services.master_ai_chat_service import generate_master_ai_reply
+
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.get_today_signal_snapshot",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.load_high_impact_events",
+        lambda: (),
+    )
+
+    reply = generate_master_ai_reply("Aaj high impact news risk kya hai?")
+
+    assert "unavailable or not configured" in reply
+    assert "no news event was invented" in reply
