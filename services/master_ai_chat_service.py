@@ -7,6 +7,15 @@ from typing import Any
 
 import httpx
 
+from services.ai_agents.macro_ai.provider import (
+    load_macro_assessment,
+)
+from services.master_ai_intelligence_orchestrator import (
+    IntelligenceDecision,
+    MarketReference,
+    format_intelligence_response,
+    synthesize_intelligence,
+)
 from services.master_ai_router import route_master_ai_request
 from services.master_ai_signal_reader import (
     MasterAISignalSnapshot,
@@ -187,6 +196,95 @@ def _market_data_reply() -> str:
     return _format_market_snapshot(snapshot)
 
 
+def _intelligence_reply(intent: str) -> str:
+    """Return a safe read-only intelligence response."""
+
+    try:
+        snapshot = get_today_signal_snapshot()
+    except Exception as exc:
+        print(
+            "[master-ai-chat] Intelligence market snapshot error "
+            f"type={type(exc).__name__}"
+        )
+        snapshot = None
+
+    market = MarketReference(
+        price=(
+            str(snapshot.live_cmp)
+            if snapshot is not None and snapshot.live_cmp is not None
+            else None
+        ),
+        observed_at=None,
+        source=(
+            snapshot.source
+            if snapshot is not None
+            else "UNAVAILABLE"
+        ),
+        fresh=bool(
+            snapshot is not None
+            and snapshot.live_cmp is not None
+        ),
+        label=(
+            "Verified current Sheet reference"
+            if snapshot is not None and snapshot.live_cmp is not None
+            else "Market reference unavailable"
+        ),
+    )
+
+    macro = None
+
+    if intent in {
+        "MARKET_OUTLOOK",
+        "MACRO_OUTLOOK",
+        "WAIT_OR_TRADE",
+    }:
+        try:
+            macro = load_macro_assessment()
+        except Exception as exc:
+            print(
+                "[master-ai-chat] Macro provider error "
+                f"type={type(exc).__name__}"
+            )
+
+    assessment = synthesize_intelligence(
+        market=market,
+        macro=macro,
+        economic_assessments=(),
+        news_lock=None,
+    )
+
+    base = format_intelligence_response(assessment)
+
+    if intent == "MACRO_OUTLOOK":
+        if macro is None:
+            return (
+                base
+                + "\nMacro provider is temporarily unavailable; "
+                  "no macro bias was guessed."
+            )
+        return base
+
+    if intent == "NEWS_RISK":
+        return (
+            base
+            + "\nEconomic calendar provider is not connected yet; "
+              "no news event was invented."
+        )
+
+    if intent == "WAIT_OR_TRADE":
+        return (
+            base
+            + "\nDecision support only: current data is incomplete, "
+              "so Master AI cannot say trading is safe."
+        )
+
+    return (
+        base
+        + "\nUnified intelligence is incomplete until macro and "
+          "economic providers are connected."
+    )
+
+
 def generate_master_ai_reply(message: str) -> str:
     """Generate one safe reply with deterministic routing and LLM fallback."""
     clean_message = str(message or "").strip()
@@ -201,6 +299,14 @@ def generate_master_ai_reply(message: str) -> str:
 
     if route.intent == "MARKET_DATA":
         return _market_data_reply()
+
+    if route.intent in {
+        "MARKET_OUTLOOK",
+        "MACRO_OUTLOOK",
+        "NEWS_RISK",
+        "WAIT_OR_TRADE",
+    }:
+        return _intelligence_reply(route.intent)
 
     if route.intent == "PUBLISH":
         return (

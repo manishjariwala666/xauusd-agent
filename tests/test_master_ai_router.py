@@ -194,3 +194,148 @@ def test_market_data_reply_uses_stale_reference_when_today_is_blank(
     assert "4246.65" in result
     assert "STALE REFERENCE" in result
     assert "not current live price" in result
+
+
+def test_routes_gold_outlook_to_unified_intelligence() -> None:
+    route = route_master_ai_request("Gold ka outlook kya hai?")
+
+    assert route.intent == "MARKET_OUTLOOK"
+    assert route.agent_key == "master_ai"
+    assert route.execution_allowed is False
+
+
+def test_routes_macro_bias_to_macro_ai() -> None:
+    route = route_master_ai_request("Macro bias for gold?")
+
+    assert route.intent == "MACRO_OUTLOOK"
+    assert route.agent_key == "macro_ai_agent"
+    assert route.execution_allowed is False
+
+
+def test_routes_high_impact_news_to_calendar_ai() -> None:
+    route = route_master_ai_request("Aaj high impact news risk kya hai?")
+
+    assert route.intent == "NEWS_RISK"
+    assert route.agent_key == "economic_calendar_ai_agent"
+    assert route.execution_allowed is False
+
+
+def test_routes_safe_to_trade_to_wait_assessment() -> None:
+    route = route_master_ai_request("Abhi trade karna safe hai?")
+
+    assert route.intent == "WAIT_OR_TRADE"
+    assert route.agent_key == "master_ai"
+    assert route.execution_allowed is False
+
+
+def test_market_outlook_returns_read_only_incomplete_assessment(
+    monkeypatch,
+) -> None:
+    from services.master_ai_chat_service import generate_master_ai_reply
+
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.get_today_signal_snapshot",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.load_macro_assessment",
+        lambda: None,
+    )
+
+    reply = generate_master_ai_reply("Gold ka outlook kya hai?")
+
+    assert "Read-only assessment only." in reply
+    assert "Decision: INCOMPLETE" in reply
+    assert "No signal" in reply
+
+
+def test_macro_outlook_never_guesses_missing_provider(
+    monkeypatch,
+) -> None:
+    from services.master_ai_chat_service import generate_master_ai_reply
+
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.get_today_signal_snapshot",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.load_macro_assessment",
+        lambda: None,
+    )
+
+    reply = generate_master_ai_reply("Macro bias for gold?")
+
+    assert "Macro provider is temporarily unavailable" in reply
+    assert "no macro bias was guessed" in reply
+
+def test_news_risk_never_invents_calendar_event(
+    monkeypatch,
+) -> None:
+    from services.master_ai_chat_service import generate_master_ai_reply
+
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.get_today_signal_snapshot",
+        lambda: None,
+    )
+
+    reply = generate_master_ai_reply("Aaj high impact news risk kya hai?")
+
+    assert "Economic calendar provider is not connected yet" in reply
+    assert "no news event was invented" in reply
+
+
+def test_macro_outlook_uses_read_only_macro_provider(
+    monkeypatch,
+) -> None:
+    from datetime import datetime, timezone
+    from decimal import Decimal
+
+    from services.ai_agents.macro_ai.models import (
+        GoldBias,
+        MacroAssessment,
+    )
+    from services.master_ai_chat_service import generate_master_ai_reply
+
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.get_today_signal_snapshot",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.load_macro_assessment",
+        lambda: MacroAssessment(
+            bias=GoldBias.BUY,
+            confidence=81,
+            total_score=Decimal("0.42"),
+            observed_at=datetime.now(timezone.utc),
+            drivers=(),
+            conflicts=("US2Y data missing",),
+            source_count=8,
+        ),
+    )
+
+    reply = generate_master_ai_reply("Macro bias for gold?")
+
+    assert "Decision: BULLISH" in reply
+    assert "Macro: BUY (81%)" in reply
+    assert "US2Y data missing" in reply
+    assert "No signal" in reply
+
+
+def test_macro_provider_failure_remains_no_guess(
+    monkeypatch,
+) -> None:
+    from services.master_ai_chat_service import generate_master_ai_reply
+
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.get_today_signal_snapshot",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "services.master_ai_chat_service.load_macro_assessment",
+        lambda: None,
+    )
+
+    reply = generate_master_ai_reply("Macro bias for gold?")
+
+    assert "temporarily unavailable" in reply
+    assert "no macro bias was guessed" in reply

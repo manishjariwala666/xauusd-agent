@@ -27,6 +27,48 @@ MARKET_TERMS = (
     "session low",
 )
 
+MARKET_OUTLOOK_TERMS = (
+    "gold outlook",
+    "xauusd outlook",
+    "market outlook",
+    "gold view",
+    "gold ka outlook",
+    "gold ka view",
+    "gold bullish ya bearish",
+    "xauusd bullish ya bearish",
+)
+
+MACRO_OUTLOOK_TERMS = (
+    "macro outlook",
+    "macro bias",
+    "macro view",
+    "dxy impact",
+    "yield impact",
+    "dollar impact on gold",
+    "macro gold bias",
+)
+
+NEWS_RISK_TERMS = (
+    "news risk",
+    "high impact news",
+    "economic news",
+    "economic calendar",
+    "nfp risk",
+    "cpi risk",
+    "fomc risk",
+    "usa news",
+    "canada news",
+)
+
+WAIT_OR_TRADE_TERMS = (
+    "should i wait",
+    "safe to trade",
+    "trade karna safe hai",
+    "wait karu",
+    "abhi trade karu",
+    "news ke pehle trade",
+)
+
 SUPPORT_TERMS = (
     "customer",
     "client",
@@ -84,6 +126,42 @@ def route_master_ai_request(message: str | None) -> MasterAIRoute:
             confidence="HIGH",
             execution_allowed=False,
             reason="Message is empty.",
+        )
+
+    if _contains_any(clean, WAIT_OR_TRADE_TERMS):
+        return MasterAIRoute(
+            intent="WAIT_OR_TRADE",
+            agent_key="master_ai",
+            confidence="HIGH",
+            execution_allowed=False,
+            reason="Read-only trading-risk assessment requested.",
+        )
+
+    if _contains_any(clean, NEWS_RISK_TERMS):
+        return MasterAIRoute(
+            intent="NEWS_RISK",
+            agent_key="economic_calendar_ai_agent",
+            confidence="HIGH",
+            execution_allowed=False,
+            reason="Read-only economic-news risk assessment requested.",
+        )
+
+    if _contains_any(clean, MACRO_OUTLOOK_TERMS):
+        return MasterAIRoute(
+            intent="MACRO_OUTLOOK",
+            agent_key="macro_ai_agent",
+            confidence="HIGH",
+            execution_allowed=False,
+            reason="Read-only macro outlook requested.",
+        )
+
+    if _contains_any(clean, MARKET_OUTLOOK_TERMS):
+        return MasterAIRoute(
+            intent="MARKET_OUTLOOK",
+            agent_key="master_ai",
+            confidence="HIGH",
+            execution_allowed=False,
+            reason="Unified read-only market intelligence requested.",
         )
 
     if _contains_any(clean, MARKET_TERMS):
