@@ -165,8 +165,33 @@ def parse_signal_snapshot(
 
     latest_slot: str | None = None
     live_cmp: Decimal | None = None
-    buy_targets: list[Decimal] = []
-    sell_targets: list[Decimal] = []
+    latest_session: str | None = None
+
+    session_targets: dict[str, dict[str, list[Decimal]]] = {
+        "morning": {"BUY": [], "SELL": []},
+        "evening": {"BUY": [], "SELL": []},
+    }
+
+    def slot_session(slot: str) -> str | None:
+        try:
+            start_text = slot.split(" TO ", 1)[0].strip()
+            start_time = datetime.strptime(
+                start_text,
+                "%I:%M %p",
+            )
+        except ValueError:
+            return None
+
+        minutes = start_time.hour * 60 + start_time.minute
+
+        # Morning: 03:30 AM through 01:30 PM start rows.
+        # Evening: 02:30 PM through 02:30 AM start rows.
+        if 210 <= minutes < 870:
+            return "morning"
+        if minutes >= 870 or minutes <= 150:
+            return "evening"
+
+        return None
 
     if hourly_header_index is not None:
         for row in block[hourly_header_index + 1 :]:
@@ -174,18 +199,49 @@ def parse_signal_snapshot(
             if not _TIME_SLOT.match(slot):
                 continue
 
+            row_session = slot_session(slot)
+
             row_live_cmp = _decimal(_cell(row, 5))
             if row_live_cmp is not None:
                 latest_slot = slot
                 live_cmp = row_live_cmp
+                latest_session = row_session
+
+            # Target rows explicitly carry MORNING SESSION /
+            # EVENING SESSION in column 13. Prefer that label.
+            session_label = _cell(row, 13).strip().lower()
+
+            if session_label == "morning session":
+                target_session = "morning"
+            elif session_label == "evening session":
+                target_session = "evening"
+            else:
+                target_session = row_session
+
+            if target_session not in session_targets:
+                continue
 
             buy_target = _decimal(_cell(row, 8))
             sell_target = _decimal(_cell(row, 9))
 
             if buy_target is not None:
-                buy_targets.append(buy_target)
+                session_targets[target_session]["BUY"].append(
+                    buy_target
+                )
+
             if sell_target is not None:
-                sell_targets.append(sell_target)
+                session_targets[target_session]["SELL"].append(
+                    sell_target
+                )
+
+    active_targets = (
+        session_targets.get(latest_session)
+        if latest_session is not None
+        else None
+    ) or {"BUY": [], "SELL": []}
+
+    buy_targets = active_targets["BUY"]
+    sell_targets = active_targets["SELL"]
 
     return MasterAISignalSnapshot(
         signal_date=signal_date,

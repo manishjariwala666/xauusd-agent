@@ -271,13 +271,54 @@ class GoogleSheetsService:
                 "morning": {"BUY": [], "SELL": []},
                 "evening": {"BUY": [], "SELL": []},
             }
+
+            explicit_stop_losses: dict[
+                str,
+                dict[str, Decimal | None],
+            ] = {
+                "morning": {"BUY": None, "SELL": None},
+                "evening": {"BUY": None, "SELL": None},
+            }
             target_section = "default"
             explicit_target_labels = False
             unlabeled_block_count = 0
 
-            for target_row in session_rows:
+            for target_index, target_row in enumerate(session_rows):
                 cells = [str(cell).strip() for cell in target_row]
                 joined = " ".join(cells).strip().lower()
+
+                if len(cells) >= 16:
+                    session_label = cells[7].strip().lower()
+                    buy_sl_header = cells[14].strip().lower()
+                    sell_sl_header = cells[15].strip().lower()
+
+                    if (
+                        session_label in {
+                            "morning session",
+                            "evening session",
+                        }
+                        and buy_sl_header == "buy sl"
+                        and sell_sl_header == "sell sl"
+                    ):
+                        sl_session = (
+                            "morning"
+                            if session_label == "morning session"
+                            else "evening"
+                        )
+
+                        if target_index + 1 < len(session_rows):
+                            value_row = [
+                                str(cell).strip()
+                                for cell in session_rows[target_index + 1]
+                            ]
+
+                            if len(value_row) >= 16:
+                                explicit_stop_losses[sl_session]["BUY"] = (
+                                    cls._decimal_or_none(value_row[14])
+                                )
+                                explicit_stop_losses[sl_session]["SELL"] = (
+                                    cls._decimal_or_none(value_row[15])
+                                )
 
                 if "morning targets" in joined:
                     target_section = "morning"
@@ -399,9 +440,12 @@ class GoogleSheetsService:
                     + observed_local.minute
                 )
 
-                if 210 <= local_minutes <= 870:
+                # Morning rows start at 03:30 and end with
+                # 01:30 PM TO 02:30 PM.
+                # 02:30 PM TO 03:30 PM is the first evening row.
+                if 210 <= local_minutes < 870:
                     target_session = "morning"
-                elif local_minutes >= 930 or local_minutes <= 150:
+                elif local_minutes >= 870 or local_minutes <= 150:
                     target_session = "evening"
                 else:
                     previous_row = (
@@ -470,18 +514,46 @@ class GoogleSheetsService:
                 if lower_low_buy:
                     direction = "BUY"
                     entry_price = current_average
-                    stop_loss = extremes["low"]
+
+                    explicit_sl = explicit_stop_losses[
+                        target_session
+                    ]["BUY"]
+
+                    stop_loss = (
+                        explicit_sl
+                        if explicit_sl is not None
+                        else extremes["low"]
+                    )
+
                     setup_name = (
                         "lower low + lower average + "
-                        "session low stop"
+                        + (
+                            "sheet BUY SL"
+                            if explicit_sl is not None
+                            else "session low stop fallback"
+                        )
                     )
                 elif higher_high_sell:
                     direction = "SELL"
                     entry_price = current_average
-                    stop_loss = extremes["high"]
+
+                    explicit_sl = explicit_stop_losses[
+                        target_session
+                    ]["SELL"]
+
+                    stop_loss = (
+                        explicit_sl
+                        if explicit_sl is not None
+                        else extremes["high"]
+                    )
+
                     setup_name = (
                         "higher high + higher average + "
-                        "session high stop"
+                        + (
+                            "sheet SELL SL"
+                            if explicit_sl is not None
+                            else "session high stop fallback"
+                        )
                     )
                 else:
                     continue

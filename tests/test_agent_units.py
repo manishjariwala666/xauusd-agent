@@ -901,7 +901,7 @@ def test_real_evening_rows_do_not_sell_the_lower_low_row() -> None:
     assert signal is not None
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4030.62")
-    assert signal.stop_loss == Decimal("4035.80")
+    assert signal.stop_loss == Decimal("4038.27")
     assert "higher high + higher average" in signal.label
     assert signal.reference_price != Decimal("4026.10")
 
@@ -994,3 +994,85 @@ def test_session_stop_loss_does_not_leak_from_previous_date() -> None:
     assert signal.reference_price == Decimal("4253.43")
     assert signal.stop_loss == Decimal("4242.40")
     assert signal.stop_loss != Decimal("3961.49")
+
+
+def test_analysis_signal_prefers_explicit_evening_sell_sl() -> None:
+    values = [
+        ["XAUUSD SESSION 2026-07-29"],
+        [
+            "Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP", "",
+            "EVENING SESSION", "02:30 PM - 03:30 AM",
+            "Session High", "Session Low", "Buy Base", "Sell Base",
+            "Mode", "BUY SL", "SELL SL",
+        ],
+        [
+            "02:30 PM TO 03:30 PM",
+            "4038.27", "4031.24", "4040.01", "4034.76", "4033.11", "",
+            "READY", "02:30 PM - 03:30 AM",
+            "4042.00", "4025.00", "4030.00", "4040.00",
+            "Aggressive (0.25)", "4028.00", "4042.00",
+        ],
+        [
+            "Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP", "",
+            "Target", "BUY Level", "SELL Level",
+        ],
+        [
+            "03:30 PM TO 04:30 PM",
+            "4034.21", "4025.93", "4034.76", "4030.07", "4027.02", "",
+            "Target 1", "4048.19", "4015.86",
+        ],
+        [
+            "04:30 PM TO 05:30 PM",
+            "4035.80", "4025.44", "4030.07", "4030.62", "4031.44", "",
+            "Target 2", "4057.68", "4006.37",
+        ],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 7, 29, 12, 0, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is not None
+    assert signal.direction == "SELL"
+    assert signal.reference_price == Decimal("4030.62")
+    assert signal.stop_loss == Decimal("4042.00")
+
+
+def test_analysis_signal_falls_back_when_explicit_sl_blank() -> None:
+    values = [
+        ["XAUUSD SESSION 2026-07-29"],
+        [
+            "Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP", "",
+            "EVENING SESSION", "02:30 PM - 03:30 AM",
+            "Session High", "Session Low", "Buy Base", "Sell Base",
+            "Mode", "BUY SL", "SELL SL",
+        ],
+        [
+            "02:30 PM TO 03:30 PM",
+            "4038.27", "4031.24", "4040.01", "4034.76", "4033.11", "",
+            "READY", "02:30 PM - 03:30 AM",
+            "4038.27", "4025.00", "4030.00", "4040.00",
+            "Aggressive (0.25)", "", "",
+        ],
+        [
+            "03:30 PM TO 04:30 PM",
+            "4034.21", "4025.93", "4034.76", "4030.07", "4027.02", "",
+            "Target 1", "4048.19", "4015.86",
+        ],
+        [
+            "04:30 PM TO 05:30 PM",
+            "4035.80", "4025.44", "4030.07", "4030.62", "4031.44", "",
+            "Target 2", "4057.68", "4006.37",
+        ],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 7, 29, 12, 0, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is not None
+    assert signal.stop_loss == Decimal("4038.27")
