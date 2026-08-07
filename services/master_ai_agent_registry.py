@@ -108,6 +108,26 @@ AGENTS: tuple[RegisteredAgent, ...] = (
         run_action="run_marketing_strategy_agent",
     ),
     RegisteredAgent(
+        short_name="VSMA",
+        official_name="Venus Social Media Agent",
+        agent_key="social_media_agent",
+        aliases=(
+            "social media",
+            "social media agent",
+            "social content",
+            "social post drafts",
+            "linkedin content",
+            "instagram content",
+            "facebook content",
+            "x content",
+        ),
+        description=(
+            "Prepares platform-specific social media drafts "
+            "for approved published VenusRealm content."
+        ),
+        run_action="run_social_media_agent",
+    ),
+    RegisteredAgent(
         short_name="VMPAA",
         official_name="Venus Master Publish Approval Agent",
         agent_key="master_publish_approval_agent",

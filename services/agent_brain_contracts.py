@@ -429,6 +429,79 @@ AGENT_BRAINS: dict[str, AgentBrainContract] = {
         ),
         default_risk=AgentRisk.LOW,
     ),
+    "social_media_agent": AgentBrainContract(
+        agent_key="social_media_agent",
+        display_name="Venus Social Media Agent",
+        purpose=(
+            "Prepare platform-specific social media drafts for "
+            "approved published VenusRealm content."
+        ),
+        allowed_inputs=(
+            "published_article",
+            "public_url",
+            "campaign_id",
+            "approved_channels",
+            "keywords",
+            "target_audience",
+        ),
+        allowed_tools=(
+            "content_reader",
+            "social_draft_formatter",
+            "hashtag_formatter",
+            "channel_formatter",
+        ),
+        automatic_actions=(
+            "prepare_social_drafts",
+            "prepare_platform_variations",
+            "prepare_hashtags",
+            "prepare_cta",
+        ),
+        approval_required_actions=(
+            "publish_social_post",
+            "send_telegram_message",
+            "send_whatsapp_message",
+            "start_social_campaign",
+        ),
+        forbidden_actions=(
+            "auto_post_social_media",
+            "publish_without_owner_approval",
+            "send_email",
+            "mass_post",
+            "create_fake_account",
+            "buy_engagement",
+            "bypass_platform_policy",
+            "guarantee_performance",
+        ),
+        output_schema=(
+            "status",
+            "campaign_id",
+            "article_title",
+            "public_url",
+            "channels",
+            "hashtags",
+            "drafts",
+            "owner_approval_required",
+            "safe_summary",
+        ),
+        idempotency_strategy=(
+            "Published article URL, campaign identity and requested channels."
+        ),
+        retry_policy=(
+            "Regenerate only when article, campaign or requested channels change."
+        ),
+        human_takeover_policy=(
+            "Owner approval is mandatory before any external publication."
+        ),
+        audit_policy=(
+            "Record source article, requested channels and draft result "
+            "without performing external delivery."
+        ),
+        safe_error_policy=(
+            "Do not expose credentials, private audience data, "
+            "provider tokens or raw tracebacks."
+        ),
+        default_risk=AgentRisk.LOW,
+    ),
     "master_publish_approval_agent": AgentBrainContract(
         agent_key="master_publish_approval_agent",
         display_name="Venus Master Publish Approval Agent",

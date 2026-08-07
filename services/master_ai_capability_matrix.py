@@ -216,6 +216,25 @@ MASTER_AI_CAPABILITIES: dict[str, AgentCapability] = {
             "send_campaign",
         ),
     ),
+    "social_media_agent": AgentCapability(
+        agent_key="social_media_agent",
+        mode=CapabilityMode.READ,
+        risk=AgentRiskLevel.LOW,
+        owner_approval_required=True,
+        allowed_actions=(
+            "prepare_social_drafts",
+            "prepare_platform_variations",
+            "prepare_hashtags",
+            "prepare_cta",
+        ),
+        blocked_actions=(
+            "publish_social_post",
+            "send_social_message",
+            "start_social_campaign",
+            "spend_budget",
+        ),
+        dependencies=("marketing_strategy_agent",),
+    ),
     "website_health_agent": AgentCapability(
         agent_key="website_health_agent",
         mode=CapabilityMode.READ,

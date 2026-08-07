@@ -25,6 +25,7 @@ from services.cms_editor_agent import run_cms_editor_agent
 from services.master_ai_content_review_agent import run_master_ai_content_review_agent
 from services.master_ai_publish_approval_agent import run_master_ai_publish_approval_agent
 from services.marketing_strategy_agent import run_marketing_strategy_agent
+from services.social_media_agent import run_social_media_agent
 from services.customer_support_agent import run_customer_support_agent
 from services.market_data_agent import run_market_data_agent
 from services.content_service import get_site_setting, save_content
@@ -1294,6 +1295,7 @@ RUNNERS = {
     "master_content_review_agent": run_master_ai_content_review_agent,
     "master_publish_approval_agent": run_master_ai_publish_approval_agent,
     "marketing_strategy_agent": run_marketing_strategy_agent,
+    "social_media_agent": run_social_media_agent,
     "customer_support_agent": run_customer_support_agent,
     "market_data_agent": run_market_data_agent,
     "telegram_reply_agent": run_telegram_reply_agent,
