@@ -66,13 +66,17 @@ def _time(value: Any) -> str:
 
 
 def signal_targets(signal: dict[str, Any]) -> list[Any]:
-    targets: list[Any] = []
-    for index in range(1, 7):
-        value = signal.get(f"target_{index}")
-        if value in (None, "") and index == 1:
-            value = signal.get("target_price")
-        if value not in (None, ""):
-            targets.append(value)
+    targets = [
+        signal.get(f"target_{index}")
+        for index in range(1, 7)
+        if signal.get(f"target_{index}") not in (None, "")
+    ]
+
+    if not targets:
+        fallback = signal.get("target_price")
+        if fallback not in (None, ""):
+            targets.append(fallback)
+
     return targets
 
 
@@ -98,7 +102,16 @@ def format_signal_message(signal: dict[str, Any], *, test: bool = False) -> str:
         ),
     ]
 
-    for index, target in enumerate(targets, start=1):
+    numbered_targets = [
+        (index, signal.get(f"target_{index}"))
+        for index in range(1, 7)
+        if signal.get(f"target_{index}") not in (None, "")
+    ]
+
+    if not numbered_targets and signal.get("target_price") not in (None, ""):
+        numbered_targets = [(1, signal.get("target_price"))]
+
+    for index, target in numbered_targets:
         lines.append(f"🎯 Target {index}: {_price(target)}")
 
     if not targets:

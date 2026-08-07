@@ -38,6 +38,7 @@ class SheetSignal:
     observed_at: datetime | None = None
     source: str = "GOOGLE_SHEET"
     targets: tuple[Decimal, ...] = ()
+    target_slots: tuple[Decimal | None, ...] = ()
 
 
 class GoogleSheetsConfigurationError(RuntimeError):
@@ -369,13 +370,13 @@ class GoogleSheetsService:
                     if value is not None:
                         targets[target_number - 1] = value
 
+            # Preserve Target 1..6 positional identity.
+            # Zero placeholders stay in-place until direction validation.
             for table in target_tables.values():
-                table["BUY"] = [
-                    value for value in table["BUY"] if value > 0
-                ]
-                table["SELL"] = [
-                    value for value in table["SELL"] if value > 0
-                ]
+                for direction in ("BUY", "SELL"):
+                    while len(table[direction]) < 6:
+                        table[direction].append(Decimal("0"))
+                    table[direction] = table[direction][:6]
 
             # Preserve compatibility when only one unlabelled table exists.
             for direction in ("BUY", "SELL"):
@@ -577,17 +578,29 @@ class GoogleSheetsService:
                 raw_targets = selected_table[direction]
 
                 if direction == "BUY":
-                    directional_targets = tuple(
-                        value
-                        for value in raw_targets
-                        if value > entry_price
+                    target_slots = tuple(
+                        (
+                            value
+                            if value > 0 and value > entry_price
+                            else None
+                        )
+                        for value in raw_targets[:6]
                     )
                 else:
-                    directional_targets = tuple(
-                        value
-                        for value in raw_targets
-                        if value < entry_price
+                    target_slots = tuple(
+                        (
+                            value
+                            if value > 0 and value < entry_price
+                            else None
+                        )
+                        for value in raw_targets[:6]
                     )
+
+                directional_targets = tuple(
+                    value
+                    for value in target_slots
+                    if value is not None
+                )
 
                 target = (
                     directional_targets[0]
@@ -632,6 +645,7 @@ class GoogleSheetsService:
                                 f"{cls._ANALYSIS_WORKSHEET}"
                             ),
                             targets=directional_targets,
+                            target_slots=target_slots,
                         ),
                     )
                 )

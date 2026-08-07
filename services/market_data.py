@@ -204,6 +204,7 @@ class MarketDataService:
         sheet_label: str,
         external_key: str,
         targets: tuple[Decimal, ...] = (),
+        target_slots: tuple[Decimal | None, ...] = (),
     ) -> dict[str, Any] | None:
         """Insert a normalized BUY/SELL signal into Supabase."""
         direction = signal_type.strip().upper()
@@ -211,11 +212,22 @@ class MarketDataService:
             logger.error("Rejected unsupported signal direction: {}", direction)
             return None
 
-        normalized_targets = tuple(targets[:6])
-        primary_target = (
-            normalized_targets[0]
-            if normalized_targets
-            else target_price
+        if target_slots:
+            normalized_targets = tuple(target_slots[:6])
+        else:
+            normalized_targets = tuple(targets[:6])
+
+        normalized_targets = normalized_targets + (
+            (None,) * (6 - len(normalized_targets))
+        )
+
+        primary_target = next(
+            (
+                value
+                for value in normalized_targets
+                if value is not None
+            ),
+            target_price,
         )
 
         record = {
@@ -230,7 +242,7 @@ class MarketDataService:
             **{
                 f"target_{index}": (
                     float(normalized_targets[index - 1])
-                    if len(normalized_targets) >= index
+                    if normalized_targets[index - 1] is not None
                     else None
                 )
                 for index in range(1, 7)
