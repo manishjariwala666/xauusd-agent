@@ -4,16 +4,14 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(request: Request) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
       return NextResponse.json(
         { error: "Master AI is not configured." },
-        { status: 503 }
+        { status: 503 },
       );
     }
 
@@ -24,9 +22,11 @@ export async function POST(request: Request) {
     if (!message || message.length > 4000) {
       return NextResponse.json(
         { error: "Valid message is required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
+
+    const client = new OpenAI({ apiKey });
 
     const response = await client.responses.create({
       model: process.env.OPENAI_MODEL || "gpt-5",
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json(
       { error: "Master AI request failed." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

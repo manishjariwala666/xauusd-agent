@@ -43,7 +43,7 @@ export function LoginForm() {
         setMessage(payload.message || "Invalid email or password.");
         return;
       }
-      router.replace("/admin/dashboard");
+      router.replace("/studio-v2");
       router.refresh();
     } catch {
       setMessage("Admin login is temporarily unavailable.");

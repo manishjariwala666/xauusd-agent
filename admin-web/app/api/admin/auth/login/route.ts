@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({ email: credentials.email, password: credentials.password }),
       cache: "no-store",
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(30000)
     });
     if (!upstream.ok) {
       const status = upstream.status === 429
@@ -73,7 +73,14 @@ export async function POST(request: NextRequest) {
     response.cookies.set(ADMIN_SESSION_COOKIE, payload.access_token, sessionCookieOptions(expiresIn));
     response.headers.set("Cache-Control", "no-store");
     return response;
-  } catch {
-    return NextResponse.json({ message: "Admin login is temporarily unavailable." }, { status: 503 });
+  } catch (error) {
+    console.error(
+      "Admin BFF login failed safely:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return NextResponse.json(
+      { message: "Admin login is temporarily unavailable." },
+      { status: 503 },
+    );
   }
 }
