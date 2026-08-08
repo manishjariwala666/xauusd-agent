@@ -1,10 +1,56 @@
 import { cache } from "react";
 import type { Announcement, Category, ContentItem, PublicPage, Signal, SignalPage, VerifiedResult } from "./types";
 
+const DEFAULT_API_BASE =
+  "https://venusrealm-master-ai-682301080982.asia-south1.run.app";
 const API_BASE = (
-  process.env.BACKEND_BASE_URL ||
-  "https://xauusd-agent-api-production.up.railway.app"
+  process.env.BACKEND_BASE_URL?.trim() || DEFAULT_API_BASE
 ).replace(/\/$/, "");
+
+const LOCAL_MEDIA_HOSTS = new Set([
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "::1",
+  "[::1]"
+]);
+
+/** Return only media URLs that are safe to render on the public website. */
+export function publicMediaUrl(value?: string): string | undefined {
+  const candidate = value?.trim();
+  if (!candidate) return undefined;
+  if (candidate.startsWith("/") && !candidate.startsWith("//")) {
+    return candidate;
+  }
+  try {
+    const url = new URL(candidate);
+    const hostname = url.hostname.toLowerCase();
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      LOCAL_MEDIA_HOSTS.has(hostname) ||
+      hostname.startsWith("127.") ||
+      hostname.endsWith(".localhost") ||
+      hostname.endsWith(".local")
+    ) {
+      return undefined;
+    }
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeContentItem(item: ContentItem): ContentItem {
+  return { ...item, image_url: publicMediaUrl(item.image_url) };
+}
+
+function isPublishedPublicDetail(item: ContentItem): boolean {
+  return (
+    item.is_public === true &&
+    item.is_published === true &&
+    item.status?.toLowerCase() === "published"
+  );
+}
 
 async function fetchJson<T>(
   path: string,
@@ -36,7 +82,7 @@ export async function getCategories(): Promise<Category[]> {
     { items: [] },
     300
   );
-  return response.items;
+  return Array.isArray(response.items) ? response.items : [];
 }
 
 export async function getContent(
@@ -50,7 +96,9 @@ export async function getContent(
     { items: [] },
     300
   );
-  return response.items;
+  return Array.isArray(response.items)
+    ? response.items.map(normalizeContentItem)
+    : [];
 }
 
 async function fetchContentDetail(slug: string): Promise<ContentItem | null> {
@@ -59,7 +107,8 @@ async function fetchContentDetail(slug: string): Promise<ContentItem | null> {
     { item: null },
     300
   );
-  return response.item;
+  if (!response.item || !isPublishedPublicDetail(response.item)) return null;
+  return normalizeContentItem(response.item);
 }
 
 // Metadata and page rendering request the same article. React cache guarantees
