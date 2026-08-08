@@ -5,3 +5,6 @@ node_modules/
 coverage/
 *.log
 *.tsbuildinfo
+
+# Local Netlify folder
+.netlify
