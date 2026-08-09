@@ -7,6 +7,7 @@ import type {
   CmsDividerBlock,
   CmsGalleryBlock,
   CmsHeadingBlock,
+  CmsListBlock,
   CmsParagraphBlock,
   CmsQuoteBlock,
   CmsTableBlock,
@@ -60,6 +61,19 @@ export function createBlock(type: CmsBlockType): CmsBlock {
           </table>
         `.trim(),
       } satisfies CmsTableBlock;
+
+    case "bullet-list":
+    case "numbered-list":
+      return {
+        id: createBlockId(type),
+        type,
+        items: [
+          {
+            id: createBlockId("list-item"),
+            text: "",
+          },
+        ],
+      } satisfies CmsListBlock;
 
     case "quote":
       return {

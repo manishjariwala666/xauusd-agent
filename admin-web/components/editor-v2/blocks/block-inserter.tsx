@@ -50,6 +50,18 @@ const options: Array<{
     description: "Rows and columns",
   },
   {
+    type: "bullet-list",
+    icon: "•",
+    label: "Bullet List",
+    description: "Unordered list items",
+  },
+  {
+    type: "numbered-list",
+    icon: "1.",
+    label: "Numbered List",
+    description: "Ordered list items",
+  },
+  {
     type: "quote",
     icon: "❝",
     label: "Quote",

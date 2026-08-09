@@ -411,6 +411,16 @@ function documentSourceHtml(document: CmsDocument): string {
         case "quote":
           return `<blockquote>${normalizePreviewHtml(block.html)}</blockquote>`;
 
+        case "bullet-list":
+        case "numbered-list": {
+          const tag = block.type === "bullet-list" ? "ul" : "ol";
+          const items = block.items
+            .map(item => `<li>${escapeHtmlAttribute(item.text)}</li>`)
+            .join("");
+
+          return `<${tag}>${items}</${tag}>`;
+        }
+
         case "image":
           return block.src
             ? `<img src="${escapeHtmlAttribute(
@@ -542,6 +552,24 @@ function PreviewBlock({
           }} />
           {block.citation ? <cite>{block.citation}</cite> : null}
         </blockquote>
+      );
+
+    case "bullet-list":
+      return (
+        <ul className="studio-v2-preview-list">
+          {block.items.map(item => (
+            <li key={item.id}>{item.text}</li>
+          ))}
+        </ul>
+      );
+
+    case "numbered-list":
+      return (
+        <ol className="studio-v2-preview-list">
+          {block.items.map(item => (
+            <li key={item.id}>{item.text}</li>
+          ))}
+        </ol>
       );
 
     case "code":

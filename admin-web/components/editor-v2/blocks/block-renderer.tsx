@@ -9,6 +9,7 @@ import { DividerBlockEditor } from "./divider-block-editor";
 import { GalleryBlockEditor } from "./gallery-block-editor";
 import { HeadingBlockEditor } from "./heading-block-editor";
 import { ImageBlockEditor } from "./image-block-editor";
+import { ListBlockEditor } from "./list-block-editor";
 import { ParagraphBlockEditor } from "./paragraph-block-editor";
 import { QuoteBlockEditor } from "./quote-block-editor";
 import { TableBlockEditor } from "./table-block-editor";
@@ -86,6 +87,16 @@ export function BlockRenderer({
     case "table":
       editorContent = (
         <TableBlockEditor
+          block={block}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      );
+      break;
+    case "bullet-list":
+    case "numbered-list":
+      editorContent = (
+        <ListBlockEditor
           block={block}
           disabled={disabled}
           onChange={onChange}

@@ -10,6 +10,8 @@ export type CmsBlockType =
   | "image"
   | "gallery"
   | "table"
+  | "bullet-list"
+  | "numbered-list"
   | "quote"
   | "code"
   | "button"
@@ -57,6 +59,16 @@ export type CmsGalleryBlock = CmsBaseBlock & {
 export type CmsTableBlock = CmsBaseBlock & {
   type: "table";
   html: string;
+};
+
+export type CmsListItem = {
+  id: string;
+  text: string;
+};
+
+export type CmsListBlock = CmsBaseBlock & {
+  type: "bullet-list" | "numbered-list";
+  items: CmsListItem[];
 };
 
 export type CmsQuoteBlock = CmsBaseBlock & {
@@ -107,6 +119,7 @@ export type CmsBlock =
   | CmsImageBlock
   | CmsGalleryBlock
   | CmsTableBlock
+  | CmsListBlock
   | CmsQuoteBlock
   | CmsCodeBlock
   | CmsButtonBlock

@@ -2141,6 +2141,38 @@ button,a,input,select,textarea { outline-offset:2px; }
   width: 100%;
 }
 
+.editor-v2-list-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.editor-v2-list-item {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dce3ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(24px, auto) minmax(0, 1fr) auto;
+  padding: 12px 14px;
+}
+
+.editor-v2-list-item label {
+  min-width: 0;
+}
+
+.editor-v2-list-item input {
+  border: 1px solid #cfd8e6;
+  border-radius: 8px;
+  font: inherit;
+  padding: 10px;
+  width: 100%;
+}
+
+.studio-v2-preview-list {
+  padding-left: 1.5rem;
+}
+
 /* CMS V2 QUOTE BUTTON YOUTUBE */
 
 .editor-v2-quote-editor,

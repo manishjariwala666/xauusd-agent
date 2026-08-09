@@ -24,6 +24,8 @@ const quickBlocks: Array<{
   { type: "image", label: "Image" },
   { type: "gallery", label: "Gallery" },
   { type: "table", label: "Table" },
+  { type: "bullet-list", label: "Bullet List" },
+  { type: "numbered-list", label: "Numbered List" },
   { type: "quote", label: "Quote" },
   { type: "button", label: "Button" },
   { type: "accordion", label: "Accordion" },

@@ -283,6 +283,10 @@ function blockText(block: CmsBlock): string {
         .map(item => `${item.title} ${stripHtml(item.html)}`)
         .join(" ");
 
+    case "bullet-list":
+    case "numbered-list":
+      return block.items.map(item => item.text).join(" ");
+
     case "image":
       return `${block.alt} ${block.caption} ${block.linkUrl}`;
 
@@ -611,6 +615,8 @@ function detectLinks(document: CmsDocument): LinkAnalysis {
         break;
 
       case "heading":
+      case "bullet-list":
+      case "numbered-list":
       case "gallery":
       case "divider":
         break;

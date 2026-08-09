@@ -104,6 +104,16 @@ function renderBlock(block: CmsBlock): string {
     case "table":
       return `<div data-cms-block="table">${block.html}</div>`;
 
+    case "bullet-list":
+    case "numbered-list": {
+      const tag = block.type === "bullet-list" ? "ul" : "ol";
+      const items = block.items
+        .map(item => `<li>${escapeHtml(item.text)}</li>`)
+        .join("");
+
+      return `<${tag}>${items}</${tag}>`;
+    }
+
     case "quote":
       return [
         "<blockquote>",
@@ -309,6 +319,26 @@ function legacyHtmlToBlocks(
         type: "quote",
         html,
         citation: "",
+      });
+    } else if (tag === "ul" || tag === "ol") {
+      const items = Array.from(
+        html.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi),
+      ).map((item, itemIndex) => ({
+        id: createImportedBlockId("list-item", itemIndex),
+        text: stripHtmlTags(item[1]),
+      }));
+
+      blocks.push({
+        id: createImportedBlockId("list", index++),
+        type: tag === "ul" ? "bullet-list" : "numbered-list",
+        items: items.length
+          ? items
+          : [
+              {
+                id: createImportedBlockId("list-item", 0),
+                text: "",
+              },
+            ],
       });
     } else {
       blocks.push({
