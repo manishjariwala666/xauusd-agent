@@ -6,6 +6,7 @@ import {
   useState,
   type DragEvent,
 } from "react";
+import { readMediaResponse } from "@/lib/media-response";
 
 type MediaAsset = {
   id: number;
@@ -149,10 +150,10 @@ export function MediaLibraryWorkspace() {
         credentials: "same-origin",
       });
 
-      const payload = (await response.json()) as MediaAsset & {
+      const payload = await readMediaResponse<MediaAsset & {
         detail?: string;
         message?: string;
-      };
+      }>(response);
 
       if (!response.ok) {
         setMessage(
@@ -170,8 +171,12 @@ export function MediaLibraryWorkspace() {
       setMessage("Image uploaded successfully.");
 
       await loadMedia(search);
-    } catch {
-      setMessage("Media upload is temporarily unavailable.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Media upload is temporarily unavailable.",
+      );
     } finally {
       setUploading(false);
     }

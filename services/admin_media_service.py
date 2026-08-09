@@ -24,10 +24,11 @@ def read_admin_media_file(
     media = get_admin_media(media_id)
     if media.get("deleted_at") is not None:
         raise MediaNotFoundError("Media file was not found.")
-    if str(media.get("storage_provider") or "").upper() != "LOCAL":
+    storage_provider = str(media.get("storage_provider") or "").upper()
+    if storage_provider not in {"LOCAL", "SUPABASE"}:
         raise MediaNotFoundError("Media file was not found.")
 
-    storage = storage or get_media_storage()
+    storage = storage or get_media_storage(storage_provider)
     original_path = str(media.get("storage_path") or "")
     requested_path = (
         str(media.get("thumbnail_path") or original_path)
@@ -155,13 +156,13 @@ def set_media_trash(*, media_id: int, actor_id: int, request_id: str, restore: b
 
 def delete_admin_media(*, media_id: int, actor_id: int, request_id: str, confirmed: bool, storage: MediaStorage | None = None) -> dict[str, Any]:
     if not confirmed: raise ValueError("Permanent deletion requires confirmation.")
-    storage = storage or get_media_storage()
     with session_scope() as session:
-        row = session.execute(text("SELECT storage_path, thumbnail_path, deleted_at FROM public.media_assets WHERE id=:id FOR UPDATE"), {"id": int(media_id)}).mappings().first()
+        row = session.execute(text("SELECT storage_provider, storage_path, thumbnail_path, deleted_at FROM public.media_assets WHERE id=:id FOR UPDATE"), {"id": int(media_id)}).mappings().first()
         if not row: raise MediaNotFoundError("Media item was not found.")
         if row["deleted_at"] is None: raise MediaConflictError("Trash the media item before permanent deletion.")
         references = session.execute(text("SELECT COUNT(*) FROM public.content_items WHERE media_id=:id"), {"id": int(media_id)}).scalar_one()
         if references: raise MediaConflictError("Media is still used by content and cannot be permanently deleted.")
+        storage = storage or get_media_storage(str(row["storage_provider"] or ""))
         storage.delete(row["storage_path"], row["thumbnail_path"] or "")
         _audit(session, actor_id, "MEDIA_DELETED", request_id, {"media_id": int(media_id)})
         session.execute(text("DELETE FROM public.media_assets WHERE id=:id"), {"id": int(media_id)})

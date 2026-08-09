@@ -6,6 +6,7 @@ import pytest
 
 from services.admin_media_storage import (
     MAX_UPLOAD_BYTES, LocalMediaStorage, MediaValidationError,
+    SupabaseMediaStorage,
     validate_image_upload,
 )
 from services import admin_media_service
@@ -77,3 +78,62 @@ def test_media_service_reads_real_file_and_falls_back_from_missing_thumbnail(
 
     assert data == original
     assert mime_type == "image/png"
+
+
+class _FakeBucket:
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+
+    def upload(self, path: str, data: bytes, _options: dict[str, str]) -> None:
+        self.objects[path] = bytes(data)
+
+    def download(self, path: str) -> bytes:
+        return self.objects[path]
+
+    def remove(self, paths: list[str]) -> None:
+        for path in paths:
+            self.objects.pop(path, None)
+
+    def get_public_url(self, path: str) -> str:
+        return f"https://cdn.example.invalid/{path}"
+
+
+class _FakeStorage:
+    def __init__(self, bucket: _FakeBucket) -> None:
+        self.bucket = bucket
+
+    def from_(self, _name: str) -> _FakeBucket:
+        return self.bucket
+
+
+class _FakeSupabase:
+    def __init__(self) -> None:
+        self.bucket = _FakeBucket()
+        self.storage = _FakeStorage(self.bucket)
+
+
+def test_supabase_storage_keeps_original_and_thumbnail_durable() -> None:
+    client = _FakeSupabase()
+    storage = SupabaseMediaStorage(
+        bucket="media-test", prefix="admin-media", client=client,
+    )
+    validated = validate_image_upload("chart.png", "image/png", image_bytes())
+
+    stored = storage.store(validated)
+
+    assert stored.provider == "SUPABASE"
+    assert stored.storage_path.startswith("admin-media/uploads/")
+    assert stored.thumbnail_path.startswith("admin-media/thumbnails/")
+    assert stored.public_url.startswith("https://cdn.example.invalid/")
+    assert storage.read(stored.storage_path) == validated.data
+    assert storage.read(stored.thumbnail_path)
+    storage.delete(stored.storage_path, stored.thumbnail_path)
+    assert client.bucket.objects == {}
+
+
+def test_supabase_storage_rejects_paths_outside_admin_prefix() -> None:
+    storage = SupabaseMediaStorage(
+        bucket="media-test", prefix="admin-media", client=_FakeSupabase(),
+    )
+    with pytest.raises(MediaValidationError):
+        storage.read("other-feature/private.png")

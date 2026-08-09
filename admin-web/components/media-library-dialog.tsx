@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { readMediaResponse } from "@/lib/media-response";
 
 export type MediaLibraryAsset = {
   id: number;
@@ -162,10 +163,10 @@ export function MediaLibraryDialog({
         credentials: "same-origin",
       });
 
-      const payload = (await response.json()) as MediaLibraryAsset & {
+      const payload = await readMediaResponse<MediaLibraryAsset & {
         detail?: string;
         message?: string;
-      };
+      }>(response);
 
       if (!response.ok) {
         setMessage(
@@ -183,8 +184,12 @@ export function MediaLibraryDialog({
       setUploadCaption("");
       setUploading(false);
       onClose();
-    } catch {
-      setMessage("Media upload is temporarily unavailable.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Media upload is temporarily unavailable.",
+      );
     } finally {
       setBusy(false);
     }

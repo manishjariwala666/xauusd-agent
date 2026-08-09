@@ -26,29 +26,38 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
         Authorization: `Bearer ${token}`, "X-Admin-BFF-Key": config.bffSecret,
         "X-Request-ID": randomUUID(), ...(contentType ? { "Content-Type": contentType } : {})
       },
-      body, cache: "no-store", signal: AbortSignal.timeout(15000)
+      body, cache: "no-store", signal: AbortSignal.timeout(30000)
     });
     const upstreamText = await upstream.text();
-    let responseText = upstreamText;
+    let payload: unknown = null;
 
-    if (request.method === "GET" && upstream.ok && upstreamText) {
+    if (upstreamText) {
       try {
-        responseText = JSON.stringify(
-          normalizeMediaPayloadUrls(
-            JSON.parse(upstreamText),
-            config.backendBaseUrl,
-            new URL("/media-fallback.svg", request.nextUrl.origin).toString(),
-          ),
-        );
+        payload = JSON.parse(upstreamText);
       } catch {
         return NextResponse.json(
-          { message: "Media service returned an invalid response." },
-          { status: 502 },
+          {
+            message: upstream.ok
+              ? "Media service returned an invalid response."
+              : `Media service request failed (HTTP ${upstream.status}).`,
+          },
+          { status: upstream.ok ? 502 : upstream.status },
         );
       }
     }
 
-    return new NextResponse(responseText || null, { status: upstream.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+    if (request.method === "GET" && upstream.ok && payload) {
+      payload = normalizeMediaPayloadUrls(
+        payload,
+        config.backendBaseUrl,
+        new URL("/media-fallback.svg", request.nextUrl.origin).toString(),
+      );
+    }
+
+    return NextResponse.json(payload, {
+      status: upstream.status,
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch {
     return NextResponse.json({ message: "Media service is temporarily unavailable." }, { status: 503 });
   }

@@ -6,6 +6,7 @@ import {
   normalizeMediaPayloadUrls,
   normalizeMediaUrl,
 } from "../lib/media-url";
+import { readMediaResponse } from "../lib/media-response";
 
 const root = resolve(import.meta.dirname, "..");
 const source = (path: string) => readFileSync(resolve(root, path), "utf8");
@@ -97,5 +98,22 @@ describe("Phase 3A Media Library", () => {
     expect(css).toContain("@media (max-width: 720px)");
     expect(css).toMatch(/overflow-x:\s*hidden/);
     expect(pkg).not.toMatch(/lightbox|dropzone|gallery|framer-motion/);
+  });
+
+  it("reports non-JSON upload failures without hiding the HTTP status", async () => {
+    await expect(
+      readMediaResponse(
+        new Response("upstream gateway error", { status: 502 }),
+      ),
+    ).rejects.toThrow("invalid response (HTTP 502)");
+
+    await expect(
+      readMediaResponse(
+        new Response(JSON.stringify({ id: 7 }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    ).resolves.toEqual({ id: 7 });
   });
 });
