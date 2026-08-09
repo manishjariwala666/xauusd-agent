@@ -50,6 +50,9 @@ export function StudioWorkspace() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [saveMessage, setSaveMessage] = useState("Loading draft…");
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [savedDocumentSignature, setSavedDocumentSignature] =
+    useState<string | null>(null);
   const [drafts, setDrafts] = useState<SavedDraftItem[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(false);
   const [openingDraftId, setOpeningDraftId] =
@@ -125,6 +128,7 @@ export function StudioWorkspace() {
 
       setSlugEdited(true);
       setDocument(loadedDocument);
+      setSavedDocumentSignature(JSON.stringify(loadedDocument));
       setSaveMessage(`Draft #${draftId} opened`);
     } catch (error) {
       setSaveMessage(
@@ -308,7 +312,12 @@ export function StudioWorkspace() {
   }, [document]);
 
   async function saveDraft() {
-    if (!document || saving) return;
+    if (!document || saving || publishing) return;
+
+    if (document.status !== "draft") {
+      setSaveMessage("Published content cannot be saved as a draft here.");
+      return;
+    }
 
     if (!document.title.trim()) {
       setSaveMessage("Article title is required");
@@ -393,6 +402,7 @@ export function StudioWorkspace() {
       );
 
       setDocument(savedDocument);
+      setSavedDocumentSignature(JSON.stringify(savedDocument));
 
       window.dispatchEvent(
         new CustomEvent("venusrealm:seo-snapshot", {
@@ -422,6 +432,95 @@ export function StudioWorkspace() {
     }
   }
 
+  async function publishDraft() {
+    if (
+      !document ||
+      !document.id ||
+      document.status !== "draft" ||
+      saving ||
+      publishing ||
+      savedDocumentSignature !== JSON.stringify(document)
+    ) return;
+
+    const confirmed = window.confirm(
+      `Publish draft #${document.id} now? It will become public immediately.`,
+    );
+
+    if (!confirmed) return;
+
+    setPublishing(true);
+    setSaveMessage(`Publishing draft #${document.id}…`);
+
+    try {
+      const csrfResponse = await fetch("/api/admin/auth/csrf", {
+        cache: "no-store",
+      });
+
+      if (!csrfResponse.ok) {
+        throw new Error("CSRF token could not be loaded.");
+      }
+
+      const csrfData = await csrfResponse.json() as {
+        csrfToken: string;
+      };
+
+      const response = await fetch(
+        `/api/admin/content/posts/${document.id}/publish`,
+        {
+          method: "POST",
+          headers: {
+            "X-CSRF-Token": csrfData.csrfToken,
+          },
+        },
+      );
+
+      const result = await response.json() as
+        CmsApiContentDetail & {
+          detail?: string;
+          message?: string;
+        };
+
+      if (
+        !response.ok ||
+        !result.id ||
+        result.status !== "published"
+      ) {
+        throw new Error(
+          result.detail ||
+          result.message ||
+          "Draft could not be published.",
+        );
+      }
+
+      const publishedDocument = cmsApiDetailToDocument(result);
+
+      window.localStorage.setItem(
+        LOCAL_DRAFT_KEY,
+        JSON.stringify(publishedDocument),
+      );
+
+      setDocument(publishedDocument);
+      setSavedDocumentSignature(JSON.stringify(publishedDocument));
+      setSaveMessage(`Post #${result.id} published successfully`);
+
+      window.dispatchEvent(
+        new CustomEvent("venusrealm:seo-snapshot", {
+          detail: publishedDocument,
+        }),
+      );
+
+      void loadSavedDrafts();
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Content service is temporarily unavailable.",
+      );
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   function createNewDraft() {
     const confirmed = window.confirm(
       "Start a new draft? The current local draft will be replaced.",
@@ -438,6 +537,7 @@ export function StudioWorkspace() {
 
     setSlugEdited(false);
     setDocument(nextDocument);
+    setSavedDocumentSignature(null);
     setSaveMessage("New draft created");
   }
 
@@ -452,6 +552,10 @@ export function StudioWorkspace() {
   }
 
   const seoAnalysis = analyzeSeoDocument(document);
+  const isSavedDatabaseDraft =
+    document.id !== null &&
+    document.status === "draft" &&
+    savedDocumentSignature === JSON.stringify(document);
 
   const quickSeoChecks = [
     {
@@ -535,9 +639,31 @@ export function StudioWorkspace() {
             type="button"
             className="primary-button"
             onClick={saveDraft}
-            disabled={saving}
+            disabled={saving || publishing || document.status !== "draft"}
           >
             {saving ? "Saving…" : "Save Draft"}
+          </button>
+
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void publishDraft()}
+            disabled={!isSavedDatabaseDraft || saving || publishing}
+            title={
+              document.status === "published"
+                ? "This post is published."
+                : !document.id
+                  ? "Save this draft to the database before publishing."
+                  : !isSavedDatabaseDraft
+                    ? "Save current changes before publishing."
+                    : "Publish this saved draft now."
+            }
+          >
+            {publishing
+              ? "Publishing…"
+              : document.status === "published"
+                ? "Published"
+                : "Publish"}
           </button>
         </div>
       </header>
@@ -590,7 +716,9 @@ export function StudioWorkspace() {
         ) : null}
         <div className="studio-v2-document-status">
           <span>{saveMessage}</span>
-          <strong>{document.status}</strong>
+          <strong>
+            {document.status === "published" ? "Published" : "Draft"}
+          </strong>
         </div>
 
         <label className="studio-v2-title-field" data-seo-target="title">
@@ -642,16 +770,21 @@ export function StudioWorkspace() {
           <label>
             <span>Status</span>
             <select
-              value="draft"
+              value={document.status === "published" ? "published" : "draft"}
               disabled
-              aria-describedby="studio-v2-draft-status-help"
+              aria-describedby="studio-v2-status-help"
             >
               <option value="draft">Draft</option>
+              <option value="published">Published</option>
             </select>
 
-            <small id="studio-v2-draft-status-help">
-              Publishing and scheduling are not enabled in
-              this draft-only workspace yet.
+            <small id="studio-v2-status-help">
+              {document.status === "published"
+                ? "This post is published and public."
+                : document.id
+                  ? "Save current changes, then publish this database draft."
+                  : "Save this draft to the database before publishing."}
+              {" Scheduling is not enabled in this workspace."}
             </small>
           </label>
         </div>

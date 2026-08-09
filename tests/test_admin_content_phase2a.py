@@ -52,3 +52,4 @@ def test_phase2b_extends_existing_contract_without_new_seo_writes() -> None:
     assert "duplicate_admin_content" in service
     assert '"stats"' in service
     assert "save_admin_content" in service
+    assert '"publish": "is_public = TRUE, is_published = TRUE' in service

@@ -24,6 +24,19 @@ describe("Phase 2B Blog Studio", () => {
     expect(actions).not.toMatch(/onClick=\{\(\) => \{\}\}/);
   });
 
+  it("publishes only a saved Studio V2 draft through the protected content BFF", () => {
+    const studio = source("components/editor-v2/core/studio-workspace.tsx");
+    const proxy = source("app/api/admin/content/[...path]/route.ts");
+    expect(studio).toContain("isSavedDatabaseDraft");
+    expect(studio).toContain("Save current changes before publishing.");
+    expect(studio).toContain("/publish`");
+    expect(studio).toContain('"X-CSRF-Token"');
+    expect(studio).toContain('result.status !== "published"');
+    expect(studio).toContain('document.status === "published"');
+    expect(studio).not.toContain("Publishing and scheduling are not enabled");
+    expect(proxy).toContain("publish|unpublish|trash|duplicate");
+  });
+
   it("provides editor preview, SEO, social, schema and metadata panels", () => {
     const editor = source("components/content-editor.tsx") + source("components/seo-workbench.tsx");
     for (const tab of ["Post Preview", "SEO Settings", "Open Graph", "X / Twitter", "FAQ / Schema", "Content Metadata"]) expect(editor).toContain(tab);

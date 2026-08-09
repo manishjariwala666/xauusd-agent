@@ -419,7 +419,7 @@ def transition_content(
     if action == "trash" and kind != "posts":
         raise ValueError("Pages cannot be trashed in Phase 2A.")
     assignments = {
-        "publish": "is_published = TRUE, status = 'published', published_at = COALESCE(published_at, NOW()), scheduled_at = NULL, deleted_at = NULL, deleted_by = NULL",
+        "publish": "is_public = TRUE, is_published = TRUE, status = 'published', published_at = COALESCE(published_at, NOW()), scheduled_at = NULL, deleted_at = NULL, deleted_by = NULL",
         "unpublish": "is_published = FALSE, status = 'draft', published_at = NULL, scheduled_at = NULL",
         "trash": "is_published = FALSE, status = 'draft', published_at = NULL, scheduled_at = NULL, deleted_at = NOW(), deleted_by = :actor_id",
     }
