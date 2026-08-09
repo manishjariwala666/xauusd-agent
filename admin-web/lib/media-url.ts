@@ -1,0 +1,105 @@
+const PRIVATE_IPV4 = /^(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/;
+
+function isPrivateHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+
+  return (
+    normalized === "localhost" ||
+    normalized === "0.0.0.0" ||
+    normalized === "::1" ||
+    normalized.endsWith(".local") ||
+    PRIVATE_IPV4.test(normalized)
+  );
+}
+
+export function normalizeMediaUrl(
+  value: unknown,
+  backendBaseUrl: string,
+  fallbackUrl: string,
+): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+
+  if (!raw || raw.startsWith("file:") || raw.startsWith("/tmp/")) {
+    return fallbackUrl;
+  }
+
+  try {
+    const backend = new URL(backendBaseUrl);
+    const source = new URL(raw, backend);
+
+    if (source.username || source.password) return fallbackUrl;
+
+    if (source.protocol === "https:" && !isPrivateHostname(source.hostname)) {
+      return source.toString();
+    }
+
+    if (
+      source.pathname.startsWith("/media-local/") &&
+      !isPrivateHostname(backend.hostname) &&
+      backend.protocol === "https:"
+    ) {
+      return new URL(
+        `${source.pathname}${source.search}`,
+        backend,
+      ).toString();
+    }
+  } catch {
+    return fallbackUrl;
+  }
+
+  return fallbackUrl;
+}
+
+function normalizeMediaRecord(
+  value: unknown,
+  backendBaseUrl: string,
+  fallbackUrl: string,
+): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (!("public_url" in record) && !("thumbnail_url" in record)) {
+    return value;
+  }
+
+  const publicUrl = normalizeMediaUrl(
+    record.public_url,
+    backendBaseUrl,
+    fallbackUrl,
+  );
+
+  return {
+    ...record,
+    public_url: publicUrl,
+    thumbnail_url: normalizeMediaUrl(
+      record.thumbnail_url || publicUrl,
+      backendBaseUrl,
+      fallbackUrl,
+    ),
+  };
+}
+
+export function normalizeMediaPayloadUrls(
+  value: unknown,
+  backendBaseUrl: string,
+  fallbackUrl: string,
+): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const payload = value as Record<string, unknown>;
+
+  if (Array.isArray(payload.items)) {
+    return {
+      ...payload,
+      items: payload.items.map(item =>
+        normalizeMediaRecord(item, backendBaseUrl, fallbackUrl),
+      ),
+    };
+  }
+
+  return normalizeMediaRecord(value, backendBaseUrl, fallbackUrl);
+}

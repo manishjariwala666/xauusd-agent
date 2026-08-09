@@ -364,7 +364,12 @@ export function MediaLibraryWorkspace() {
                   loading="lazy"
                   decoding="async"
                   onError={event => {
-                    event.currentTarget.style.display = "none";
+                    if (event.currentTarget.dataset.fallbackApplied) {
+                      return;
+                    }
+
+                    event.currentTarget.dataset.fallbackApplied = "true";
+                    event.currentTarget.src = "/media-fallback.svg";
                   }}
                 />
               </div>

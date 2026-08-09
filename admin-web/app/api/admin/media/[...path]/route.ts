@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyCsrfToken } from "@/lib/csrf";
+import { normalizeMediaPayloadUrls } from "@/lib/media-url";
 import { getAdminServerConfig } from "@/lib/server-config";
 import { ADMIN_CSRF_COOKIE, ADMIN_SESSION_COOKIE } from "@/lib/session";
 
@@ -27,7 +28,27 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
       },
       body, cache: "no-store", signal: AbortSignal.timeout(15000)
     });
-    return new NextResponse(await upstream.text() || null, { status: upstream.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+    const upstreamText = await upstream.text();
+    let responseText = upstreamText;
+
+    if (request.method === "GET" && upstream.ok && upstreamText) {
+      try {
+        responseText = JSON.stringify(
+          normalizeMediaPayloadUrls(
+            JSON.parse(upstreamText),
+            config.backendBaseUrl,
+            new URL("/media-fallback.svg", request.nextUrl.origin).toString(),
+          ),
+        );
+      } catch {
+        return NextResponse.json(
+          { message: "Media service returned an invalid response." },
+          { status: 502 },
+        );
+      }
+    }
+
+    return new NextResponse(responseText || null, { status: upstream.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ message: "Media service is temporarily unavailable." }, { status: 503 });
   }

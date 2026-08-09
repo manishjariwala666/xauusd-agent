@@ -24,6 +24,19 @@ export default async function StudioV2Layout({
     redirect("/admin/login");
   }
 
+  const deploymentContext = String(process.env.CONTEXT || "")
+    .trim()
+    .toLowerCase();
+  const environmentLabel =
+    deploymentContext === "production"
+      ? "Production"
+      : deploymentContext === "deploy-preview" ||
+          deploymentContext === "branch-deploy"
+        ? "Preview staging"
+        : process.env.NODE_ENV === "production"
+          ? "Production"
+          : "Local development";
+
   return (
     <div className="studio-v2-shell">
       <aside className="studio-v2-sidebar">
@@ -61,7 +74,7 @@ export default async function StudioV2Layout({
 
         <div className="studio-v2-environment">
           <span>Environment</span>
-          <strong>Local staging</strong>
+          <strong>{environmentLabel}</strong>
           <small>No automatic publishing</small>
         </div>
       </aside>
