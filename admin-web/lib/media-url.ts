@@ -28,20 +28,10 @@ export function normalizeMediaUrl(
     const source = new URL(raw, backend);
 
     if (source.username || source.password) return fallbackUrl;
+    if (source.pathname.startsWith("/media-local/")) return fallbackUrl;
 
     if (source.protocol === "https:" && !isPrivateHostname(source.hostname)) {
       return source.toString();
-    }
-
-    if (
-      source.pathname.startsWith("/media-local/") &&
-      !isPrivateHostname(backend.hostname) &&
-      backend.protocol === "https:"
-    ) {
-      return new URL(
-        `${source.pathname}${source.search}`,
-        backend,
-      ).toString();
     }
   } catch {
     return fallbackUrl;
@@ -64,19 +54,29 @@ function normalizeMediaRecord(
     return value;
   }
 
+  const mediaId = Number(record.id);
+  const hasMediaId = Number.isInteger(mediaId) && mediaId > 0;
+  const adminOrigin = new URL(fallbackUrl).origin;
+  const originalBffUrl = hasMediaId
+    ? new URL(`/api/admin/media-file/${mediaId}?variant=original`, adminOrigin).toString()
+    : fallbackUrl;
+  const thumbnailBffUrl = hasMediaId
+    ? new URL(`/api/admin/media-file/${mediaId}?variant=thumbnail`, adminOrigin).toString()
+    : fallbackUrl;
+
   const publicUrl = normalizeMediaUrl(
     record.public_url,
     backendBaseUrl,
-    fallbackUrl,
+    originalBffUrl,
   );
 
   return {
     ...record,
     public_url: publicUrl,
     thumbnail_url: normalizeMediaUrl(
-      record.thumbnail_url || publicUrl,
+      record.thumbnail_url,
       backendBaseUrl,
-      fallbackUrl,
+      thumbnailBffUrl,
     ),
   };
 }

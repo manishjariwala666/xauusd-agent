@@ -52,6 +52,7 @@ class StoredMedia:
 
 class MediaStorage(Protocol):
     def store(self, image: ValidatedImage) -> StoredMedia: ...
+    def read(self, path: str) -> bytes: ...
     def delete(self, *paths: str) -> None: ...
 
 
@@ -137,6 +138,9 @@ class LocalMediaStorage:
         for path in paths:
             if path:
                 self._target(Path(path)).unlink(missing_ok=True)
+
+    def read(self, path: str) -> bytes:
+        return self._target(Path(path)).read_bytes()
 
     def _target(self, relative: Path) -> Path:
         if relative.is_absolute() or ".." in relative.parts:

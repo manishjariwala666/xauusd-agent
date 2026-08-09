@@ -13,7 +13,7 @@ from services.admin_auth_service import AdminIdentity
 from services.admin_media_service import (
     MediaConflictError, MediaNotFoundError, create_admin_media, delete_admin_media,
     get_admin_media, list_admin_media, remove_featured_image, set_featured_image,
-    set_media_trash, update_admin_media,
+    read_admin_media_file, set_media_trash, update_admin_media,
 )
 from services.admin_media_storage import MAX_UPLOAD_BYTES, MediaValidationError, get_media_storage, validate_image_upload
 
@@ -98,6 +98,26 @@ def media_detail(media_id: int, response: Response,
     x_admin_bff_key: Annotated[str | None, Header()] = None) -> dict[str, Any]:
     _identity(authorization, x_admin_bff_key); response.headers["Cache-Control"] = "private, no-store"
     return _safe(lambda: get_admin_media(media_id))
+
+
+@router.get("/media/{media_id}/file")
+def media_file(
+    media_id: int, variant: str = Query("original", pattern="^(original|thumbnail)$"),
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
+) -> Response:
+    _identity(authorization, x_admin_bff_key)
+    data, mime_type = _safe(
+        lambda: read_admin_media_file(media_id=media_id, variant=variant)
+    )
+    return Response(
+        content=data,
+        media_type=mime_type,
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.patch("/media/{media_id}")

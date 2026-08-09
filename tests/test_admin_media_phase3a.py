@@ -11,6 +11,7 @@ def test_phase3a_routes_and_additive_reversible_migration() -> None:
     required = {
         ("/admin/media", "GET"), ("/admin/media/upload", "POST"),
         ("/admin/media/{media_id}", "GET"), ("/admin/media/{media_id}", "PATCH"),
+        ("/admin/media/{media_id}/file", "GET"),
         ("/admin/media/{media_id}/{action}", "POST"), ("/admin/media/{media_id}", "DELETE"),
         ("/admin/content/{content_id}/featured-image", "POST"),
         ("/admin/content/{content_id}/featured-image", "DELETE"),

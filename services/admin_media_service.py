@@ -16,6 +16,43 @@ class MediaNotFoundError(ValueError): pass
 class MediaConflictError(ValueError): pass
 
 
+def read_admin_media_file(
+    *, media_id: int, variant: str = "original", storage: MediaStorage | None = None,
+) -> tuple[bytes, str]:
+    if variant not in {"original", "thumbnail"}:
+        raise ValueError("Unsupported media file variant.")
+    media = get_admin_media(media_id)
+    if media.get("deleted_at") is not None:
+        raise MediaNotFoundError("Media file was not found.")
+    if str(media.get("storage_provider") or "").upper() != "LOCAL":
+        raise MediaNotFoundError("Media file was not found.")
+
+    storage = storage or get_media_storage()
+    original_path = str(media.get("storage_path") or "")
+    requested_path = (
+        str(media.get("thumbnail_path") or original_path)
+        if variant == "thumbnail" else original_path
+    )
+    if not requested_path:
+        raise MediaNotFoundError("Media file was not found.")
+
+    try:
+        data = storage.read(requested_path)
+        mime_type = "image/webp" if variant == "thumbnail" and requested_path != original_path else str(media.get("mime_type") or "application/octet-stream")
+    except FileNotFoundError:
+        if variant != "thumbnail" or requested_path == original_path or not original_path:
+            raise MediaNotFoundError("Media file was not found.") from None
+        try:
+            data = storage.read(original_path)
+            mime_type = str(media.get("mime_type") or "application/octet-stream")
+        except FileNotFoundError:
+            raise MediaNotFoundError("Media file was not found.") from None
+
+    if not mime_type.startswith("image/"):
+        raise MediaNotFoundError("Media file was not found.")
+    return data, mime_type
+
+
 def list_admin_media(*, page: int, page_size: int, search: str = "", source: str = "all", state: str = "active", date_filter: str = "all") -> dict[str, Any]:
     page, page_size = max(1, int(page)), max(1, min(50, int(page_size)))
     clauses, params = [], {"limit": page_size, "offset": (page - 1) * page_size}

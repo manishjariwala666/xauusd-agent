@@ -11,17 +11,10 @@ const root = resolve(import.meta.dirname, "..");
 const source = (path: string) => readFileSync(resolve(root, path), "utf8");
 
 describe("Phase 3A Media Library", () => {
-  it("rebases local media paths and blocks private production URLs", () => {
+  it("maps private media records to unique authenticated BFF URLs", () => {
     const backend = "https://backend.example.com";
     const fallback = "https://admin.example.com/media-fallback.svg";
 
-    expect(
-      normalizeMediaUrl(
-        "http://127.0.0.1:8000/media-local/uploads/chart.webp",
-        backend,
-        fallback,
-      ),
-    ).toBe("https://backend.example.com/media-local/uploads/chart.webp");
     expect(
       normalizeMediaUrl("file:///tmp/private.png", backend, fallback),
     ).toBe(fallback);
@@ -30,8 +23,14 @@ describe("Phase 3A Media Library", () => {
         {
           items: [
             {
+              id: 101,
               public_url: "http://localhost:8000/media-local/uploads/a.png",
               thumbnail_url: null,
+            },
+            {
+              id: 102,
+              public_url: "http://127.0.0.1:8000/media-local/uploads/b.png",
+              thumbnail_url: "http://127.0.0.1:8000/media-local/thumbnails/b.webp",
             },
           ],
         },
@@ -41,8 +40,12 @@ describe("Phase 3A Media Library", () => {
     ).toMatchObject({
       items: [
         {
-          public_url: "https://backend.example.com/media-local/uploads/a.png",
-          thumbnail_url: "https://backend.example.com/media-local/uploads/a.png",
+          public_url: "https://admin.example.com/api/admin/media-file/101?variant=original",
+          thumbnail_url: "https://admin.example.com/api/admin/media-file/101?variant=thumbnail",
+        },
+        {
+          public_url: "https://admin.example.com/api/admin/media-file/102?variant=original",
+          thumbnail_url: "https://admin.example.com/api/admin/media-file/102?variant=thumbnail",
         },
       ],
     });
@@ -72,6 +75,10 @@ describe("Phase 3A Media Library", () => {
     expect(proxy).toContain("arrayBuffer");
     expect(featured).toContain("verifyCsrfToken");
     expect(proxy + featured).not.toMatch(/SUPABASE|DATABASE_URL|service.role/i);
+    const fileProxy = source("app/api/admin/media-file/[mediaId]/route.ts");
+    expect(fileProxy).toContain("ADMIN_SESSION_COOKIE");
+    expect(fileProxy).toContain("X-Admin-BFF-Key");
+    expect(fileProxy).toContain("X-Content-Type-Options");
   });
 
   it("replaces the placeholder with a functional featured-image picker", () => {
