@@ -27,12 +27,26 @@ describe("Agents Dashboard", () => {
     expect(route).not.toContain("ADMIN_BFF_SHARED_SECRET=");
   });
 
+  it("normalizes partial backend records before rendering agent cards", () => {
+    const api = read("lib/agents-api.ts");
+
+    expect(api).toContain("normalizeAgentsDashboardPayload");
+    expect(api).toContain("normalizeAgentDashboardRecord");
+    expect(api).toContain("stringList(record.aliases)");
+    expect(api).toContain('status: String(record.status || "NOT_CONFIGURED")');
+    expect(api).toContain(
+      'agentKey === "ai_blog_agent" && record.can_toggle === true',
+    );
+  });
+
   it("keeps operational controls disabled in read-only mode", () => {
     const dashboard = read("components/agents-dashboard.tsx");
 
     expect(dashboard).toContain("Read-only safety mode");
-    expect(dashboard).toContain("Controls coming later");
-    expect(dashboard).toContain("<button type=\"button\" disabled>");
+    expect(dashboard).toContain("Preview mode · execution locked");
+    expect(dashboard).toContain(
+      "No agent job, message, signal, schedule or publishing action was executed.",
+    );
     expect(dashboard).not.toContain("fetch(\"/api/admin/agents/run");
   });
 
