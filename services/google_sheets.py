@@ -126,6 +126,64 @@ class GoogleSheetsService:
 
         return None, "no valid stop"
 
+    @classmethod
+    def _select_analysis_targets(
+        cls,
+        *,
+        direction: str,
+        entry_price: Decimal,
+        raw_targets: list[Decimal],
+        fallback_high: Decimal,
+        fallback_low: Decimal,
+    ) -> tuple[Decimal, tuple[Decimal, ...], tuple[Decimal | None, ...]] | None:
+        """Keep the configured target table, rejecting invalid ordering."""
+
+        target_slots: list[Decimal | None] = []
+        directional_targets: list[Decimal] = []
+        previous_target: Decimal | None = None
+
+        for value in raw_targets[:6]:
+            if value <= 0:
+                target_slots.append(None)
+                continue
+
+            if direction == "BUY":
+                valid_direction = value > entry_price
+                progressive = (
+                    previous_target is None or value > previous_target
+                )
+            else:
+                valid_direction = value < entry_price
+                progressive = (
+                    previous_target is None or value < previous_target
+                )
+
+            if not valid_direction or not progressive:
+                return None
+
+            target_slots.append(value)
+            directional_targets.append(value)
+            previous_target = value
+
+        if directional_targets:
+            return (
+                directional_targets[0],
+                tuple(directional_targets),
+                tuple(target_slots),
+            )
+
+        fallback_target = fallback_high if direction == "BUY" else fallback_low
+        if (
+            direction == "BUY"
+            and fallback_target <= entry_price
+        ) or (
+            direction == "SELL"
+            and fallback_target >= entry_price
+        ):
+            return None
+
+        return fallback_target, (), tuple(target_slots)
+
     def __init__(self) -> None:
         settings = get_settings()
         self._public_url = settings.google_sheet_public_url
@@ -680,49 +738,17 @@ class GoogleSheetsService:
 
                 raw_targets = selected_table[direction]
 
-                if direction == "BUY":
-                    target_slots = tuple(
-                        (
-                            value
-                            if value > 0 and value > entry_price
-                            else None
-                        )
-                        for value in raw_targets[:6]
-                    )
-                else:
-                    target_slots = tuple(
-                        (
-                            value
-                            if value > 0 and value < entry_price
-                            else None
-                        )
-                        for value in raw_targets[:6]
-                    )
-
-                directional_targets = tuple(
-                    value
-                    for value in target_slots
-                    if value is not None
+                selected_targets = cls._select_analysis_targets(
+                    direction=direction,
+                    entry_price=entry_price,
+                    raw_targets=raw_targets,
+                    fallback_high=high,
+                    fallback_low=low,
                 )
-
-                target = (
-                    directional_targets[0]
-                    if directional_targets
-                    else (
-                        high
-                        if direction == "BUY"
-                        else low
-                    )
-                )
-
-                if (
-                    direction == "BUY"
-                    and target <= entry_price
-                ) or (
-                    direction == "SELL"
-                    and target >= entry_price
-                ):
+                if selected_targets is None:
                     continue
+
+                target, directional_targets, target_slots = selected_targets
 
                 label = (
                     f"{session_date} {normalized[0]} · "
