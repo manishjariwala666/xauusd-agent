@@ -54,6 +54,7 @@ class GoogleSheetsService:
     _LABEL_HEADERS = ("label", "note", "message", "remarks")
     _ANALYSIS_WORKSHEET = "Sheet1"
     _MAX_ANALYSIS_AGE = timedelta(hours=6)
+    _MIN_STOP_DISTANCE = Decimal("0.01")
     _SESSION_HEADER = re.compile(
         r"^(?:XAUUSD SESSION\s+|DATE:\s*)(\d{4}-\d{2}-\d{2})$",
         re.IGNORECASE,
@@ -63,6 +64,67 @@ class GoogleSheetsService:
         r"(?:-|TO)\s*(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$",
         re.IGNORECASE,
     )
+
+    @classmethod
+    def _select_analysis_stop_loss(
+        cls,
+        *,
+        direction: str,
+        entry_price: Decimal,
+        explicit_stop: Decimal | None,
+        current_high: Decimal,
+        current_low: Decimal,
+        previous_high: Decimal,
+        previous_low: Decimal,
+        session_high: Decimal | None,
+        session_low: Decimal | None,
+    ) -> tuple[Decimal | None, str]:
+        """Select risk after direction is fixed, preferring local structure."""
+
+        def is_valid(value: Decimal | None) -> bool:
+            if value is None:
+                return False
+            distance = (
+                entry_price - value
+                if direction == "BUY"
+                else value - entry_price
+            )
+            return distance >= cls._MIN_STOP_DISTANCE
+
+        if is_valid(explicit_stop):
+            return explicit_stop, f"sheet {direction} SL"
+
+        structural_candidates = (
+            (current_low, previous_low)
+            if direction == "BUY"
+            else (current_high, previous_high)
+        )
+        valid_structural = [
+            value for value in structural_candidates if is_valid(value)
+        ]
+        if valid_structural:
+            stop_loss = (
+                max(valid_structural)
+                if direction == "BUY"
+                else min(valid_structural)
+            )
+            structure_name = (
+                "recent candle low"
+                if direction == "BUY"
+                else "recent candle high"
+            )
+            return stop_loss, structure_name
+
+        session_stop = session_low if direction == "BUY" else session_high
+        if is_valid(session_stop):
+            fallback_name = (
+                "session low stop fallback"
+                if direction == "BUY"
+                else "session high stop fallback"
+            )
+            return session_stop, fallback_name
+
+        return None, "no valid stop"
 
     def __init__(self) -> None:
         settings = get_settings()
@@ -553,19 +615,23 @@ class GoogleSheetsService:
                         target_session
                     ]["BUY"]
 
-                    stop_loss = (
-                        explicit_sl
-                        if explicit_sl is not None
-                        else extremes["low"]
+                    stop_loss, stop_source = (
+                        cls._select_analysis_stop_loss(
+                            direction=direction,
+                            entry_price=entry_price,
+                            explicit_stop=explicit_sl,
+                            current_high=high,
+                            current_low=low,
+                            previous_high=previous_high,
+                            previous_low=previous_low,
+                            session_high=extremes["high"],
+                            session_low=extremes["low"],
+                        )
                     )
 
                     setup_name = (
                         "higher high + higher average + CMP above average + "
-                        + (
-                            "sheet BUY SL"
-                            if explicit_sl is not None
-                            else "session low stop fallback"
-                        )
+                        + stop_source
                     )
                 elif bearish_setup:
                     direction = "SELL"
@@ -575,19 +641,23 @@ class GoogleSheetsService:
                         target_session
                     ]["SELL"]
 
-                    stop_loss = (
-                        explicit_sl
-                        if explicit_sl is not None
-                        else extremes["high"]
+                    stop_loss, stop_source = (
+                        cls._select_analysis_stop_loss(
+                            direction=direction,
+                            entry_price=entry_price,
+                            explicit_stop=explicit_sl,
+                            current_high=high,
+                            current_low=low,
+                            previous_high=previous_high,
+                            previous_low=previous_low,
+                            session_high=extremes["high"],
+                            session_low=extremes["low"],
+                        )
                     )
 
                     setup_name = (
                         "lower low + lower average + CMP below average + "
-                        + (
-                            "sheet SELL SL"
-                            if explicit_sl is not None
-                            else "session high stop fallback"
-                        )
+                        + stop_source
                     )
                 else:
                     continue

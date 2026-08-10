@@ -350,7 +350,7 @@ def test_latest_sheet_analysis_row_produces_fresh_trend() -> None:
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4149")
     assert signal.target_price == Decimal("4132")
-    assert signal.stop_loss == Decimal("4160")
+    assert signal.stop_loss == Decimal("4155")
 
 def test_sheet_analysis_never_returns_stale_session() -> None:
     values = [
@@ -415,7 +415,7 @@ def test_latest_sheet_analysis_sell_uses_low_target_and_high_stop() -> None:
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4142")
     assert signal.target_price == Decimal("4132")
-    assert signal.stop_loss == Decimal("4150")
+    assert signal.stop_loss == Decimal("4148")
 
 def test_sheet_analysis_reads_six_directional_targets() -> None:
     values = [
@@ -537,7 +537,7 @@ def test_sheet_analysis_reads_six_directional_targets() -> None:
     assert signal is not None
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4076")
-    assert signal.stop_loss == Decimal("4081")
+    assert signal.stop_loss == Decimal("4080")
     assert signal.targets == (
         Decimal("4058.98"),
         Decimal("4041.73"),
@@ -576,7 +576,7 @@ def test_sheet_uses_morning_target_table() -> None:
     assert signal is not None
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4092")
-    assert signal.stop_loss == Decimal("4102")
+    assert signal.stop_loss == Decimal("4100")
     assert signal.targets == (Decimal("4091"), Decimal("4090"))
 
 
@@ -607,7 +607,7 @@ def test_sheet_uses_evening_target_table() -> None:
     assert signal is not None
     assert signal.direction == "BUY"
     assert signal.reference_price == Decimal("4192")
-    assert signal.stop_loss == Decimal("4180")
+    assert signal.stop_loss == Decimal("4182")
     assert signal.targets == (Decimal("4201"), Decimal("4202"))
 
 
@@ -661,7 +661,7 @@ def test_lower_low_lower_average_creates_sell_at_average() -> None:
     assert signal is not None
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4019.73")
-    assert signal.stop_loss == Decimal("4029.66")
+    assert signal.stop_loss == Decimal("4027.55")
     assert signal.targets == (
         Decimal("4005.35"),
         Decimal("3995.86"),
@@ -699,7 +699,7 @@ def test_higher_high_higher_average_creates_buy_at_average() -> None:
     assert signal is not None
     assert signal.direction == "BUY"
     assert signal.reference_price == Decimal("4038.59")
-    assert signal.stop_loss == Decimal("4026.39")
+    assert signal.stop_loss == Decimal("4033.02")
     assert signal.targets == (
         Decimal("4050"),
         Decimal("4060"),
@@ -715,12 +715,12 @@ def test_august_10_bullish_row_rejects_sell_and_keeps_buy_eligible() -> None:
         ],
         [
             "08:30 AM TO 09:30 AM",
-            "4330.00", "4315.00", "4318.00", "4323.58", "4325.00", "",
+            "4329.19", "4317.98", "4326.53", "4323.58", "4327.24", "",
             "Target 1", "4345.00", "4310.00",
         ],
         [
             "09:30 AM TO 10:30 AM",
-            "4340.00", "4320.00", "4323.58", "4331.26", "4337.38", "",
+            "4339.06", "4323.45", "4323.58", "4331.26", "4337.38", "",
             "Target 2", "4355.00", "4295.00",
         ],
     ]
@@ -735,8 +735,76 @@ def test_august_10_bullish_row_rejects_sell_and_keeps_buy_eligible() -> None:
     assert signal.direction == "BUY"
     assert signal.direction != "SELL"
     assert signal.reference_price == Decimal("4331.26")
+    assert signal.stop_loss == Decimal("4323.45")
     assert "CMP above average" in signal.label
-    assert "session low stop fallback" in signal.label
+    assert "recent candle low" in signal.label
+
+
+def test_august_10_evening_sell_uses_nearest_structural_high() -> None:
+    values = [
+        ["DATE: 2026-08-10"],
+        [
+            "Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP", "",
+            "Target", "BUY Level", "SELL Level",
+        ],
+        [
+            "02:30 PM TO 03:30 PM",
+            "4349.72", "4341.22", "4350.98", "4345.47", "4341.88", "",
+            "Target 1", "4350.00", "4330.00",
+        ],
+        [
+            "03:30 PM TO 04:30 PM",
+            "4344.43", "4335.89", "4345.47", "4340.16", "4336.41", "",
+            "Target 2", "4360.00", "4320.00",
+        ],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 8, 10, 11, 1, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is not None
+    assert signal.direction == "SELL"
+    assert signal.reference_price == Decimal("4340.16")
+    assert signal.stop_loss == Decimal("4344.43")
+    assert "recent candle high" in signal.label
+    assert "session high stop fallback" not in signal.label
+
+
+def test_analysis_signal_rejects_stop_without_minimum_distance() -> None:
+    stop_loss, source = GoogleSheetsService._select_analysis_stop_loss(
+        direction="SELL",
+        entry_price=Decimal("4340.16"),
+        explicit_stop=Decimal("4340.16"),
+        current_high=Decimal("4340.16"),
+        current_low=Decimal("4335.00"),
+        previous_high=Decimal("4340.16"),
+        previous_low=Decimal("4330.00"),
+        session_high=Decimal("4340.16"),
+        session_low=Decimal("4320.00"),
+    )
+
+    assert stop_loss is None
+    assert source == "no valid stop"
+
+
+def test_analysis_signal_uses_session_stop_only_without_local_structure() -> None:
+    stop_loss, source = GoogleSheetsService._select_analysis_stop_loss(
+        direction="SELL",
+        entry_price=Decimal("4340.16"),
+        explicit_stop=None,
+        current_high=Decimal("4339.00"),
+        current_low=Decimal("4335.00"),
+        previous_high=Decimal("4338.00"),
+        previous_low=Decimal("4330.00"),
+        session_high=Decimal("4349.72"),
+        session_low=Decimal("4320.00"),
+    )
+
+    assert stop_loss == Decimal("4349.72")
+    assert source == "session high stop fallback"
 
 
 def test_august_10_bullish_row_waits_for_closed_bar() -> None:
@@ -959,7 +1027,7 @@ def test_real_evening_rows_select_latest_directionally_consistent_row() -> None:
     assert signal is not None
     assert signal.direction == "BUY"
     assert signal.reference_price == Decimal("4030.62")
-    assert signal.stop_loss == Decimal("4025.44")
+    assert signal.stop_loss == Decimal("4025.93")
     assert "higher high + higher average" in signal.label
     assert signal.reference_price != Decimal("4026.10")
 
@@ -1038,19 +1106,19 @@ def test_session_stop_loss_does_not_leak_from_previous_date() -> None:
         ["XAUUSD SESSION 2026-08-06"],
         ["Time", "High", "Low", "Previous AVG", "AVG", "Live CMP"],
         ["07:30 PM TO 08:30 PM", "4284.96", "4250.44", "4270", "4260", "4258"],
-        ["08:30 PM TO 09:30 PM", "4270", "4242.40", "4260", "4253.43", "4255"],
+        ["08:30 PM TO 09:30 PM", "4288", "4242.40", "4260", "4263.43", "4265"],
     ]
 
     signal = GoogleSheetsService.parse_latest_analysis_signal(
         values,
-        now=datetime(2026, 8, 6, 15, 30, tzinfo=timezone.utc),
+        now=datetime(2026, 8, 6, 16, 0, tzinfo=timezone.utc),
         max_age=timedelta(hours=12),
     )
 
     assert signal is not None
     assert signal.direction == "BUY"
-    assert signal.reference_price == Decimal("4253.43")
-    assert signal.stop_loss == Decimal("4242.40")
+    assert signal.reference_price == Decimal("4263.43")
+    assert signal.stop_loss == Decimal("4250.44")
     assert signal.stop_loss != Decimal("3961.49")
 
 
@@ -1133,4 +1201,6 @@ def test_analysis_signal_falls_back_when_explicit_sl_blank() -> None:
     )
 
     assert signal is not None
-    assert signal.stop_loss == Decimal("4038.27")
+    assert signal.stop_loss == Decimal("4025.93")
+    assert "recent candle low" in signal.label
+    assert "session low stop fallback" not in signal.label
