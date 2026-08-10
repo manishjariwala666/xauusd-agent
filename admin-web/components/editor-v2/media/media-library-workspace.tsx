@@ -7,6 +7,7 @@ import {
   type DragEvent,
 } from "react";
 import { readMediaResponse } from "@/lib/media-response";
+import { prepareMediaUpload } from "@/lib/media-upload";
 
 type MediaAsset = {
   id: number;
@@ -134,10 +135,11 @@ export function MediaLibraryWorkspace() {
     setMessage("");
 
     try {
+      const preparedFile = await prepareMediaUpload(file);
       const token = await csrfToken();
       const formData = new FormData();
 
-      formData.set("file", file);
+      formData.set("file", preparedFile);
       formData.set("alt_text", altText.trim());
       formData.set("caption", caption.trim());
 

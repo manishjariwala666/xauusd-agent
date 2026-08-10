@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { readMediaResponse } from "@/lib/media-response";
+import { prepareMediaUpload } from "@/lib/media-upload";
 
 export type MediaLibraryAsset = {
   id: number;
@@ -147,10 +148,11 @@ export function MediaLibraryDialog({
     setMessage("");
 
     try {
+      const preparedFile = await prepareMediaUpload(uploadFile);
       const token = await csrfToken();
       const formData = new FormData();
 
-      formData.set("file", uploadFile);
+      formData.set("file", preparedFile);
       formData.set("alt_text", uploadAlt.trim());
       formData.set("caption", uploadCaption.trim());
 

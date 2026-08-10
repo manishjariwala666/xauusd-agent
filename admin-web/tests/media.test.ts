@@ -7,6 +7,10 @@ import {
   normalizeMediaUrl,
 } from "../lib/media-url";
 import { readMediaResponse } from "../lib/media-response";
+import {
+  MEDIA_PROXY_SAFE_UPLOAD_BYTES,
+  prepareMediaUpload,
+} from "../lib/media-upload";
 
 const root = resolve(import.meta.dirname, "..");
 const source = (path: string) => readFileSync(resolve(root, path), "utf8");
@@ -115,5 +119,34 @@ describe("Phase 3A Media Library", () => {
         }),
       ),
     ).resolves.toEqual({ id: 7 });
+  });
+
+  it("keeps small uploads intact and rejects oversized GIFs safely", async () => {
+    const smallImage = new File([new Uint8Array(16)], "chart.png", {
+      type: "image/png",
+    });
+    await expect(prepareMediaUpload(smallImage)).resolves.toBe(smallImage);
+
+    const largeGif = new File(
+      [new Uint8Array(MEDIA_PROXY_SAFE_UPLOAD_BYTES + 1)],
+      "animated.gif",
+      { type: "image/gif" },
+    );
+    await expect(prepareMediaUpload(largeGif)).rejects.toThrow(
+      "GIF images must be 3 MB or smaller.",
+    );
+  });
+
+  it("optimizes oversized non-GIF images before the Netlify proxy", () => {
+    const helper = source("lib/media-upload.ts");
+    const workspace = source(
+      "components/editor-v2/media/media-library-workspace.tsx",
+    );
+    const dialog = source("components/media-library-dialog.tsx");
+
+    expect(helper).toContain('"image/webp"');
+    expect(helper).toContain("createImageBitmap");
+    expect(workspace).toContain("prepareMediaUpload(file)");
+    expect(dialog).toContain("prepareMediaUpload(uploadFile)");
   });
 });
