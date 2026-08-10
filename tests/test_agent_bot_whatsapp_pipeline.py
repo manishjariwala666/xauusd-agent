@@ -135,3 +135,49 @@ def test_pipeline_persists_sheet_average_without_fetching_live_price(
     assert inserted["signal_type"] == "BUY"
     assert inserted["stop_loss"] == Decimal("4018.00")
     assert inserted["targets"][0] == Decimal("4029.21")
+
+
+def test_existing_sell_key_does_not_block_next_closed_bar_buy(monkeypatch):
+    """An earlier SELL/SL lifecycle cannot consume the BUY dedupe key."""
+    from datetime import datetime, timezone
+    from decimal import Decimal
+
+    buy_key = "gsheet-session:2026-08-10:morning:BUY"
+    sheet_signal = SimpleNamespace(
+        external_key=buy_key,
+        reference_price=Decimal("4331.26"),
+        observed_at=datetime(2026, 8, 10, 5, 0, tzinfo=timezone.utc),
+        source="GOOGLE_SHEET:Sheet1",
+        direction="BUY",
+        target_price=Decimal("4355.00"),
+        stop_loss=Decimal("4320.00"),
+        label="higher high + higher average + CMP above average",
+        targets=(Decimal("4355.00"),),
+        target_slots=(Decimal("4355.00"),),
+    )
+
+    sheets = Mock()
+    sheets.get_latest_signal.return_value = sheet_signal
+
+    market_data = Mock()
+    market_data.signal_exists.side_effect = lambda key: key == (
+        "gsheet-session:2026-08-10:morning:SELL"
+    )
+
+    telegram = Mock()
+    telegram.broadcast_pending_signals.return_value = 0
+    monkeypatch.setattr(
+        agent_bot,
+        "deliver_pending_whatsapp_signals",
+        Mock(),
+    )
+
+    agent_bot.run_pipeline_once(
+        sheets=sheets,
+        market_data=market_data,
+        telegram=telegram,
+    )
+
+    market_data.signal_exists.assert_called_once_with(buy_key)
+    market_data.insert_signal.assert_called_once()
+    assert market_data.insert_signal.call_args.kwargs["signal_type"] == "BUY"

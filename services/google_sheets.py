@@ -405,6 +405,7 @@ class GoogleSheetsService:
 
                 high = cls._decimal_or_none(normalized[1])
                 low = cls._decimal_or_none(normalized[2])
+                sheet_previous_average = cls._decimal_or_none(normalized[3])
                 current_average = cls._decimal_or_none(normalized[4])
                 live_price = cls._decimal_or_none(normalized[5])
 
@@ -436,6 +437,22 @@ class GoogleSheetsService:
                 ).replace(tzinfo=india)
 
                 observed_at = observed_local.astimezone(timezone.utc)
+                end_hour = int(slot_match.group(4))
+                end_minute = int(slot_match.group(5))
+                end_meridiem = str(slot_match.group(6) or "").upper()
+
+                if end_meridiem:
+                    end_hour %= 12
+                    if end_meridiem == "PM":
+                        end_hour += 12
+
+                closed_local = observed_local.replace(
+                    hour=end_hour,
+                    minute=end_minute,
+                )
+                if closed_local <= observed_local:
+                    closed_local += timedelta(days=1)
+                closed_at = closed_local.astimezone(timezone.utc)
                 local_minutes = (
                     observed_local.hour * 60
                     + observed_local.minute
@@ -497,13 +514,24 @@ class GoogleSheetsService:
                     previous_row
                 )
 
-                lower_low_buy = (
-                    low < previous_low
-                    and current_average < previous_avg
+                comparison_average = (
+                    sheet_previous_average
+                    if sheet_previous_average is not None
+                    else previous_avg
                 )
-                higher_high_sell = (
+
+                # Direction is determined only by confirmed price structure.
+                # Stop-loss sources are selected later and must never reverse
+                # or otherwise influence the direction decision.
+                bullish_setup = (
                     high > previous_high
-                    and current_average > previous_avg
+                    and current_average > comparison_average
+                    and live_price > current_average
+                )
+                bearish_setup = (
+                    low < previous_low
+                    and current_average < comparison_average
+                    and live_price < current_average
                 )
 
                 previous_row = (
@@ -512,7 +540,12 @@ class GoogleSheetsService:
                     current_average,
                 )
 
-                if lower_low_buy:
+                # A row becomes actionable only after its configured bar has
+                # closed, preventing an intrabar reversal from being emitted.
+                if normalized_now < closed_at:
+                    continue
+
+                if bullish_setup:
                     direction = "BUY"
                     entry_price = current_average
 
@@ -527,14 +560,14 @@ class GoogleSheetsService:
                     )
 
                     setup_name = (
-                        "lower low + lower average + "
+                        "higher high + higher average + CMP above average + "
                         + (
                             "sheet BUY SL"
                             if explicit_sl is not None
                             else "session low stop fallback"
                         )
                     )
-                elif higher_high_sell:
+                elif bearish_setup:
                     direction = "SELL"
                     entry_price = current_average
 
@@ -549,7 +582,7 @@ class GoogleSheetsService:
                     )
 
                     setup_name = (
-                        "higher high + higher average + "
+                        "lower low + lower average + CMP below average + "
                         + (
                             "sheet SELL SL"
                             if explicit_sl is not None
