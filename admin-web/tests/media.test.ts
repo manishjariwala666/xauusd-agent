@@ -56,6 +56,23 @@ describe("Phase 3A Media Library", () => {
     });
   });
 
+  it("streams durable HTTPS media through the authenticated BFF", () => {
+    const result = normalizeMediaPayloadUrls(
+      {
+        id: 103,
+        public_url: "https://storage.example.invalid/admin-media/one.png",
+        thumbnail_url: "https://storage.example.invalid/admin-media/one.webp",
+      },
+      "https://backend.example.com",
+      "https://admin.example.com/media-fallback.svg",
+    );
+
+    expect(result).toMatchObject({
+      public_url: "https://admin.example.com/api/admin/media-file/103?variant=original",
+      thumbnail_url: "https://admin.example.com/api/admin/media-file/103?variant=thumbnail",
+    });
+  });
+
   it("provides the protected media route and real library controls", () => {
     expect(existsSync(resolve(root, "app/admin/(protected)/media/page.tsx"))).toBe(true);
     const library = source("components/media-library.tsx");

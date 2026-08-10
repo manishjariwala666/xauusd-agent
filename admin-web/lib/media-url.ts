@@ -64,20 +64,19 @@ function normalizeMediaRecord(
     ? new URL(`/api/admin/media-file/${mediaId}?variant=thumbnail`, adminOrigin).toString()
     : fallbackUrl;
 
-  const publicUrl = normalizeMediaUrl(
-    record.public_url,
-    backendBaseUrl,
-    originalBffUrl,
-  );
+  // A durable storage URL is not necessarily public. Stream catalog records
+  // through the authenticated BFF so private buckets work without exposing
+  // storage credentials to the browser.
+  const publicUrl = hasMediaId
+    ? originalBffUrl
+    : normalizeMediaUrl(record.public_url, backendBaseUrl, fallbackUrl);
 
   return {
     ...record,
     public_url: publicUrl,
-    thumbnail_url: normalizeMediaUrl(
-      record.thumbnail_url,
-      backendBaseUrl,
-      thumbnailBffUrl,
-    ),
+    thumbnail_url: hasMediaId
+      ? thumbnailBffUrl
+      : normalizeMediaUrl(record.thumbnail_url, backendBaseUrl, fallbackUrl),
   };
 }
 
