@@ -11,6 +11,10 @@ venv/
 !.env.example
 google_creds.json
 service_account.json
+.local-admin-preview-credentials
+
+# Local timestamped safety copies; canonical source remains tracked normally.
+services/*.backup.*
 
 # Local admin media and upload storage.
 admin-media/
