@@ -871,20 +871,106 @@ def test_analysis_targets_preserve_current_levels_and_reject_bad_ordering() -> N
         assert slots == targets
         assert target == targets[0]
 
+    selected_buy = GoogleSheetsService._select_analysis_targets(
+        direction="BUY",
+        entry_price=Decimal("4340.36"),
+        raw_targets=[
+            Decimal("4345"),
+            Decimal("4344"),
+            Decimal("4345"),
+            Decimal("4355"),
+        ],
+        fallback_high=Decimal("4346"),
+        fallback_low=Decimal("4330"),
+    )
+    assert selected_buy is not None
+    assert selected_buy[1] == (Decimal("4345"), Decimal("4355"))
+    assert selected_buy[2] == (
+        Decimal("4345"), None, None, Decimal("4355"),
+    )
+
+    selected_sell = GoogleSheetsService._select_analysis_targets(
+        direction="SELL",
+        entry_price=Decimal("4340.16"),
+        raw_targets=[Decimal("4330"), Decimal("4331"), Decimal("4320")],
+        fallback_high=Decimal("4350"),
+        fallback_low=Decimal("4320"),
+    )
+    assert selected_sell is not None
+    assert selected_sell[1] == (Decimal("4330"), Decimal("4320"))
+
     assert GoogleSheetsService._select_analysis_targets(
         direction="BUY",
         entry_price=Decimal("4340.36"),
-        raw_targets=[Decimal("4345"), Decimal("4344")],
+        raw_targets=[Decimal("0"), Decimal("4355")],
         fallback_high=Decimal("4346"),
         fallback_low=Decimal("4330"),
     ) is None
-    assert GoogleSheetsService._select_analysis_targets(
-        direction="SELL",
-        entry_price=Decimal("4340.16"),
-        raw_targets=[Decimal("4330"), Decimal("4331")],
-        fallback_high=Decimal("4350"),
-        fallback_low=Decimal("4320"),
-    ) is None
+
+
+def test_analysis_targets_ignore_num_duplicates_and_invalid_later_slots() -> None:
+    values = [
+        ["DATE: 2026-08-12"],
+        [
+            "Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP", "",
+            "Target", "BUY Level", "SELL Level",
+        ],
+        [
+            "08:30 AM TO 09:30 AM",
+            "4330", "4315", "4320", "4323", "4326", "",
+            "Target 1", "4345", "4310",
+        ],
+        [
+            "09:30 AM TO 10:30 AM",
+            "4340", "4320", "4323", "4331", "4337", "",
+            "Target 2", "#NUM!", "4300",
+        ],
+        ["", "", "", "", "", "", "", "Target 3", "4345", "4290"],
+        ["", "", "", "", "", "", "", "Target 4", "4329", "4280"],
+        ["", "", "", "", "", "", "", "Target 5", "4360", "4270"],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 8, 12, 5, 1, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is not None
+    assert signal.direction == "BUY"
+    assert signal.targets == (Decimal("4345"), Decimal("4360"))
+    assert signal.target_slots == (
+        Decimal("4345"), None, None, None, Decimal("4360"), None,
+    )
+    assert signal.stop_loss < signal.reference_price < signal.target_price
+
+
+def test_morning_row_never_seeds_first_evening_direction_comparison() -> None:
+    values = [
+        ["DATE: 2026-08-12"],
+        [
+            "Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP", "",
+            "Target", "BUY Level", "SELL Level",
+        ],
+        [
+            "01:30 PM TO 02:30 PM",
+            "4330", "4310", "4320", "4322", "4325", "",
+            "Target 1", "4350", "4300",
+        ],
+        [
+            "02:30 PM TO 03:30 PM",
+            "4340", "4320", "4322", "4330", "4335", "",
+            "Target 2", "4360", "4290",
+        ],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 8, 12, 10, 1, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is None
 
 
 def test_august_10_bullish_row_waits_for_closed_bar() -> None:
@@ -1067,7 +1153,7 @@ def test_unlabelled_double_table_keeps_first_block_for_morning() -> None:
     )
 
 
-def test_real_evening_rows_select_latest_directionally_consistent_row() -> None:
+def test_real_evening_rows_reject_buy_when_target_one_is_below_entry() -> None:
     values = [
         ["XAUUSD SESSION 2026-07-29"],
         [
@@ -1104,12 +1190,7 @@ def test_real_evening_rows_select_latest_directionally_consistent_row() -> None:
         max_age=timedelta(hours=6),
     )
 
-    assert signal is not None
-    assert signal.direction == "BUY"
-    assert signal.reference_price == Decimal("4030.62")
-    assert signal.stop_loss == Decimal("4025.93")
-    assert "higher high + higher average" in signal.label
-    assert signal.reference_price != Decimal("4026.10")
+    assert signal is None
 
 
 def test_same_session_direction_uses_one_stable_external_key() -> None:

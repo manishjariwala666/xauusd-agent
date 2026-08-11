@@ -79,6 +79,9 @@ describe("Phase 3A Media Library", () => {
     const studioV2Library = source(
       "components/editor-v2/media/media-library-workspace.tsx",
     );
+    const studioV2Gallery = source(
+      "components/editor-v2/gallery/gallery-manager-workspace.tsx",
+    );
     for (const label of ["Upload Media", "Search filename", "Copy URL", "Edit image metadata", "Restore", "Delete permanently"]) expect(library).toContain(label);
     expect(library).toContain('type="file"');
     expect(library).toContain("window.confirm");
@@ -87,6 +90,13 @@ describe("Phase 3A Media Library", () => {
     expect(studioV2Library).toContain(
       'event.currentTarget.src = "/media-fallback.svg"',
     );
+    const mediaListRoute = source("app/api/admin/media/route.ts");
+    expect(mediaListRoute).toContain("normalizeMediaPayloadUrls");
+    expect(mediaListRoute).toContain("request.nextUrl.origin");
+    expect(mediaListRoute).not.toContain("127.0.0.1");
+    expect(studioV2Library).toContain("/api/admin/media?");
+    expect(studioV2Gallery).toContain("/api/admin/media?");
+    expect(studioV2Gallery).toContain("thumbnail_url");
   });
 
   it("keeps upload and mutations behind session and CSRF BFF checks", () => {

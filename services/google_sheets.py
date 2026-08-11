@@ -136,7 +136,41 @@ class GoogleSheetsService:
         fallback_high: Decimal,
         fallback_low: Decimal,
     ) -> tuple[Decimal, tuple[Decimal, ...], tuple[Decimal | None, ...]] | None:
-        """Keep the configured target table, rejecting invalid ordering."""
+        """Return valid configured targets without inventing a Target 1.
+
+        Target 1 is the publishability gate. Later blank, malformed,
+        duplicate, non-progressive, or directionally invalid slots are
+        excluded while their positional identity is preserved.
+
+        ``fallback_high`` and ``fallback_low`` are used only for legacy sheets
+        that contain no target table at all. They never replace an invalid
+        configured Target 1.
+        """
+
+        if not raw_targets:
+            # Legacy sheets without a target table retain their existing
+            # structural target behavior. Once a target table is present,
+            # however, Target 1 below is mandatory and no fallback is used.
+            fallback_target = (
+                fallback_high if direction == "BUY" else fallback_low
+            )
+            if (
+                direction == "BUY" and fallback_target > entry_price
+            ) or (
+                direction == "SELL" and fallback_target < entry_price
+            ):
+                return fallback_target, (), ()
+            return None
+
+        first_target = raw_targets[0]
+        if first_target <= 0:
+            return None
+        if (
+            direction == "BUY" and first_target <= entry_price
+        ) or (
+            direction == "SELL" and first_target >= entry_price
+        ):
+            return None
 
         target_slots: list[Decimal | None] = []
         directional_targets: list[Decimal] = []
@@ -158,31 +192,26 @@ class GoogleSheetsService:
                     previous_target is None or value < previous_target
                 )
 
-            if not valid_direction or not progressive:
-                return None
+            if (
+                not valid_direction
+                or not progressive
+                or value in directional_targets
+            ):
+                target_slots.append(None)
+                continue
 
             target_slots.append(value)
             directional_targets.append(value)
             previous_target = value
 
-        if directional_targets:
-            return (
-                directional_targets[0],
-                tuple(directional_targets),
-                tuple(target_slots),
-            )
-
-        fallback_target = fallback_high if direction == "BUY" else fallback_low
-        if (
-            direction == "BUY"
-            and fallback_target <= entry_price
-        ) or (
-            direction == "SELL"
-            and fallback_target >= entry_price
-        ):
+        if not directional_targets:
             return None
 
-        return fallback_target, (), tuple(target_slots)
+        return (
+            directional_targets[0],
+            tuple(directional_targets),
+            tuple(target_slots),
+        )
 
     def __init__(self) -> None:
         settings = get_settings()
@@ -490,6 +519,14 @@ class GoogleSheetsService:
                     if value is not None:
                         targets[target_number - 1] = value
 
+            # One unlabelled table is the legacy/default table. With two
+            # blocks, the first remains morning and the second evening.
+            if unlabeled_block_count == 1:
+                for direction in ("BUY", "SELL"):
+                    target_tables["default"][direction] = list(
+                        target_tables["morning"][direction]
+                    )
+
             # Preserve Target 1..6 positional identity.
             # Zero placeholders stay in-place until direction validation.
             for table in target_tables.values():
@@ -498,21 +535,12 @@ class GoogleSheetsService:
                         table[direction].append(Decimal("0"))
                     table[direction] = table[direction][:6]
 
-            # Preserve compatibility when only one unlabelled table exists.
-            for direction in ("BUY", "SELL"):
-                if (
-                    not target_tables["default"][direction]
-                    and target_tables["morning"][direction]
-                ):
-                    target_tables["default"][direction] = list(
-                        target_tables["morning"][direction]
-                    )
-
-            previous_row: tuple[
-                Decimal,
-                Decimal,
-                Decimal,
-            ] | None = None
+            # Never compare a morning row with an evening row. Each trading
+            # session owns its own previous closed-bar structure.
+            previous_rows: dict[
+                str,
+                tuple[Decimal, Decimal, Decimal],
+            ] = {}
 
             for row in session_rows:
                 normalized = [str(cell).strip() for cell in row]
@@ -586,12 +614,9 @@ class GoogleSheetsService:
                 elif local_minutes >= 870 or local_minutes <= 150:
                     target_session = "evening"
                 else:
-                    previous_row = (
-                        high,
-                        low,
-                        current_average,
-                    )
                     continue
+
+                previous_row = previous_rows.get(target_session)
 
                 session_key = (session_date, target_session)
                 extremes = session_extremes.setdefault(
@@ -615,7 +640,7 @@ class GoogleSheetsService:
 
                 age = normalized_now - observed_at
                 if age < timedelta(minutes=-5) or age > max_age:
-                    previous_row = (
+                    previous_rows[target_session] = (
                         high,
                         low,
                         current_average,
@@ -623,7 +648,7 @@ class GoogleSheetsService:
                     continue
 
                 if previous_row is None:
-                    previous_row = (
+                    previous_rows[target_session] = (
                         high,
                         low,
                         current_average,
@@ -654,7 +679,7 @@ class GoogleSheetsService:
                     and live_price < current_average
                 )
 
-                previous_row = (
+                previous_rows[target_session] = (
                     high,
                     low,
                     current_average,
@@ -732,11 +757,14 @@ class GoogleSheetsService:
                 ):
                     continue
 
-                selected_table = target_tables[target_session]
-                if not selected_table[direction]:
-                    selected_table = target_tables["default"]
-
-                raw_targets = selected_table[direction]
+                session_targets = target_tables[target_session][direction]
+                default_targets = target_tables["default"][direction]
+                if any(value > 0 for value in session_targets):
+                    raw_targets = session_targets
+                elif any(value > 0 for value in default_targets):
+                    raw_targets = default_targets
+                else:
+                    raw_targets = []
 
                 selected_targets = cls._select_analysis_targets(
                     direction=direction,
