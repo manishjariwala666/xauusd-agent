@@ -2168,6 +2168,20 @@ def _fallback_blog_payload(
                         "marked verification required until a reviewer supplies a "
                         "current authoritative source."
                     ),
+                    "#### Evidence standard for each answer",
+                    (
+                        "Each material answer should distinguish sourced facts "
+                        "from interpretation, identify when the supporting "
+                        "information was published and avoid turning an "
+                        "unverified observation into a current market claim."
+                    ),
+                    "##### Final verification before publication",
+                    (
+                        "Before publication, confirm that time-sensitive facts "
+                        "still match an authoritative source. If verification is "
+                        "not possible, keep the limitation visible rather than "
+                        "substituting an estimate or fabricated market value."
+                    ),
                 ]
             )
 
@@ -2188,6 +2202,156 @@ def _fallback_blog_payload(
 
     body_parts.extend(
         [
+            "## Market context and why XAUUSD matters",
+            (
+                "XAUUSD is the market symbol commonly used to represent the "
+                "price of gold relative to the US dollar. Its behavior is "
+                "influenced by several interacting forces rather than one "
+                "single indicator. Interest-rate expectations, real yields, "
+                "US dollar strength, inflation expectations, geopolitical "
+                "risk, central-bank activity, liquidity conditions and broader "
+                "risk sentiment can all affect the market. Because these "
+                "drivers can change at different speeds, a useful market "
+                "analysis should explain the broader context instead of "
+                "presenting one isolated price movement as a complete story."
+            ),
+            "## Understanding price action",
+            (
+                "Price action can be evaluated through structure, momentum, "
+                "volatility and the location of important support and "
+                "resistance areas. A move above a previous high may indicate "
+                "strength, but confirmation depends on timeframe, volume "
+                "where reliable volume data is available, volatility and "
+                "whether price can sustain the move. Similarly, a decline "
+                "below support can be meaningful without automatically "
+                "proving that a larger bearish trend has begun. Traders and "
+                "readers should distinguish between an observed market "
+                "condition and an interpretation of what could happen next."
+            ),
+            "## Timeframe considerations",
+            (
+                "Different timeframes can produce apparently conflicting "
+                "signals. A short-term chart may show strong upward momentum "
+                "while a higher timeframe remains inside a broader range. "
+                "For this reason, analysis should identify the timeframe "
+                "being discussed and avoid mixing short-term observations "
+                "with long-term conclusions without explanation. Higher "
+                "timeframes can help establish broader structure, while lower "
+                "timeframes can provide more detailed information about "
+                "recent price behavior. Neither timeframe should be treated "
+                "as inherently capable of predicting the future."
+            ),
+            "## Key drivers to monitor",
+            (
+                "For XAUUSD analysis, readers should monitor the US dollar, "
+                "Treasury yields and expectations for monetary policy, while "
+                "also considering inflation data, employment reports and "
+                "major central-bank communications. Geopolitical developments "
+                "can increase demand for perceived safe-haven assets, but "
+                "market reactions are not guaranteed to follow a simple rule. "
+                "Economic releases can also produce rapid price movements and "
+                "temporary volatility. A responsible article therefore "
+                "describes these factors as potential drivers rather than "
+                "promising a predetermined market response."
+            ),
+            "## Risk management",
+            (
+                "Risk management is essential whenever financial markets are "
+                "discussed. Position size should reflect the possibility of "
+                "an adverse move, and traders should understand how leverage, "
+                "spread, slippage and execution conditions can affect actual "
+                "results. A theoretical entry, stop-loss or target does not "
+                "guarantee that an order will be executed at the expected "
+                "price. Market gaps, fast-moving conditions and liquidity "
+                "changes can produce materially different outcomes. Readers "
+                "should therefore evaluate any strategy against their own "
+                "capital, risk tolerance, objectives and trading constraints."
+            ),
+            "## Using indicators responsibly",
+            (
+                "Technical indicators can help organize market information, "
+                "but they should not be presented as prediction machines. "
+                "Moving averages, RSI, MACD, ATR and other tools describe "
+                "different aspects of historical price behavior. Their value "
+                "depends on the context in which they are used. Combining "
+                "several indicators that measure similar information does "
+                "not automatically create stronger confirmation. A more "
+                "robust process considers market structure, volatility, "
+                "macro context and invalidation conditions alongside any "
+                "indicator-based observation."
+            ),
+            "## Scenario-based analysis",
+            (
+                "A useful market article can describe multiple scenarios "
+                "instead of claiming certainty. A bullish scenario might "
+                "describe what evidence would support continued strength, "
+                "while a bearish scenario can explain which conditions would "
+                "invalidate that view. A range-bound scenario may also be "
+                "appropriate when price remains between clearly defined "
+                "levels. Scenario analysis helps readers understand that "
+                "markets evolve as new information arrives. It also makes "
+                "the distinction between analysis and a guaranteed forecast "
+                "clear."
+            ),
+            "## Data quality and freshness",
+            (
+                "Market information should always be evaluated for freshness "
+                "and source quality. Prices, economic calendars, indicators "
+                "and macroeconomic statistics can become outdated quickly. "
+                "An educational fallback article should avoid inventing live "
+                "prices, current spreads, exact support levels or recent "
+                "economic results when those values have not been verified. "
+                "When current data is required, the reader should consult a "
+                "reliable real-time source before making a decision. This is "
+                "especially important for XAUUSD because significant news "
+                "events can change market conditions rapidly."
+            ),
+            "## Practical checklist",
+            (
+                "Before acting on any XAUUSD market analysis, readers can "
+                "check several basic questions: What timeframe is being "
+                "analyzed? What is the current market structure? Which major "
+                "economic or geopolitical events could affect price? Where "
+                "would the analysis be considered invalid? Is the proposed "
+                "risk appropriate for the available capital? Are the data "
+                "sources current and trustworthy? Answering these questions "
+                "does not eliminate uncertainty, but it can reduce the risk "
+                "of making decisions from incomplete or emotionally driven "
+                "information."
+            ),
+            "## Common interpretation mistakes",
+            (
+                "Common mistakes include treating every breakout as genuine, "
+                "assuming a single indicator can predict direction, ignoring "
+                "higher-timeframe structure, using stale market information "
+                "and confusing an educational example with a live trading "
+                "recommendation. Another frequent problem is hindsight bias: "
+                "after a market move occurs, historical charts can make the "
+                "move appear obvious even though it was uncertain beforehand. "
+                "Good analysis should acknowledge uncertainty and explain "
+                "what evidence would change the original interpretation."
+            ),
+            "## What readers should take away",
+            (
+                "The most useful conclusion from an XAUUSD market discussion "
+                "is not a promise about the next price movement. Instead, "
+                "readers should come away with a framework for evaluating "
+                "market structure, macroeconomic drivers, volatility, data "
+                "quality and risk. This approach is more durable than a "
+                "single directional prediction because market conditions "
+                "change continuously. Any current market view should be "
+                "rechecked against fresh information before it is used for "
+                "a trading decision."
+            ),
+            "## Risk disclaimer",
+            (
+                "This content is for educational and informational purposes only "
+                "and does not constitute financial, investment or trading advice. "
+                "XAUUSD and other financial markets involve substantial risk of loss. "
+                "Past performance does not guarantee future results. Readers should "
+                "verify current market information, assess their own risk tolerance "
+                "and seek qualified professional advice where appropriate."
+            ),
             "## Conclusion",
             (
                 f"A trustworthy article about {safe_topic} combines current "
@@ -2197,7 +2361,12 @@ def _fallback_blog_payload(
             ),
         ]
     )
-    body = "\n\n".join(body_parts)
+    body = _normalize_public_blog_sections(
+        "\n\n".join(body_parts),
+        faq=faq,
+        include_faq=include_faq,
+        include_risk_disclaimer=True,
+    )
 
     return {
         "title": title,
