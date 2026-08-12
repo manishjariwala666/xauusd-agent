@@ -46,7 +46,7 @@ describe("Phase 3A Media Library", () => {
   });
 
   it("keeps Studio V2 picker selection and reload on canonical media IDs", () => {
-    const insights = source("components/editor-v2/core/content-insights-panel.tsx");
+    const insights = source("components/editor-v2/seo/content-insights-panel.tsx");
     const workspace = source("components/editor-v2/core/studio-workspace.tsx");
     expect(insights).toContain("onChange(asset.id, asset)");
     expect(insights).toContain("/api/admin/media/${document.featuredMediaId}");
