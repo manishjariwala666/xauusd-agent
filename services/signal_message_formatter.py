@@ -66,10 +66,11 @@ def _time(value: Any) -> str:
 
 
 def signal_targets(signal: dict[str, Any]) -> list[Any]:
+    from services.signal_target_monitor import actionable_target_milestones
+
     targets = [
-        signal.get(f"target_{index}")
-        for index in range(1, 7)
-        if signal.get(f"target_{index}") not in (None, "")
+        milestone.price
+        for milestone in actionable_target_milestones(signal)
     ]
 
     if not targets:
@@ -81,10 +82,13 @@ def signal_targets(signal: dict[str, Any]) -> list[Any]:
 
 
 def format_signal_message(signal: dict[str, Any], *, test: bool = False) -> str:
+    from services.signal_target_monitor import actionable_target_milestones
+
     direction = str(signal.get("signal_type") or "").strip().upper()
     icon = "🟢" if direction == "BUY" else "🔴"
     test_label = "TEST · " if test else ""
-    targets = signal_targets(signal)
+    milestones = actionable_target_milestones(signal)
+    targets = [milestone.price for milestone in milestones]
 
     lines = [
         f"{icon} {test_label}XAUUSD {direction}",
@@ -102,17 +106,16 @@ def format_signal_message(signal: dict[str, Any], *, test: bool = False) -> str:
         ),
     ]
 
-    numbered_targets = [
-        (index, signal.get(f"target_{index}"))
-        for index in range(1, 7)
-        if signal.get(f"target_{index}") not in (None, "")
-    ]
+    for milestone in milestones:
+        lines.append(
+            f"🎯 Target {milestone.number}: {_price(milestone.price)}"
+        )
 
-    if not numbered_targets and signal.get("target_price") not in (None, ""):
-        numbered_targets = [(1, signal.get("target_price"))]
-
-    for index, target in numbered_targets:
-        lines.append(f"🎯 Target {index}: {_price(target)}")
+    if milestones:
+        first = milestones[0]
+        lines.append(
+            f"⏳ Target {first.number} coming: {_price(first.price)}"
+        )
 
     if not targets:
         lines.append("🎯 Targets: —")

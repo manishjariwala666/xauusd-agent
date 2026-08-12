@@ -2,8 +2,173 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
+
+
+@dataclass(frozen=True)
+class TargetMilestone:
+    """One valid, sequential profit milestone for a signal."""
+
+    number: int
+    source_slot: int
+    price: Decimal
+
+
+def actionable_target_milestones(
+    signal: dict[str, Any],
+) -> list[TargetMilestone]:
+    """Return directionally valid targets without changing Sheet numbering.
+
+    Target 1 is the strategy's first required milestone. If it is invalid,
+    the sequence is unusable and must be rejected rather than silently turning
+    Target 2 into Target 1. Invalid later slots may be ignored, but their
+    original target numbers remain stable in alerts and durable progress.
+    """
+    direction = str(signal.get("signal_type") or "").strip().upper()
+    entry_value = signal.get("price")
+    if direction not in {"BUY", "SELL"} or entry_value in (None, ""):
+        return []
+
+    entry = Decimal(str(entry_value))
+    milestones: list[TargetMilestone] = []
+    seen: set[Decimal] = set()
+    previous = entry
+
+    has_numbered_targets = any(
+        signal.get(f"target_{slot}") not in (None, "")
+        for slot in range(1, 7)
+    )
+
+    for source_slot in range(1, 7):
+        value = signal.get(f"target_{source_slot}")
+        if value in (None, ""):
+            if source_slot == 1 and has_numbered_targets:
+                return []
+            continue
+
+        try:
+            target = Decimal(str(value))
+        except Exception:
+            if source_slot == 1:
+                return []
+            continue
+
+        if target in seen:
+            if source_slot == 1:
+                return []
+            continue
+
+        is_valid = (
+            target > entry and target > previous
+            if direction == "BUY"
+            else target < entry and target < previous
+        )
+        if not is_valid:
+            if source_slot == 1:
+                return []
+            continue
+
+        seen.add(target)
+        previous = target
+        milestones.append(
+            TargetMilestone(
+                number=source_slot,
+                source_slot=source_slot,
+                price=target,
+            )
+        )
+
+    if not has_numbered_targets and not milestones:
+        fallback = signal.get("target_price")
+        if fallback not in (None, ""):
+            target = Decimal(str(fallback))
+            if (
+                direction == "BUY" and target > entry
+            ) or (
+                direction == "SELL" and target < entry
+            ):
+                milestones.append(
+                    TargetMilestone(1, 0, target)
+                )
+
+    return milestones
+
+
+def reached_target_milestones(
+    signal: dict[str, Any],
+    current_price: Decimal,
+) -> list[TargetMilestone]:
+    """Return all sequential milestones reached by the current quote."""
+    direction = str(signal.get("signal_type") or "").strip().upper()
+    milestones = actionable_target_milestones(signal)
+    if direction == "BUY":
+        return [item for item in milestones if current_price >= item.price]
+    if direction == "SELL":
+        return [item for item in milestones if current_price <= item.price]
+    return []
+
+
+def milestone_profit_points(
+    signal: dict[str, Any],
+    milestone: TargetMilestone,
+) -> Decimal:
+    """Return positive entry-to-milestone distance."""
+    direction = str(signal.get("signal_type") or "").strip().upper()
+    entry = Decimal(str(signal["price"]))
+    if direction == "BUY":
+        return milestone.price - entry
+    if direction == "SELL":
+        return entry - milestone.price
+    raise ValueError("Signal direction must be BUY or SELL.")
+
+
+def format_target_progress_message(
+    signal: dict[str, Any],
+    milestone: TargetMilestone,
+    *,
+    next_milestone: TargetMilestone | None,
+    achieved_price: Decimal,
+) -> str:
+    """Build a factual target-progress message without profit promises."""
+    direction = str(signal["signal_type"]).strip().upper()
+    symbol = str(signal.get("symbol") or "XAUUSD").strip().upper()
+    entry = Decimal(str(signal["price"]))
+    points = milestone_profit_points(signal, milestone)
+
+    lines = [
+        f"🎯 Yahooo — Target {milestone.number} achieved "
+        f"— {symbol} {direction} ✅",
+        "",
+        f"Entry: {entry:.2f}",
+        f"Target {milestone.number}: {milestone.price:.2f}",
+        f"Observed price: {achieved_price:.2f}",
+        f"Move from entry: +{points:.2f} points",
+        "",
+    ]
+    if next_milestone is not None:
+        lines.extend(
+            [
+                f"⏳ Target {next_milestone.number} coming: "
+                f"{next_milestone.price:.2f}",
+                "If partial exits are part of your plan, review whether to "
+                "secure part of the position and manage the remainder "
+                "carefully.",
+            ]
+        )
+    else:
+        lines.append("🏁 All listed targets achieved.")
+
+    lines.extend(
+        [
+            "",
+            "Market analysis only; returns are not guaranteed.",
+            "",
+            "— VenusRealm",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def target_is_hit(signal: dict[str, Any], current_price: Decimal) -> bool:

@@ -421,11 +421,19 @@ def _monitor_target_hits(
     market_data: MarketDataService,
     telegram: TelegramService,
 ) -> int:
-    """Detect target-hit signals and notify Telegram and WhatsApp once."""
+    """Persist and deliver every sequential target milestone exactly once.
+
+    Intermediate targets keep the signal active so later targets and the stop
+    loss remain observable. Only the final actionable target closes the signal.
+    Durable delivery state lives in ``signal_target_progress``; if that additive
+    schema has not been applied, monitoring fails closed without sending a
+    duplicate or prematurely closing a signal.
+    """
     from services.signal_target_monitor import (
-        format_target_hit_message,
-        profit_points,
-        target_is_hit,
+        actionable_target_milestones,
+        format_target_progress_message,
+        milestone_profit_points,
+        reached_target_milestones,
     )
 
     now = datetime.now(timezone.utc)
@@ -438,53 +446,94 @@ def _monitor_target_hits(
         logger.warning("Target monitoring skipped: market price unavailable")
         return 0
 
-    with session_scope() as session:
-        rows = (
-            session.execute(
-                text(
-                    """
-                    SELECT *
-                    FROM public.market_signals
-                    WHERE signal_type IN ('BUY', 'SELL')
-                      AND target_price IS NOT NULL
-                      AND signal_time >= NOW() - INTERVAL '6 hours'
-                      AND whatsapp_sent_at IS NOT NULL
-                      AND (
-                          target_hit_telegram_sent_at IS NULL
-                          OR target_hit_whatsapp_sent_at IS NULL
-                      )
-                      AND COALESCE(lifecycle_status, 'DRAFT') NOT IN (
-                          'STOPPED',
-                          'CLOSED',
-                          'CANCELLED',
-                          'EXPIRED',
-                          'TRASHED'
-                      )
-                    ORDER BY signal_time DESC
-                    """
+    try:
+        with session_scope() as session:
+            rows = (
+                session.execute(
+                    text(
+                        """
+                        SELECT *
+                        FROM public.market_signals
+                        WHERE signal_type IN ('BUY', 'SELL')
+                          AND signal_time >= NOW() - INTERVAL '6 hours'
+                          AND telegram_sent_at IS NOT NULL
+                          AND whatsapp_sent_at IS NOT NULL
+                          AND (
+                              COALESCE(lifecycle_status, 'DRAFT') NOT IN (
+                                  'STOPPED',
+                                  'CLOSED',
+                                  'TARGET_HIT',
+                                  'CANCELLED',
+                                  'EXPIRED',
+                                  'TRASHED'
+                              )
+                              OR (
+                                  lifecycle_status = 'TARGET_HIT'
+                                  AND EXISTS (
+                                      SELECT 1
+                                      FROM public.signal_target_progress p
+                                      WHERE p.signal_id = market_signals.id
+                                  )
+                              )
+                          )
+                        ORDER BY signal_time DESC
+                        """
+                    )
                 )
+                .mappings()
+                .all()
             )
-            .mappings()
-            .all()
+    except Exception as exc:
+        logger.warning(
+            "Target monitoring unavailable: category={}",
+            exc.__class__.__name__,
         )
+        return 0
 
     recipients = _verified_whatsapp_recipients()
+    telegram_chat_id = str(get_settings().telegram_chat_id or "").strip()
     notified = 0
 
     for raw_signal in rows:
         signal = dict(raw_signal)
+        milestones = actionable_target_milestones(signal)
+        reached = reached_target_milestones(signal, quote.price)
+        if not milestones or not reached:
+            continue
 
-        # A row with target_hit_price already set represents a previously
-        # claimed notification whose WhatsApp delivery can be retried.
-        if signal.get("target_hit_price") is None:
-            if not target_is_hit(signal, quote.price):
-                continue
-
-            points = profit_points(signal)
-
-            # Atomic target claim prevents duplicate first-time alerts.
+        try:
             with session_scope() as session:
-                claimed = (
+                for milestone in reached:
+                    session.execute(
+                        text(
+                            """
+                            INSERT INTO public.signal_target_progress (
+                                signal_id,
+                                target_number,
+                                source_slot,
+                                target_price,
+                                achieved_price
+                            ) VALUES (
+                                :signal_id,
+                                :target_number,
+                                :source_slot,
+                                :target_price,
+                                :achieved_price
+                            )
+                            ON CONFLICT (signal_id, target_number) DO NOTHING
+                            """
+                        ),
+                        {
+                            "signal_id": signal["id"],
+                            "target_number": milestone.number,
+                            "source_slot": milestone.source_slot,
+                            "target_price": float(milestone.price),
+                            "achieved_price": float(quote.price),
+                        },
+                    )
+
+                final = milestones[-1]
+                if reached[-1].number == final.number:
                     session.execute(
                         text(
                             """
@@ -494,147 +543,224 @@ def _monitor_target_hits(
                                 outcome = 'TARGET_HIT',
                                 result_points = :result_points,
                                 target_hit_price = :target_hit_price,
+                                closed_at = COALESCE(closed_at, NOW()),
                                 updated_at = NOW()
                             WHERE id = :id
-                              AND target_hit_price IS NULL
-                              AND target_hit_whatsapp_sent_at IS NULL
                               AND COALESCE(lifecycle_status, 'DRAFT') NOT IN (
-                                  'STOPPED',
-                                  'CLOSED',
-                                  'CANCELLED',
-                                  'EXPIRED',
-                                  'TRASHED'
+                                  'STOPPED', 'CLOSED', 'TARGET_HIT',
+                                  'CANCELLED', 'EXPIRED', 'TRASHED'
                               )
-                            RETURNING *
                             """
                         ),
                         {
                             "id": signal["id"],
-                            "result_points": float(points),
+                            "result_points": float(
+                                milestone_profit_points(signal, final)
+                            ),
                             "target_hit_price": float(quote.price),
                         },
                     )
-                    .mappings()
-                    .first()
-                )
+        except Exception as exc:
+            logger.warning(
+                "Target progress persistence unavailable: category={}",
+                exc.__class__.__name__,
+            )
+            continue
 
-            if claimed is None:
-                continue
-
-            signal = dict(claimed)
-
-        message = format_target_hit_message(signal)
-
-        telegram_error = None
-        telegram_sent = False
-        telegram_already_sent = (
-            signal.get("target_hit_telegram_sent_at") is not None
-        )
-
-        if not telegram_already_sent:
-            try:
-                telegram.send_text(
-                    get_settings().telegram_chat_id,
-                    message,
-                )
-                telegram_sent = True
-            except Exception as exc:
-                telegram_error = str(exc)[:2000]
-                logger.exception(
-                    "Target Hit Telegram delivery failed: signal_id={}",
-                    signal["id"],
-                )
-
-        whatsapp_errors: list[str] = []
-        whatsapp_sent = False
-        whatsapp_already_sent = (
-            signal.get("target_hit_whatsapp_sent_at") is not None
-        )
-        service = (
-            WhatsAppService()
-            if recipients and not whatsapp_already_sent
-            else None
-        )
-
-        if not recipients and not whatsapp_already_sent:
-            whatsapp_errors.append(
-                "No verified WhatsApp recipients configured."
+        for milestone in reached:
+            milestone_index = milestones.index(milestone)
+            next_milestone = (
+                milestones[milestone_index + 1]
+                if milestone_index + 1 < len(milestones)
+                else None
+            )
+            message = format_target_progress_message(
+                signal,
+                milestone,
+                next_milestone=next_milestone,
+                achieved_price=quote.price,
             )
 
-        if not whatsapp_already_sent:
-            for recipient in recipients:
+            destinations: list[tuple[str, str]] = []
+            if telegram_chat_id:
+                destinations.append(("telegram", telegram_chat_id))
+            destinations.extend(
+                ("whatsapp", recipient) for recipient in recipients
+            )
+
+            for channel, recipient in destinations:
+                recipient_hash = hashlib.sha256(
+                    recipient.encode("utf-8")
+                ).hexdigest()
                 try:
-                    assert service is not None
-                    service.send_text(recipient, message)
-                    whatsapp_sent = True
+                    with session_scope() as session:
+                        session.execute(
+                            text(
+                                """
+                                INSERT INTO public.signal_target_progress_deliveries (
+                                    progress_id,
+                                    channel,
+                                    recipient_hash
+                                )
+                                SELECT id, :channel, :recipient_hash
+                                FROM public.signal_target_progress
+                                WHERE signal_id = :signal_id
+                                  AND target_number = :target_number
+                                ON CONFLICT (
+                                    progress_id, channel, recipient_hash
+                                ) DO NOTHING
+                                """
+                            ),
+                            {
+                                "channel": channel,
+                                "recipient_hash": recipient_hash,
+                                "signal_id": signal["id"],
+                                "target_number": milestone.number,
+                            },
+                        )
+                        delivery = (
+                            session.execute(
+                                text(
+                                    """
+                                    UPDATE public.signal_target_progress_deliveries
+                                    SET claimed_at = NOW(),
+                                        attempts = attempts + 1,
+                                        updated_at = NOW()
+                                    WHERE progress_id = (
+                                        SELECT id
+                                        FROM public.signal_target_progress
+                                        WHERE signal_id = :signal_id
+                                          AND target_number = :target_number
+                                    )
+                                      AND channel = :channel
+                                      AND recipient_hash = :recipient_hash
+                                      AND sent_at IS NULL
+                                      AND attempts < 3
+                                      AND (
+                                          claimed_at IS NULL
+                                          OR claimed_at <
+                                              NOW() - INTERVAL '5 minutes'
+                                      )
+                                    RETURNING id
+                                    """
+                                ),
+                                {
+                                    "signal_id": signal["id"],
+                                    "target_number": milestone.number,
+                                    "channel": channel,
+                                    "recipient_hash": recipient_hash,
+                                },
+                            )
+                            .mappings()
+                            .first()
+                        )
                 except Exception as exc:
-                    whatsapp_errors.append(str(exc))
-                    logger.exception(
-                        "Target Hit WhatsApp delivery failed: signal_id={}",
+                    logger.warning(
+                        "Target progress claim unavailable: channel={} "
+                        "signal_id={} target={} category={}",
+                        channel,
                         signal["id"],
+                        milestone.number,
+                        exc.__class__.__name__,
+                    )
+                    continue
+                if delivery is None:
+                    continue
+
+                sent = False
+                error_category: str | None = None
+                try:
+                    if channel == "telegram":
+                        telegram.send_text(recipient, message)
+                    else:
+                        WhatsAppService().send_text(recipient, message)
+                    sent = True
+                except Exception as exc:
+                    error_category = exc.__class__.__name__
+                    logger.warning(
+                        "Target progress delivery failed: channel={} "
+                        "signal_id={} target={} category={}",
+                        channel,
+                        signal["id"],
+                        milestone.number,
+                        error_category,
                     )
 
-        with session_scope() as session:
-            session.execute(
-                text(
-                    """
-                    UPDATE public.market_signals
-                    SET target_hit_telegram_sent_at =
-                            CASE
-                                WHEN :telegram_sent
-                                THEN COALESCE(
-                                    target_hit_telegram_sent_at,
-                                    NOW()
-                                )
-                                ELSE target_hit_telegram_sent_at
-                            END,
-                        target_hit_telegram_error =
-                            CASE
-                                WHEN target_hit_telegram_sent_at IS NOT NULL
-                                THEN target_hit_telegram_error
-                                ELSE :telegram_error
-                            END,
-                        target_hit_whatsapp_sent_at =
-                            CASE
-                                WHEN :whatsapp_sent
-                                THEN COALESCE(
-                                    target_hit_whatsapp_sent_at,
-                                    NOW()
-                                )
-                                ELSE target_hit_whatsapp_sent_at
-                            END,
-                        target_hit_whatsapp_error =
-                            CASE
-                                WHEN target_hit_whatsapp_sent_at IS NOT NULL
-                                THEN target_hit_whatsapp_error
-                                ELSE :whatsapp_error
-                            END,
-                        updated_at = NOW()
-                    WHERE id = :id
-                    """
-                ),
-                {
-                    "id": signal["id"],
-                    "telegram_sent": telegram_sent,
-                    "telegram_error": telegram_error,
-                    "whatsapp_sent": whatsapp_sent,
-                    "whatsapp_error": (
-                        "; ".join(whatsapp_errors)[:2000]
-                        if whatsapp_errors
-                        else None
-                    ),
-                },
-            )
+                try:
+                    with session_scope() as session:
+                        session.execute(
+                            text(
+                                """
+                                UPDATE public.signal_target_progress_deliveries
+                                SET sent_at = CASE WHEN :sent THEN NOW()
+                                                   ELSE sent_at END,
+                                    claimed_at = CASE WHEN :sent THEN claimed_at
+                                                      ELSE NULL END,
+                                    error_category = :error_category,
+                                    updated_at = NOW()
+                                WHERE id = :delivery_id
+                                """
+                            ),
+                            {
+                                "delivery_id": delivery["id"],
+                                "sent": sent,
+                                "error_category": error_category,
+                            },
+                        )
 
-        if telegram_sent or whatsapp_sent:
-            notified += 1
-            logger.info(
-                "Target Hit WhatsApp delivered: id={} direction={} "
-                "current_price={}",
-                signal["id"],
-                signal["signal_type"],
-                quote.price,
-            )
+                        if sent and milestone.number == milestones[-1].number:
+                            legacy_column = (
+                                "target_hit_telegram_sent_at"
+                                if channel == "telegram"
+                                else "target_hit_whatsapp_sent_at"
+                            )
+                            session.execute(
+                                text(
+                                    f"""
+                                    UPDATE public.market_signals
+                                    SET {legacy_column} = COALESCE(
+                                            {legacy_column}, NOW()
+                                        ),
+                                        updated_at = NOW()
+                                    WHERE id = :signal_id
+                                      AND NOT EXISTS (
+                                          SELECT 1
+                                          FROM public.signal_target_progress p
+                                          JOIN public.signal_target_progress_deliveries d
+                                            ON d.progress_id = p.id
+                                          WHERE p.signal_id = :signal_id
+                                            AND p.target_number = :target_number
+                                            AND d.channel = :channel
+                                            AND d.sent_at IS NULL
+                                      )
+                                    """
+                                ),
+                                {
+                                    "signal_id": signal["id"],
+                                    "target_number": milestone.number,
+                                    "channel": channel,
+                                },
+                            )
+                except Exception as exc:
+                    logger.warning(
+                        "Target progress finalization unavailable: "
+                        "channel={} signal_id={} target={} category={}",
+                        channel,
+                        signal["id"],
+                        milestone.number,
+                        exc.__class__.__name__,
+                    )
+                    continue
+
+                if sent:
+                    notified += 1
+                    logger.info(
+                        "Target progress delivered: channel={} signal_id={} "
+                        "target={}",
+                        channel,
+                        signal["id"],
+                        milestone.number,
+                    )
 
     return notified
 
