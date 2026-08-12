@@ -41,7 +41,9 @@ describe("Phase 3A Media Library", () => {
     expect(proxy).toContain("normalizeMediaPayloadUrls");
     expect(proxy).not.toContain('request.method === "GET" && upstream.ok');
     const dialog = source("components/media-library-dialog.tsx");
-    expect(dialog).toContain("onSelect(payload)");
+    expect(dialog).toContain("normalizeMediaLibraryAsset");
+    expect(dialog).toContain("onSelect(asset)");
+    expect(dialog).toContain("const id = Number(candidate.id)");
     expect(dialog).toContain("thumbnail_url || item.public_url");
   });
 
