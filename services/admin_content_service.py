@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 import json
 import re
 from typing import Any
@@ -219,6 +220,12 @@ def save_admin_content(
     normalized_status = str(status or "draft").lower()
     if normalized_status not in {"draft", "published"}:
         raise ValueError("Unsupported content status.")
+    if (
+        normalized_status == "published"
+        and os.getenv("CONTENT_PUBLISH_ENABLED", "").strip().lower()
+        not in {"1", "true", "yes", "on"}
+    ):
+        raise ValueError("Content publishing is currently locked.")
     now = datetime.now(timezone.utc)
     if scheduled_at and scheduled_at > now:
         normalized_status = "draft"
@@ -416,6 +423,12 @@ def transition_content(
 ) -> dict[str, Any]:
     if action not in {"publish", "unpublish", "trash"}:
         raise ValueError("Unsupported content action.")
+    if (
+        action == "publish"
+        and os.getenv("CONTENT_PUBLISH_ENABLED", "").strip().lower()
+        not in {"1", "true", "yes", "on"}
+    ):
+        raise ValueError("Content publishing is currently locked.")
     if action == "trash" and kind != "posts":
         raise ValueError("Pages cannot be trashed in Phase 2A.")
     assignments = {
