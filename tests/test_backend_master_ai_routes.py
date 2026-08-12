@@ -221,8 +221,8 @@ def test_public_content_cache_has_short_ttl_and_does_not_cache_signals(
     )
     monkeypatch.setattr(
         backend,
-        "get_live_market_signals",
-        lambda limit=12: signal_calls.append(limit) or [],
+        "list_public_signals",
+        lambda page=1, page_size=12: signal_calls.append(page_size) or {"items": []},
     )
     client = TestClient(app)
 
@@ -270,8 +270,8 @@ def test_public_categories_and_signals_endpoints(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         backend,
-        "get_live_market_signals",
-        lambda limit=12: [{"symbol": "XAUUSD", "limit": limit}],
+        "list_public_signals",
+        lambda page=1, page_size=12: {"items": [{"symbol": "XAUUSD", "limit": page_size}]},
     )
     client = TestClient(app)
 
@@ -290,3 +290,59 @@ def test_public_content_rejects_admin_or_unknown_types() -> None:
     response = client.get("/public/content?content_type=MASTER_AI_EVENT")
 
     assert response.status_code == 400
+
+
+def test_admin_agents_routes_are_registered(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "services.admin_agents_api._identity",
+        lambda authorization, secret: object(),
+    )
+    monkeypatch.setattr(
+        "services.admin_agents_api.list_ai_agents",
+        lambda: [],
+    )
+    client = TestClient(app)
+
+    listing = client.get("/admin/agents")
+    detail = client.get("/admin/agents/report_agent")
+
+    assert listing.status_code == 200
+    assert listing.json()["count"] == 21
+    assert detail.status_code == 200
+    assert detail.json()["item"]["agent_key"] == "report_agent"
+
+
+def test_admin_master_ai_chat_route_is_registered(
+    monkeypatch,
+) -> None:
+    from fastapi.testclient import TestClient
+    from backend import app
+
+    monkeypatch.setattr(
+        "services.admin_master_ai_api._require_bff",
+        lambda value: None,
+    )
+    monkeypatch.setattr(
+        "services.admin_master_ai_api._require_identity",
+        lambda token: object(),
+    )
+    monkeypatch.setattr(
+        "services.admin_master_ai_api.generate_master_ai_reply",
+        lambda message: f"ECHO:{message}",
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/admin/master-ai/chat",
+        json={"message": "hello"},
+        headers={
+            "Authorization": "Bearer test-admin-token",
+            "X-Admin-BFF-Key": "test-bff-key",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["reply"] == "ECHO:hello"
+    assert payload["mode"] == "CONVERSATION_ONLY"
+    assert payload["execution"] == "LOCKED"

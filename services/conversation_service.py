@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import hashlib
 import os
 import re
-from typing import Any
+from typing import Any, Callable
 
+from loguru import logger
 from sqlalchemy import text
 
 from config import get_settings
@@ -15,6 +17,11 @@ from services.job_queue import enqueue_agent_job
 from services.google_sheets_service import append_message_log
 from services.telegram_service import TelegramService
 from services.whatsapp_service import WhatsAppService
+from services.whatsapp_standing_authorization import (
+    AutomationDecisionStatus,
+    WhatsAppStandingAuthorizationService,
+    classify_inbound_action,
+)
 
 
 def record_inbound_message(
@@ -24,6 +31,9 @@ def record_inbound_message(
     external_message_id: str,
     body: str,
     media: dict[str, Any] | None = None,
+    channel_identity: str | None = None,
+    authorization_service: WhatsAppStandingAuthorizationService | None = None,
+    enqueue_job: Callable[..., int] | None = None,
 ) -> tuple[int, bool]:
     """Persist one inbound message and enqueue an AI reply exactly once."""
     normalized_channel = channel.upper()
@@ -69,12 +79,21 @@ def record_inbound_message(
         ).scalar_one_or_none()
     if inserted is None:
         return int(conversation_id), False
+    log_identity = (
+        _whatsapp_log_reference(external_user_id)
+        if normalized_channel == "WHATSAPP"
+        else external_user_id
+    )
     append_message_log(
         channel=normalized_channel,
         status="inbound",
-        user_id=external_user_id,
-        phone=external_user_id if normalized_channel == "WHATSAPP" else "",
-        message=body[:1000],
+        user_id=log_identity,
+        phone=log_identity if normalized_channel == "WHATSAPP" else "",
+        message=(
+            "Inbound message stored in protected conversation history."
+            if normalized_channel == "WHATSAPP"
+            else body[:1000]
+        ),
         notes=f"conversation_id={conversation_id}",
     )
     if (
@@ -90,6 +109,16 @@ def record_inbound_message(
                 "include_image": _requests_image(body),
             },
         )
+    elif normalized_channel == "WHATSAPP" and _auto_reply_agents_enabled():
+        _authorize_and_enqueue_whatsapp_reply(
+            conversation_id=int(conversation_id),
+            channel_identity=str(channel_identity or ""),
+            client_identity=external_user_id,
+            external_message_id=external_message_id,
+            body=body,
+            authorization_service=authorization_service,
+            enqueue_job=enqueue_job,
+        )
     elif _auto_reply_agents_enabled():
         agent_key = (
             "telegram_reply_agent"
@@ -101,6 +130,66 @@ def record_inbound_message(
             {"conversation_id": int(conversation_id)},
         )
     return int(conversation_id), True
+
+
+def _authorize_and_enqueue_whatsapp_reply(
+    *,
+    conversation_id: int,
+    channel_identity: str,
+    client_identity: str,
+    external_message_id: str,
+    body: str,
+    authorization_service: WhatsAppStandingAuthorizationService | None,
+    enqueue_job: Callable[..., int] | None,
+) -> AutomationDecisionStatus:
+    """Fail closed unless a routine action has durable standing authorization."""
+    if not channel_identity:
+        logger.warning(
+            "WhatsApp automation blocked: verified channel identity is missing."
+        )
+        return AutomationDecisionStatus.BLOCKED
+    action = classify_inbound_action(body)
+    try:
+        standing = authorization_service or _whatsapp_authorization_service()
+        webhook_decision = standing.claim_webhook(
+            channel_identity=channel_identity,
+            webhook_id=external_message_id,
+        )
+        if webhook_decision.status == AutomationDecisionStatus.DUPLICATE_IGNORED:
+            return webhook_decision.status
+        decision = standing.evaluate(
+            channel_identity=channel_identity,
+            client_identity=client_identity,
+            action=action,
+        )
+    except Exception as exc:
+        logger.warning(
+            "WhatsApp automation blocked: authorization storage unavailable ({})",
+            exc.__class__.__name__,
+        )
+        return AutomationDecisionStatus.BLOCKED
+    if not decision.allowed:
+        logger.info(
+            "WhatsApp automation not queued: status={} action={}",
+            decision.status.value,
+            action,
+        )
+        return decision.status
+    queue = enqueue_job or enqueue_agent_job
+    queue(
+        "whatsapp_reply_agent",
+        {
+            "conversation_id": conversation_id,
+            "channel_identity": channel_identity,
+            "client_identity": client_identity,
+            "automation_action": action,
+            "inbound_message_id": external_message_id,
+            "delivery_idempotency_key": _delivery_idempotency_key(
+                channel_identity, external_message_id
+            ),
+        },
+    )
+    return AutomationDecisionStatus.ALLOWED
 
 
 def _auto_reply_agents_enabled() -> bool:
@@ -119,6 +208,9 @@ def send_human_reply(
     conversation_id: int,
     admin_id: int,
     message: str,
+    *,
+    authorization_service: WhatsAppStandingAuthorizationService | None = None,
+    channel_identity: str | None = None,
 ) -> str:
     """Send an admin response and immediately pause AI for the conversation."""
     if not message.strip():
@@ -142,6 +234,18 @@ def send_human_reply(
             str(conversation["external_user_id"]), message
         )
     else:
+        standing = authorization_service or _whatsapp_authorization_service()
+        verified_channel = channel_identity or _configured_whatsapp_channel()
+        if not verified_channel:
+            raise RuntimeError(
+                "Verified WhatsApp channel identity is not configured."
+            )
+        standing.record_owner_manual_reply(
+            actor_id=str(admin_id),
+            channel_identity=verified_channel,
+            client_identity=str(conversation["external_user_id"]),
+            conversation_reference=str(conversation_id),
+        )
         external_id = WhatsAppService().send_text(
             str(conversation["external_user_id"]), message
         )
@@ -178,16 +282,81 @@ def send_human_reply(
     append_message_log(
         channel=str(conversation["channel"]),
         status="admin_reply",
-        user_id=str(conversation["external_user_id"]),
+        user_id=(
+            _whatsapp_log_reference(str(conversation["external_user_id"]))
+            if conversation["channel"] == "WHATSAPP"
+            else str(conversation["external_user_id"])
+        ),
         phone=(
-            str(conversation["external_user_id"])
+            _whatsapp_log_reference(str(conversation["external_user_id"]))
             if conversation["channel"] == "WHATSAPP"
             else ""
         ),
-        reply=message[:1000],
+        reply=(
+            "Manual admin reply stored in protected conversation history."
+            if conversation["channel"] == "WHATSAPP"
+            else message[:1000]
+        ),
         notes=f"conversation_id={conversation_id} admin_id={admin_id}",
     )
     return external_id
+
+
+def record_verified_owner_whatsapp_reply(
+    *,
+    provider_owner_identity: str,
+    channel_identity: str,
+    client_identity: str,
+    conversation_reference: str,
+    resolve_verified_admin: Callable[[str, str], str | None],
+    authorization_service: WhatsAppStandingAuthorizationService | None = None,
+) -> bool:
+    """Pause one client only after a server-side owner mapping succeeds."""
+    actor_id = resolve_verified_admin(
+        channel_identity, provider_owner_identity
+    )
+    if not actor_id:
+        raise PermissionError("Verified owner mapping is required.")
+    standing = authorization_service or _whatsapp_authorization_service()
+    standing.record_owner_manual_reply(
+        actor_id=str(actor_id),
+        channel_identity=channel_identity,
+        client_identity=client_identity,
+        conversation_reference=conversation_reference,
+    )
+    return True
+
+
+def _whatsapp_authorization_service() -> WhatsAppStandingAuthorizationService:
+    from services.whatsapp_standing_authorization_repository import (
+        build_postgres_standing_authorization_service,
+    )
+
+    return build_postgres_standing_authorization_service()
+
+
+def _configured_whatsapp_channel() -> str:
+    settings = get_settings()
+    return str(
+        settings.whatsapp_business_account_id
+        or settings.whatsapp_phone_number_id
+        or ""
+    ).strip()
+
+
+def _delivery_idempotency_key(
+    channel_identity: str, external_message_id: str
+) -> str:
+    digest = hashlib.sha256(
+        f"{channel_identity}:{external_message_id}:reply".encode("utf-8")
+    ).hexdigest()
+    return f"whatsapp-reply-{digest}"
+
+
+def _whatsapp_log_reference(identity: str) -> str:
+    return "wa_" + hashlib.sha256(
+        str(identity or "").encode("utf-8")
+    ).hexdigest()[:16]
 
 
 def list_conversations(limit: int = 100) -> list[dict[str, Any]]:

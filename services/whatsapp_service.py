@@ -15,12 +15,35 @@ class WhatsAppService:
 
     def __init__(self) -> None:
         settings = get_settings()
+
+        self._green_api_instance_id = settings.green_api_instance_id
+        self._green_api_token = settings.green_api_token
+        self._green_api_chat_id = settings.green_api_chat_id
+
+        self._use_green_api = bool(
+            self._green_api_instance_id
+            and self._green_api_token
+            and self._green_api_chat_id
+        )
+
+        if self._use_green_api:
+            self._token = ""
+            self._endpoint = (
+                "https://api.green-api.com/"
+                f"waInstance{self._green_api_instance_id}/"
+                f"sendMessage/{self._green_api_token}"
+            )
+            return
+
         if not settings.whatsapp_access_token:
-            raise ConfigurationError("WHATSAPP_ACCESS_TOKEN is not configured.")
+            raise ConfigurationError(
+                "WHATSAPP_ACCESS_TOKEN is not configured."
+            )
         if not settings.whatsapp_phone_number_id:
             raise ConfigurationError(
                 "WHATSAPP_PHONE_NUMBER_ID is not configured."
             )
+
         self._token = settings.whatsapp_access_token
         self._endpoint = (
             "https://graph.facebook.com/v23.0/"
@@ -28,7 +51,45 @@ class WhatsAppService:
         )
 
     def send_text(self, recipient: str, message: str) -> str:
-        """Send one WhatsApp text message and return Meta message id."""
+        """Send one WhatsApp text message using Green API or Meta Cloud API."""
+        if self._use_green_api:
+            normalized_recipient = recipient.strip().replace(" ", "")
+
+            if normalized_recipient.endswith("@g.us"):
+                group_id = normalized_recipient[:-5]
+                parts = group_id.split("-", 1)
+                valid_group = (
+                    group_id.isdigit()
+                    or (
+                        len(parts) == 2
+                        and parts[0].isdigit()
+                        and parts[1].isdigit()
+                    )
+                )
+                if not valid_group:
+                    raise ValueError(
+                        "Green API group recipient has an invalid format."
+                    )
+                chat_id = normalized_recipient
+            else:
+                if normalized_recipient.endswith("@c.us"):
+                    normalized_recipient = normalized_recipient[:-5]
+                if normalized_recipient.startswith("+"):
+                    normalized_recipient = normalized_recipient[1:]
+
+                if not normalized_recipient.isdigit():
+                    raise ValueError(
+                        "Green API individual recipient must contain digits only."
+                    )
+                chat_id = f"{normalized_recipient}@c.us"
+
+            return self._send(
+                {
+                    "chatId": chat_id,
+                    "message": message[:4096],
+                }
+            )
+
         return self._send(
             {
                 "messaging_product": "whatsapp",
@@ -63,17 +124,27 @@ class WhatsAppService:
 
     def _send(self, payload: dict[str, Any]) -> str:
         try:
+            headers = {"Content-Type": "application/json"}
+            if not self._use_green_api:
+                headers["Authorization"] = f"Bearer {self._token}"
+
             response = requests.post(
                 self._endpoint,
-                headers={
-                    "Authorization": f"Bearer {self._token}",
-                    "Content-Type": "application/json",
-                },
+                headers=headers,
                 json=payload,
                 timeout=30,
             )
             response.raise_for_status()
-            message_id = response.json()["messages"][0]["id"]
+            response_payload = response.json()
+            if self._use_green_api:
+                message_id = response_payload.get("idMessage")
+            else:
+                message_id = response_payload["messages"][0]["id"]
+
+            if not message_id:
+                raise RuntimeError(
+                    "WhatsApp provider returned no message id."
+                )
         except Exception:
             logger.exception("WhatsApp Cloud API delivery failed")
             raise

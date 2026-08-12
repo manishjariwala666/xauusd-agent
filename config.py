@@ -193,9 +193,20 @@ class Settings:
     whatsapp_business_account_id: str
     whatsapp_verify_token: str
     meta_app_secret: str
+    green_api_instance_id: str
+    green_api_token: str
+    green_api_chat_id: str
     human_takeover_minutes: int
     worker_poll_seconds: int
     block_search_indexing: bool
+    app_env: str
+    local_admin_preview: bool
+    local_admin_preview_email: str
+    local_admin_preview_password: str
+    admin_bff_shared_secret: str
+    admin_session_ttl_minutes: int
+    admin_login_window_seconds: int
+    admin_login_max_attempts: int
 
     @classmethod
     def load(cls) -> "Settings":
@@ -339,6 +350,9 @@ class Settings:
             ),
             whatsapp_verify_token=_read_secret("WHATSAPP_VERIFY_TOKEN"),
             meta_app_secret=_read_secret("META_APP_SECRET"),
+            green_api_instance_id=_read_secret("GREEN_API_INSTANCE_ID"),
+            green_api_token=_read_secret("GREEN_API_TOKEN"),
+            green_api_chat_id=_read_secret("GREEN_API_CHAT_ID"),
             human_takeover_minutes=max(
                 1,
                 int(_read_secret("HUMAN_TAKEOVER_MINUTES", "30")),
@@ -350,6 +364,34 @@ class Settings:
             block_search_indexing=_read_bool_secret(
                 "BLOCK_SEARCH_INDEXING",
                 False,
+            ),
+            app_env=_read_secret(
+                "APP_ENV",
+                "production",
+            ).strip().lower(),
+            local_admin_preview=_read_bool_secret(
+                "LOCAL_ADMIN_PREVIEW",
+                False,
+            ),
+            local_admin_preview_email=_read_secret(
+                "LOCAL_ADMIN_PREVIEW_EMAIL",
+                "preview@localhost.invalid",
+            ).strip().lower(),
+            local_admin_preview_password=_read_secret(
+                "LOCAL_ADMIN_PREVIEW_PASSWORD",
+            ),
+            admin_bff_shared_secret=_read_secret("ADMIN_BFF_SHARED_SECRET"),
+            admin_session_ttl_minutes=max(
+                5,
+                min(30, int(_read_secret("ADMIN_SESSION_TTL_MINUTES", "15"))),
+            ),
+            admin_login_window_seconds=max(
+                60,
+                int(_read_secret("ADMIN_LOGIN_WINDOW_SECONDS", "900")),
+            ),
+            admin_login_max_attempts=max(
+                3,
+                min(20, int(_read_secret("ADMIN_LOGIN_MAX_ATTEMPTS", "5"))),
             ),
         )
 

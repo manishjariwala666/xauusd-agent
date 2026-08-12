@@ -32,7 +32,9 @@ def test_next_public_api_has_two_second_fallback_and_cache() -> None:
     assert "setTimeout(() => controller.abort(), 2000)" in source
     assert "next: { revalidate }" in source
     assert "return fallback" in source
-    assert "/public/signals?limit=12" in source
+    assert "/public/signals/v2" in source
+    assert 'return { items: [], page: 1, page_size: 12' in source
+    assert "/public/signals?limit=" not in source
 
     for relative in (
         "app/blog/page.tsx",

@@ -15,6 +15,15 @@ from services.market_data import MarketDataService, MarketPrice
 from services.telegram_service import TelegramService
 
 
+def deliver_pending_whatsapp_signals() -> None:
+    """Import WhatsApp delivery lazily to avoid a circular module import."""
+    from services.production_agents import (
+        deliver_pending_whatsapp_signals as deliver,
+    )
+
+    deliver()
+
+
 def run_pipeline_once(
     sheets: GoogleSheetsService | None,
     market_data: MarketDataService,
@@ -51,6 +60,12 @@ def run_pipeline_once(
                     stop_loss=sheet_signal.stop_loss,
                     sheet_label=sheet_signal.label,
                     external_key=sheet_signal.external_key,
+                    targets=getattr(sheet_signal, "targets", ()),
+                    target_slots=getattr(
+                        sheet_signal,
+                        "target_slots",
+                        (),
+                    ),
                 )
 
     # TelegramService queries only BUY/SELL rows where telegram_sent_at is
@@ -58,6 +73,9 @@ def run_pipeline_once(
     # This persistent database state prevents duplicate messages on restart.
     sent_count = telegram.broadcast_pending_signals()
     logger.debug("Supabase Telegram poll completed: sent={}", sent_count)
+
+    deliver_pending_whatsapp_signals()
+    logger.debug("Supabase WhatsApp poll completed")
 
 
 def automation_loop(stop_event: Event) -> None:
