@@ -46,7 +46,7 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
       }
     }
 
-    if (request.method === "GET" && upstream.ok && payload) {
+    if (upstream.ok && payload) {
       payload = normalizeMediaPayloadUrls(
         payload,
         config.backendBaseUrl,

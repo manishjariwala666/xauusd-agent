@@ -18,49 +18,60 @@ export async function GET(
   }
 
   const { mediaId } = await context.params;
-  const variant = request.nextUrl.searchParams.get("variant") || "original";
-  if (!MEDIA_ID.test(mediaId) || !["original", "thumbnail"].includes(variant)) {
+  const requestedVariant = request.nextUrl.searchParams.get("variant") || "original";
+  if (!MEDIA_ID.test(mediaId) || !["original", "thumbnail"].includes(requestedVariant)) {
     return NextResponse.json({ message: "Not found." }, { status: 404 });
   }
 
   try {
     const config = getAdminServerConfig();
-    const upstream = await fetch(
-      `${config.backendBaseUrl}/admin/media/${mediaId}/file?variant=${variant}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-Admin-BFF-Key": config.bffSecret,
-          "X-Request-ID": randomUUID(),
+    const variants = requestedVariant === "thumbnail"
+      ? ["thumbnail", "original"]
+      : ["original"];
+    let lastStatus = 404;
+
+    for (const variant of variants) {
+      const upstream = await fetch(
+        `${config.backendBaseUrl}/admin/media/${mediaId}/file?variant=${variant}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Admin-BFF-Key": config.bffSecret,
+            "X-Request-ID": randomUUID(),
+          },
+          cache: "no-store",
+          signal: AbortSignal.timeout(15_000),
         },
-        cache: "no-store",
-        signal: AbortSignal.timeout(15_000),
-      },
+      );
+
+      lastStatus = upstream.status;
+      if (!upstream.ok) {
+        if (variant === "thumbnail" && upstream.status === 404) continue;
+        break;
+      }
+
+      const contentType = upstream.headers.get("content-type") || "";
+      if (!contentType.toLowerCase().startsWith("image/")) {
+        return NextResponse.json(
+          { message: "Media service returned an invalid file." },
+          { status: 502 },
+        );
+      }
+
+      return new NextResponse(await upstream.arrayBuffer(), {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+
+    return NextResponse.json(
+      { message: lastStatus === 404 ? "Media file was not found." : "Media service is temporarily unavailable." },
+      { status: lastStatus === 404 ? 404 : 502 },
     );
-
-    if (!upstream.ok) {
-      return NextResponse.json(
-        { message: upstream.status === 404 ? "Media file was not found." : "Media service is temporarily unavailable." },
-        { status: upstream.status === 404 ? 404 : 502 },
-      );
-    }
-
-    const contentType = upstream.headers.get("content-type") || "";
-    if (!contentType.toLowerCase().startsWith("image/")) {
-      return NextResponse.json(
-        { message: "Media service returned an invalid file." },
-        { status: 502 },
-      );
-    }
-
-    return new NextResponse(await upstream.arrayBuffer(), {
-      status: 200,
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "private, no-store",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
   } catch {
     return NextResponse.json(
       { message: "Media service is temporarily unavailable." },
