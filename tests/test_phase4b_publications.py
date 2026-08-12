@@ -2,7 +2,8 @@ from decimal import Decimal
 from pathlib import Path
 import pytest
 from services.admin_publications_api import AnnouncementPayload, ResultPayload
-from services.admin_publications_service import calculate_points
+from services import admin_publications_service
+from services.admin_publications_service import calculate_points, PublicationConflict
 
 ROOT=Path(__file__).parents[1]
 def test_deterministic_buy_sell_points():
@@ -57,3 +58,63 @@ def test_publication_filters_have_accessible_focus_and_mobile_stack():
     assert ".publication-filters select:focus-visible" in css
     assert ".publication-filters button" in css
     assert ".publication-filters { grid-template-columns: 1fr;" in css
+
+
+def test_announcement_publish_is_locked_by_default(monkeypatch):
+    monkeypatch.delenv("ANNOUNCEMENT_PUBLISH_ENABLED", raising=False)
+    with pytest.raises(PublicationConflict, match="publishing is currently locked"):
+        admin_publications_service.transition_announcement(
+            item_id=1,
+            action="PUBLISH",
+            actor_id=1,
+            request_id="publish-lock-test",
+        )
+
+
+def test_announcement_publish_lock_can_be_explicitly_enabled(monkeypatch):
+    monkeypatch.setenv("ANNOUNCEMENT_PUBLISH_ENABLED", "true")
+
+    class Result:
+        def mappings(self):
+            return self
+
+        def first(self):
+            return {
+                "status": "DRAFT",
+                "title": "Test",
+                "excerpt": "Summary",
+                "body": "Body",
+                "scheduled_at": None,
+                "expires_at": None,
+            }
+
+    class Session:
+        def execute(self, statement, params=None):
+            sql = str(statement)
+            if "SELECT status,title,excerpt,body" in sql:
+                return Result()
+            return Result()
+
+    class Scope:
+        def __enter__(self):
+            return Session()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(admin_publications_service, "session_scope", lambda: Scope())
+    monkeypatch.setattr(admin_publications_service, "_audit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        admin_publications_service,
+        "get_announcement",
+        lambda item_id: {"id": item_id, "status": "PUBLISHED"},
+    )
+
+    result = admin_publications_service.transition_announcement(
+        item_id=1,
+        action="PUBLISH",
+        actor_id=1,
+        request_id="publish-enabled-test",
+    )
+
+    assert result["status"] == "PUBLISHED"
