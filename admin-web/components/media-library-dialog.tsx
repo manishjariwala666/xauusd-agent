@@ -21,6 +21,36 @@ type MediaLibraryDialogProps = {
   onSelect: (asset: MediaLibraryAsset) => void;
 };
 
+function normalizeMediaLibraryAsset(value: unknown): MediaLibraryAsset | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const payload = value as Record<string, unknown>;
+  const candidate =
+    payload.item && typeof payload.item === "object" && !Array.isArray(payload.item)
+      ? payload.item as Record<string, unknown>
+      : payload;
+  const id = Number(candidate.id);
+
+  if (!Number.isInteger(id) || id <= 0) return null;
+
+  return {
+    id,
+    public_url: typeof candidate.public_url === "string" ? candidate.public_url : "",
+    thumbnail_url:
+      typeof candidate.thumbnail_url === "string"
+        ? candidate.thumbnail_url
+        : null,
+    original_filename:
+      typeof candidate.original_filename === "string" && candidate.original_filename.trim()
+        ? candidate.original_filename
+        : `media-${id}`,
+    alt_text: typeof candidate.alt_text === "string" ? candidate.alt_text : "",
+    caption: typeof candidate.caption === "string" ? candidate.caption : "",
+    width: Number.isFinite(Number(candidate.width)) ? Number(candidate.width) : undefined,
+    height: Number.isFinite(Number(candidate.height)) ? Number(candidate.height) : undefined,
+  };
+}
+
 async function csrfToken(): Promise<string> {
   const response = await fetch("/api/admin/auth/csrf", {
     cache: "no-store",
@@ -56,6 +86,19 @@ export function MediaLibraryDialog({
   const [uploadCaption, setUploadCaption] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function chooseAsset(value: unknown) {
+    const asset = normalizeMediaLibraryAsset(value);
+
+    if (!asset) {
+      setMessage("Selected media item is invalid. Refresh the Media Library and try again.");
+      return false;
+    }
+
+    onSelect(asset);
+    onClose();
+    return true;
+  }
 
   function acceptUploadFile(file: File | null) {
     if (!file) return;
@@ -97,7 +140,7 @@ export function MediaLibraryDialog({
       );
 
       const payload = (await response.json()) as {
-        items?: MediaLibraryAsset[];
+        items?: unknown[];
         message?: string;
         detail?: string;
       };
@@ -111,7 +154,11 @@ export function MediaLibraryDialog({
         return;
       }
 
-      setItems(payload.items || []);
+      setItems(
+        (payload.items || [])
+          .map(normalizeMediaLibraryAsset)
+          .filter((item): item is MediaLibraryAsset => item !== null),
+      );
     } catch {
       setMessage("Media service is temporarily unavailable.");
     } finally {
@@ -165,27 +212,27 @@ export function MediaLibraryDialog({
         credentials: "same-origin",
       });
 
-      const payload = await readMediaResponse<MediaLibraryAsset & {
-        detail?: string;
-        message?: string;
-      }>(response);
+      const payload = await readMediaResponse<unknown>(response);
 
       if (!response.ok) {
+        const errorPayload =
+          payload && typeof payload === "object"
+            ? payload as { detail?: string; message?: string }
+            : {};
         setMessage(
-          payload.detail ||
-            payload.message ||
+          errorPayload.detail ||
+            errorPayload.message ||
             "Image upload could not be completed.",
         );
         return;
       }
 
-      onSelect(payload);
+      if (!chooseAsset(payload)) return;
       setUploadFile(null);
       setUploadPreviewUrl("");
       setUploadAlt("");
       setUploadCaption("");
       setUploading(false);
-      onClose();
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -389,10 +436,7 @@ export function MediaLibraryDialog({
                 type="button"
                 className="media-library-item"
                 key={item.id}
-                onClick={() => {
-                  onSelect(item);
-                  onClose();
-                }}
+                onClick={() => void chooseAsset(item)}
               >
                 <img
                   src={item.thumbnail_url || item.public_url}
