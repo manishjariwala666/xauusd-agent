@@ -20,19 +20,19 @@ describe("Phase 3A Media Library", () => {
     expect(normalizeMediaUrl("file:///tmp/private.png", backend, fallback)).toBe(fallback);
   });
 
-  it("maps media records to canonical authenticated original and thumbnail BFF URLs", () => {
+  it("maps media records to canonical same-origin original and thumbnail BFF URLs", () => {
     const result = normalizeMediaPayloadUrls({
       items: [{ id: 101, public_url: "http://localhost:8000/a.png", thumbnail_url: null }],
     }, "https://backend.example.com", "https://admin.example.com/media-fallback.svg");
     expect(result).toMatchObject({ items: [{
-      public_url: "https://admin.example.com/api/admin/media-file/101?variant=original",
-      thumbnail_url: "https://admin.example.com/api/admin/media-file/101?variant=thumbnail",
+      public_url: "/api/admin/media-file/101?variant=original",
+      thumbnail_url: "/api/admin/media-file/101?variant=thumbnail",
     }] });
   });
 
-  it("streams durable HTTPS media through the authenticated BFF", () => {
+  it("streams durable HTTPS media through the same-origin authenticated BFF", () => {
     const result = normalizeMediaPayloadUrls({ id: 103, public_url: "https://storage.example.invalid/admin-media/one.png", thumbnail_url: "https://storage.example.invalid/admin-media/one.webp" }, "https://backend.example.com", "https://admin.example.com/media-fallback.svg");
-    expect(result).toMatchObject({ public_url: "https://admin.example.com/api/admin/media-file/103?variant=original", thumbnail_url: "https://admin.example.com/api/admin/media-file/103?variant=thumbnail" });
+    expect(result).toMatchObject({ public_url: "/api/admin/media-file/103?variant=original", thumbnail_url: "/api/admin/media-file/103?variant=thumbnail" });
   });
 
   it("normalizes successful upload responses before picker selection", () => {
