@@ -1324,7 +1324,8 @@ def test_analysis_signal_prefers_explicit_evening_sell_sl() -> None:
 
     assert signal is not None
     assert signal.direction == "SELL"
-    assert signal.reference_price == Decimal("4028.00")
+    assert signal.reference_price == Decimal("4040.00")
+    assert signal.target_price < signal.reference_price < signal.stop_loss
     assert signal.stop_loss == Decimal("4042.00")
 
 
@@ -1363,6 +1364,177 @@ def test_analysis_signal_falls_back_when_explicit_sl_blank() -> None:
     )
 
     assert signal is not None
+    assert signal.direction == "BUY"
+    assert signal.reference_price == Decimal("4030.00")
+    assert signal.stop_loss < signal.reference_price < signal.target_price
     assert signal.stop_loss == Decimal("4025.93")
     assert "recent candle low" in signal.label
     assert "session low stop fallback" not in signal.label
+
+
+def test_morning_buy_uses_same_session_buy_base_not_average() -> None:
+    values = [
+        ["DATE: 2026-08-12"],
+        [
+            "Open", "High", "Low", "Close", "", "", "", "Day High",
+            "Day Low", "Step", "Range", "Buy Base", "Sell Base", "Mode",
+        ],
+        [
+            "4368.48", "4415.01", "4363.38", "4409.31", "", "", "",
+            "4415.01", "4363.38", "12.91", "51.63", "4368.63",
+            "4408.20", "Aggressive (0.25)",
+        ],
+        [
+            "", "", "", "", "", "", "", "Target", "BUY Level",
+            "SELL Level",
+        ],
+        ["", "", "", "", "", "", "", "Target 1", "4381.54", "4395.37"],
+        ["", "", "", "", "", "", "", "Target 2", "4394.45", "4382.46"],
+        ["Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP"],
+        ["03:30 AM TO 04:30 AM", "4378.26", "4367.77", "", "4373.02", "4370.27"],
+        ["04:30 AM TO 05:30 AM", "4373.88", "4363.38", "4373.02", "4368.63", "4371.35"],
+        ["05:30 AM TO 06:30 AM", "4383.78", "4366.31", "4368.63", "4375.05", "4380.62"],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 8, 12, 1, 15, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is not None
+    assert signal.direction == "BUY"
+    assert signal.reference_price == Decimal("4368.63")
+    assert signal.reference_price != Decimal("4375.05")
+    assert signal.stop_loss < Decimal("4368.63") < signal.target_price
+    assert all(target > Decimal("4368.63") for target in signal.targets)
+    assert signal.external_key == "gsheet-session:2026-08-12:morning:BUY"
+
+
+def test_evening_sell_uses_same_session_sell_base_not_average() -> None:
+    values = [
+        ["DATE: 2026-08-12"],
+        [
+            "", "", "", "", "", "", "", "EVENING SESSION",
+            "02:30 PM - 03:30 AM", "Session High", "Session Low",
+            "Buy Base", "Sell Base", "Mode",
+        ],
+        [
+            "", "", "", "", "", "", "", "READY",
+            "02:30 PM - 03:30 AM", "4410.00", "4360.00", "4371.48",
+            "4408.20", "Aggressive (0.25)",
+        ],
+        [
+            "", "", "", "", "", "", "", "Target", "BUY Level",
+            "SELL Level",
+        ],
+        ["", "", "", "", "", "", "", "Target 1", "4412.00", "4396.28"],
+        ["", "", "", "", "", "", "", "Target 2", "4422.00", "4386.04"],
+        ["Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP"],
+        ["02:30 PM TO 03:30 PM", "4409.00", "4390.00", "", "4404.27", "4405.00"],
+        ["03:30 PM TO 04:30 PM", "4405.00", "4385.00", "4404.27", "4395.06", "4393.90"],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 8, 12, 11, 15, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is not None
+    assert signal.direction == "SELL"
+    assert signal.reference_price == Decimal("4408.20")
+    assert signal.reference_price != Decimal("4395.06")
+    assert signal.target_price < Decimal("4408.20") < signal.stop_loss
+    assert all(target < Decimal("4408.20") for target in signal.targets)
+    assert signal.external_key == "gsheet-session:2026-08-12:evening:SELL"
+
+
+def test_morning_and_evening_base_tables_do_not_cross_contaminate() -> None:
+    values = [
+        ["DATE: 2026-08-12"],
+        [
+            "", "", "", "", "", "", "", "Day High", "Day Low",
+            "Step", "Range", "Buy Base", "Sell Base", "Mode",
+        ],
+        [
+            "", "", "", "", "", "", "", "4434.79", "4356.49",
+            "19.58", "78.30", "4362.13", "4422.25", "Aggressive",
+        ],
+        ["", "", "", "", "", "", "", "Target", "BUY Level", "SELL Level"],
+        ["", "", "", "", "", "", "", "Target 1", "4381.71", "4402.67"],
+        [
+            "", "", "", "", "", "", "", "EVENING SESSION",
+            "02:30 PM - 03:30 AM", "Session High", "Session Low",
+            "Buy Base", "Sell Base", "Mode",
+        ],
+        [
+            "", "", "", "", "", "", "", "READY",
+            "02:30 PM - 03:30 AM", "4407.94", "4366.97", "4371.48",
+            "4396.28", "Aggressive",
+        ],
+        ["", "", "", "", "", "", "", "Target", "BUY Level", "SELL Level"],
+        ["", "", "", "", "", "", "", "Target 1", "4381.72", "4386.04"],
+        ["Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP"],
+        ["02:30 PM TO 03:30 PM", "4398.00", "4380.00", "", "4391.61", "4392.00"],
+        ["03:30 PM TO 04:30 PM", "4395.00", "4370.00", "4391.61", "4385.00", "4380.00"],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 8, 12, 11, 15, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is not None
+    assert signal.direction == "SELL"
+    assert signal.reference_price == Decimal("4396.28")
+    assert signal.reference_price != Decimal("4422.25")
+    assert signal.target_price == Decimal("4386.04")
+
+
+def test_invalid_current_session_base_never_uses_previous_date_base() -> None:
+    values = [
+        ["DATE: 2026-08-11"],
+        ["", "", "", "", "", "", "", "Day High", "Day Low", "Step", "Range", "Buy Base", "Sell Base"],
+        ["", "", "", "", "", "", "", "4434", "4356", "19", "78", "4362.13", "4422.25"],
+        ["", "", "", "", "", "", "", "Target", "BUY Level", "SELL Level"],
+        ["", "", "", "", "", "", "", "Target 1", "4381", "4402"],
+        ["DATE: 2026-08-12"],
+        ["", "", "", "", "", "", "", "Day High", "Day Low", "Step", "Range", "Buy Base", "Sell Base"],
+        ["", "", "", "", "", "", "", "4415", "4363", "12", "51", "", "4408.20"],
+        ["", "", "", "", "", "", "", "Target", "BUY Level", "SELL Level"],
+        ["", "", "", "", "", "", "", "Target 1", "4381.54", "4395.37"],
+        ["Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP"],
+        ["04:30 AM TO 05:30 AM", "4373", "4363", "4373", "4368", "4370"],
+        ["05:30 AM TO 06:30 AM", "4383", "4366", "4368", "4375", "4380"],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 8, 12, 1, 15, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is None
+
+
+def test_num_error_required_session_base_skips_candidate() -> None:
+    values = [
+        ["DATE: 2026-08-12"],
+        ["", "", "", "", "", "", "", "Day High", "Day Low", "Step", "Range", "Buy Base", "Sell Base"],
+        ["", "", "", "", "", "", "", "4415", "4363", "12", "51", "#NUM!", "4408.20"],
+        ["", "", "", "", "", "", "", "Target", "BUY Level", "SELL Level"],
+        ["", "", "", "", "", "", "", "Target 1", "4381.54", "4395.37"],
+        ["Time", "High", "Low", "Prev AVG", "AVG", "LIVE CMP"],
+        ["04:30 AM TO 05:30 AM", "4373", "4363", "4373", "4368", "4370"],
+        ["05:30 AM TO 06:30 AM", "4383", "4366", "4368", "4375", "4380"],
+    ]
+
+    signal = GoogleSheetsService.parse_latest_analysis_signal(
+        values,
+        now=datetime(2026, 8, 12, 1, 15, tzinfo=timezone.utc),
+        max_age=timedelta(hours=6),
+    )
+
+    assert signal is None

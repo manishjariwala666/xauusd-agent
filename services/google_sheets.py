@@ -429,13 +429,115 @@ class GoogleSheetsService:
                 "morning": {"BUY": None, "SELL": None},
                 "evening": {"BUY": None, "SELL": None},
             }
+            session_bases: dict[
+                str,
+                dict[str, Decimal | None],
+            ] = {
+                "morning": {"BUY": None, "SELL": None},
+                "evening": {"BUY": None, "SELL": None},
+            }
+            session_bounds: dict[
+                str,
+                dict[str, Decimal | None],
+            ] = {
+                "morning": {"high": None, "low": None},
+                "evening": {"high": None, "low": None},
+            }
+            base_layout_sessions: set[str] = set()
             target_section = "default"
             explicit_target_labels = False
             unlabeled_block_count = 0
+            pending_target_session: str | None = None
 
             for target_index, target_row in enumerate(session_rows):
                 cells = [str(cell).strip() for cell in target_row]
                 joined = " ".join(cells).strip().lower()
+
+                header_indexes = {
+                    cell.strip().lower(): index
+                    for index, cell in enumerate(cells)
+                    if cell.strip()
+                }
+                buy_base_index = header_indexes.get("buy base")
+                sell_base_index = header_indexes.get("sell base")
+
+                if (
+                    buy_base_index is not None
+                    and sell_base_index is not None
+                ):
+                    if (
+                        "evening session" in joined
+                        or (
+                            "session high" in header_indexes
+                            and "session low" in header_indexes
+                        )
+                    ):
+                        base_session = "evening"
+                        high_header = "session high"
+                        low_header = "session low"
+                    elif (
+                        "morning session" in joined
+                        or (
+                            "day high" in header_indexes
+                            and "day low" in header_indexes
+                        )
+                    ):
+                        base_session = "morning"
+                        high_header = "day high"
+                        low_header = "day low"
+                    else:
+                        base_session = None
+
+                    if base_session is not None:
+                        base_layout_sessions.add(base_session)
+                        pending_target_session = base_session
+                        # A declared summary row owns the base values for
+                        # this date/session. Invalid values deliberately
+                        # clear the session base instead of falling back to
+                        # another date, another session, or AVG.
+                        session_bases[base_session] = {
+                            "BUY": None,
+                            "SELL": None,
+                        }
+                        session_bounds[base_session] = {
+                            "high": None,
+                            "low": None,
+                        }
+
+                        if target_index + 1 < len(session_rows):
+                            value_row = session_rows[target_index + 1]
+
+                            def summary_value(
+                                column_index: int | None,
+                            ) -> Decimal | None:
+                                if (
+                                    column_index is None
+                                    or column_index >= len(value_row)
+                                ):
+                                    return None
+                                parsed = cls._decimal_or_none(
+                                    value_row[column_index]
+                                )
+                                if parsed is None or parsed <= 0:
+                                    return None
+                                return parsed
+
+                            session_bases[base_session]["BUY"] = (
+                                summary_value(buy_base_index)
+                            )
+                            session_bases[base_session]["SELL"] = (
+                                summary_value(sell_base_index)
+                            )
+                            session_bounds[base_session]["high"] = (
+                                summary_value(
+                                    header_indexes.get(high_header)
+                                )
+                            )
+                            session_bounds[base_session]["low"] = (
+                                summary_value(
+                                    header_indexes.get(low_header)
+                                )
+                            )
 
                 if len(cells) >= 16:
                     session_label = cells[7].strip().lower()
@@ -490,11 +592,15 @@ class GoogleSheetsService:
                 if is_target_header:
                     if not explicit_target_labels:
                         unlabeled_block_count += 1
-                        target_section = (
-                            "morning"
-                            if unlabeled_block_count == 1
-                            else "evening"
-                        )
+                        if pending_target_session is not None:
+                            target_section = pending_target_session
+                            pending_target_session = None
+                        else:
+                            target_section = (
+                                "morning"
+                                if unlabeled_block_count == 1
+                                else "evening"
+                            )
                     continue
 
                 target_match = re.fullmatch(
@@ -504,6 +610,13 @@ class GoogleSheetsService:
                 )
                 if not target_match:
                     continue
+
+                if (
+                    not explicit_target_labels
+                    and pending_target_session is not None
+                ):
+                    target_section = pending_target_session
+                    pending_target_session = None
 
                 target_number = int(target_match.group(1))
                 buy_level = cls._decimal_or_none(cells[8])
@@ -692,7 +805,15 @@ class GoogleSheetsService:
 
                 if bullish_setup:
                     direction = "BUY"
-                    entry_price = current_average
+                    session_base = session_bases[target_session][direction]
+                    if target_session in base_layout_sessions:
+                        if session_base is None:
+                            continue
+                        entry_price = session_base
+                    else:
+                        # Compatibility for historical Sheet layouts that
+                        # predate explicit Buy Base / Sell Base summaries.
+                        entry_price = current_average
 
                     explicit_sl = explicit_stop_losses[
                         target_session
@@ -707,8 +828,14 @@ class GoogleSheetsService:
                             current_low=low,
                             previous_high=previous_high,
                             previous_low=previous_low,
-                            session_high=extremes["high"],
-                            session_low=extremes["low"],
+                            session_high=(
+                                session_bounds[target_session]["high"]
+                                or extremes["high"]
+                            ),
+                            session_low=(
+                                session_bounds[target_session]["low"]
+                                or extremes["low"]
+                            ),
                         )
                     )
 
@@ -718,7 +845,15 @@ class GoogleSheetsService:
                     )
                 elif bearish_setup:
                     direction = "SELL"
-                    entry_price = current_average
+                    session_base = session_bases[target_session][direction]
+                    if target_session in base_layout_sessions:
+                        if session_base is None:
+                            continue
+                        entry_price = session_base
+                    else:
+                        # Compatibility for historical Sheet layouts that
+                        # predate explicit Buy Base / Sell Base summaries.
+                        entry_price = current_average
 
                     explicit_sl = explicit_stop_losses[
                         target_session
@@ -733,8 +868,14 @@ class GoogleSheetsService:
                             current_low=low,
                             previous_high=previous_high,
                             previous_low=previous_low,
-                            session_high=extremes["high"],
-                            session_low=extremes["low"],
+                            session_high=(
+                                session_bounds[target_session]["high"]
+                                or extremes["high"]
+                            ),
+                            session_low=(
+                                session_bounds[target_session]["low"]
+                                or extremes["low"]
+                            ),
                         )
                     )
 
@@ -759,7 +900,12 @@ class GoogleSheetsService:
 
                 session_targets = target_tables[target_session][direction]
                 default_targets = target_tables["default"][direction]
-                if any(value > 0 for value in session_targets):
+                if target_session in base_layout_sessions:
+                    # The current two-table design requires the target block
+                    # owned by this exact date/session. Never borrow the
+                    # default or opposite-session target table.
+                    raw_targets = session_targets
+                elif any(value > 0 for value in session_targets):
                     raw_targets = session_targets
                 elif any(value > 0 for value in default_targets):
                     raw_targets = default_targets
@@ -846,10 +992,14 @@ class GoogleSheetsService:
         if not cleaned:
             return None
         try:
-            return Decimal(cleaned)
+            parsed = Decimal(cleaned)
         except InvalidOperation:
             logger.warning("Ignoring non-numeric Sheet price value: {}", value)
             return None
+        if not parsed.is_finite():
+            logger.warning("Ignoring non-finite Sheet price value")
+            return None
+        return parsed
 
     @staticmethod
     def _build_external_key(
