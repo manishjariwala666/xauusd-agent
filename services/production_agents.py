@@ -75,6 +75,7 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         if str(item).strip()
     ][:20]
     source_material = str(payload.get("source_material") or "").strip()[:60_000]
+    require_ai_quality = bool(payload.get("require_ai_quality", False))
 
     word_ranges = {
         "short": "700 to 900",
@@ -119,8 +120,10 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         "secondary_keywords, search_intent, keyword_volume, keyword_competition, "
         "research_brief, slug, excerpt, body_markdown, internal_links, faq, "
         "schema_jsonld, image_research_brief, image_prompt, image_alt_text. "
-        f"body_markdown must contain {target_word_range} meaningful words, exactly one H1, "
-        "at least six H2 headings, and supporting H3, H4 and H5 headings. "
+        f"body_markdown must contain {target_word_range} meaningful words, "
+        "exactly one H1, at least six descriptive H2 headings, and H3 headings "
+        "only where they genuinely improve structure. The H1 should match the "
+        "article title. "
         f"FAQ requested: {include_faq}. When requested, use six to eight FAQs "
         "and include accordion-ready <details> and <summary> markup. "
         "Include actionable guidance, natural keywords, "
@@ -165,6 +168,15 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
             user_instruction=user_instruction,
         )
     except Exception as exc:
+        if require_ai_quality:
+            logger.warning(
+                "AI blog provider failed; refusing low-quality admin draft: {}",
+                exc.__class__.__name__,
+            )
+            raise RuntimeError(
+                "AI content generation failed before draft creation."
+            ) from exc
+
         logger.warning(
             "AI blog provider failed; using deterministic fallback: {}",
             exc.__class__.__name__,
@@ -202,6 +214,14 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         content_length=content_length,
         include_faq=include_faq,
     ):
+        if require_ai_quality:
+            logger.warning(
+                "Generated admin blog failed quality validation; draft rejected."
+            )
+            raise RuntimeError(
+                "AI content failed quality validation; no draft was created."
+            )
+
         logger.warning(
             "Generated blog failed long-form validation; using safe fallback."
         )
@@ -211,10 +231,18 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         generated["title"] = selected_title[:240]
         generated["meta_title"] = selected_title[:60]
         generated["slug"] = _slugify(selected_title)
-        body = str(generated.get("body_markdown") or "")
-        generated["body_markdown"] = re.sub(
-            r"(?m)^#\s+.*$", f"# {selected_title[:240]}", body, count=1
-        )
+
+    # Keep the backend article contract at exactly one H1. The preview/editor
+    # suppresses a body H1 that duplicates the separately rendered title.
+    body = str(generated.get("body_markdown") or "")
+    body_without_h1 = re.sub(
+        r"(?m)^\s*#\s+.+?\s*$\n*",
+        "",
+        body,
+    ).strip()
+    generated["body_markdown"] = (
+        f"# {str(generated['title']).strip()}\n\n{body_without_h1}"
+    ).strip()
 
     generated["faq"] = (
         _normalize_blog_faq(generated.get("faq"), fallback["faq"])

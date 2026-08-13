@@ -94,6 +94,15 @@ class GoogleSheetsService:
         if is_valid(explicit_stop):
             return explicit_stop, f"sheet {direction} SL"
 
+        session_stop = session_low if direction == "BUY" else session_high
+        if is_valid(session_stop):
+            fallback_name = (
+                "session low stop fallback"
+                if direction == "BUY"
+                else "session high stop fallback"
+            )
+            return session_stop, fallback_name
+
         structural_candidates = (
             (current_low, previous_low)
             if direction == "BUY"
@@ -104,9 +113,9 @@ class GoogleSheetsService:
         ]
         if valid_structural:
             stop_loss = (
-                max(valid_structural)
+                min(valid_structural)
                 if direction == "BUY"
-                else min(valid_structural)
+                else max(valid_structural)
             )
             structure_name = (
                 "recent candle low"
@@ -114,15 +123,6 @@ class GoogleSheetsService:
                 else "recent candle high"
             )
             return stop_loss, structure_name
-
-        session_stop = session_low if direction == "BUY" else session_high
-        if is_valid(session_stop):
-            fallback_name = (
-                "session low stop fallback"
-                if direction == "BUY"
-                else "session high stop fallback"
-            )
-            return session_stop, fallback_name
 
         return None, "no valid stop"
 

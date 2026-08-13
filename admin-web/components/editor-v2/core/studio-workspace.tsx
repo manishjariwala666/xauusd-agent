@@ -213,6 +213,15 @@ export function StudioWorkspace() {
   }, []);
 
   useEffect(() => {
+    const requestedDraft = Number(
+      new URLSearchParams(window.location.search).get("draft"),
+    );
+
+    if (Number.isInteger(requestedDraft) && requestedDraft > 0) {
+      void openSavedDraft(requestedDraft);
+      return;
+    }
+
     try {
       const saved = window.localStorage.getItem(LOCAL_DRAFT_KEY);
 

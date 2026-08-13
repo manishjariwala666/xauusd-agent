@@ -22,7 +22,16 @@ function inline(text: string): ReactNode[] {
 }
 
 export function SafeContentPreview({ body, title }: { body: string; title?: string }) {
-  const lines = clean(body).split(/\n+/).map(line => line.trim()).filter(Boolean);
+  const normalizedTitle = (title || "").trim().toLocaleLowerCase();
+  const lines = clean(body)
+    .split(/\n+/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .filter(line => {
+      if (!line.startsWith("# ")) return true;
+      return line.slice(2).trim().toLocaleLowerCase() !== normalizedTitle;
+    });
+
   return <article className="article-preview">
     {title && <h1>{title}</h1>}
     {lines.length ? lines.map((line, index) => {

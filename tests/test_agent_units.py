@@ -351,7 +351,7 @@ def test_latest_sheet_analysis_row_produces_fresh_trend() -> None:
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4149")
     assert signal.target_price == Decimal("4132")
-    assert signal.stop_loss == Decimal("4155")
+    assert signal.stop_loss == Decimal("4160")
 
 def test_sheet_analysis_never_returns_stale_session() -> None:
     values = [
@@ -416,7 +416,7 @@ def test_latest_sheet_analysis_sell_uses_low_target_and_high_stop() -> None:
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4142")
     assert signal.target_price == Decimal("4132")
-    assert signal.stop_loss == Decimal("4148")
+    assert signal.stop_loss == Decimal("4150")
 
 def test_sheet_analysis_reads_six_directional_targets() -> None:
     values = [
@@ -538,7 +538,7 @@ def test_sheet_analysis_reads_six_directional_targets() -> None:
     assert signal is not None
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4076")
-    assert signal.stop_loss == Decimal("4080")
+    assert signal.stop_loss == Decimal("4081")
     assert signal.targets == (
         Decimal("4058.98"),
         Decimal("4041.73"),
@@ -577,7 +577,7 @@ def test_sheet_uses_morning_target_table() -> None:
     assert signal is not None
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4092")
-    assert signal.stop_loss == Decimal("4100")
+    assert signal.stop_loss == Decimal("4102")
     assert signal.targets == (Decimal("4091"), Decimal("4090"))
 
 
@@ -608,7 +608,7 @@ def test_sheet_uses_evening_target_table() -> None:
     assert signal is not None
     assert signal.direction == "BUY"
     assert signal.reference_price == Decimal("4192")
-    assert signal.stop_loss == Decimal("4182")
+    assert signal.stop_loss == Decimal("4180")
     assert signal.targets == (Decimal("4201"), Decimal("4202"))
 
 
@@ -693,7 +693,7 @@ def test_higher_high_higher_average_creates_buy_at_average() -> None:
     assert signal is not None
     assert signal.direction == "BUY"
     assert signal.reference_price == Decimal("4038.59")
-    assert signal.stop_loss == Decimal("4033.02")
+    assert signal.stop_loss == Decimal("4026.39")
     assert signal.targets == (
         Decimal("4050"),
         Decimal("4060"),
@@ -729,12 +729,12 @@ def test_august_10_bullish_row_rejects_sell_and_keeps_buy_eligible() -> None:
     assert signal.direction == "BUY"
     assert signal.direction != "SELL"
     assert signal.reference_price == Decimal("4331.26")
-    assert signal.stop_loss == Decimal("4323.45")
+    assert signal.stop_loss == Decimal("4317.98")
     assert "CMP above average" in signal.label
-    assert "recent candle low" in signal.label
+    assert "session low stop fallback" in signal.label
 
 
-def test_august_10_evening_sell_uses_nearest_structural_high() -> None:
+def test_august_10_evening_sell_uses_session_high_before_recent_structure() -> None:
     values = [
         ["DATE: 2026-08-10"],
         [
@@ -762,9 +762,8 @@ def test_august_10_evening_sell_uses_nearest_structural_high() -> None:
     assert signal is not None
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4340.16")
-    assert signal.stop_loss == Decimal("4344.43")
-    assert "recent candle high" in signal.label
-    assert "session high stop fallback" not in signal.label
+    assert signal.stop_loss == Decimal("4349.72")
+    assert "session high stop fallback" in signal.label
 
 
 def test_analysis_signal_rejects_stop_without_minimum_distance() -> None:
@@ -803,14 +802,14 @@ def test_analysis_signal_uses_session_stop_only_without_local_structure() -> Non
 
 def test_regression_stop_selection_keeps_direction_and_prefers_structure() -> None:
     cases = (
-        ("BUY", "4340.36", "4303.73", "4336.10", "4333.42", "4336.10"),
-        ("BUY", "4341.57", "4333.42", "4339.80", "4338.15", "4339.80"),
-        ("SELL", "4334.63", "4355.99", "4343.25", "4341.72", "4341.72"),
-        ("BUY", "4345.47", "4341.22", "4343.11", "4342.65", "4343.11"),
-        ("SELL", "4340.16", "4349.72", "4349.72", "4344.43", "4344.43"),
+        ("BUY", "4340.36", "4303.73", "4336.10", "4333.42", "4333.42"),
+        ("BUY", "4341.57", "4333.42", "4339.80", "4338.15", "4338.15"),
+        ("SELL", "4334.63", "4355.99", "4343.25", "4341.72", "4343.25"),
+        ("BUY", "4345.47", "4341.22", "4343.11", "4342.65", "4342.65"),
+        ("SELL", "4340.16", "4349.72", "4349.72", "4344.43", "4349.72"),
     )
 
-    for direction, entry, old_stop, current_structure, previous_structure, expected in cases:
+    for direction, entry, _old_stop, current_structure, previous_structure, expected in cases:
         stop_loss, source = GoogleSheetsService._select_analysis_stop_loss(
             direction=direction,
             entry_price=Decimal(entry),
@@ -835,8 +834,8 @@ def test_regression_stop_selection_keeps_direction_and_prefers_structure() -> No
                 if direction == "BUY"
                 else Decimal(entry) - Decimal("2")
             ),
-            session_high=Decimal(old_stop) if direction == "SELL" else None,
-            session_low=Decimal(old_stop) if direction == "BUY" else None,
+            session_high=None,
+            session_low=None,
         )
 
         assert stop_loss == Decimal(expected)
@@ -846,6 +845,23 @@ def test_regression_stop_selection_keeps_direction_and_prefers_structure() -> No
         ) or (
             direction == "SELL" and stop_loss > Decimal(entry)
         )
+
+
+def test_morning_sell_stop_uses_active_session_high_over_recent_high() -> None:
+    stop_loss, source = GoogleSheetsService._select_analysis_stop_loss(
+        direction="SELL",
+        entry_price=Decimal("4422.90"),
+        explicit_stop=None,
+        current_high=Decimal("4436.24"),
+        current_low=Decimal("4418.00"),
+        previous_high=Decimal("4430.00"),
+        previous_low=Decimal("4419.00"),
+        session_high=Decimal("4449.78"),
+        session_low=Decimal("4410.00"),
+    )
+
+    assert stop_loss == Decimal("4449.78")
+    assert source == "session high stop fallback"
 
 
 def test_analysis_targets_preserve_current_levels_and_reject_bad_ordering() -> None:
@@ -1090,7 +1106,7 @@ def test_unlabelled_second_target_block_is_evening_table() -> None:
     assert signal is not None
     assert signal.direction == "SELL"
     assert signal.reference_price == Decimal("4044")
-    assert signal.stop_loss == Decimal("4048")
+    assert signal.stop_loss == Decimal("4050")
     assert signal.targets == (
         Decimal("4040"),
         Decimal("4030"),
@@ -1280,7 +1296,7 @@ def test_session_stop_loss_does_not_leak_from_previous_date() -> None:
     assert signal is not None
     assert signal.direction == "BUY"
     assert signal.reference_price == Decimal("4263.43")
-    assert signal.stop_loss == Decimal("4250.44")
+    assert signal.stop_loss == Decimal("4242.40")
     assert signal.stop_loss != Decimal("3961.49")
 
 
