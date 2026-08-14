@@ -30,6 +30,11 @@ def run_pipeline_once(
     telegram: TelegramService,
 ) -> None:
     """Process Sheet enrichment, then deliver unsent Supabase signals."""
+    from services.captain_shadow_gate import shadow_gate_enabled
+
+    captain_shadow = shadow_gate_enabled()
+    inserted_signal = None
+
     if sheets is not None:
         sheet_signal = sheets.get_latest_signal()
         if sheet_signal and not market_data.signal_exists(
@@ -53,7 +58,7 @@ def run_pipeline_once(
                     "Skipping new signal because market price is unavailable"
                 )
             else:
-                market_data.insert_signal(
+                inserted_signal = market_data.insert_signal(
                     market_price=market_price,
                     signal_type=sheet_signal.direction,
                     target_price=sheet_signal.target_price,
@@ -67,6 +72,22 @@ def run_pipeline_once(
                         (),
                     ),
                 )
+
+    # Captain shadow mode:
+    # persist the candidate, evaluate/audit it once, and stop before
+    # Telegram/WhatsApp delivery.
+    if captain_shadow:
+        if inserted_signal is not None:
+            telegram.send_signal(
+                inserted_signal,
+                test=False,
+            )
+
+        logger.warning(
+            "Captain shadow mode active: outbound Telegram and "
+            "WhatsApp signal delivery blocked."
+        )
+        return
 
     # TelegramService queries only BUY/SELL rows where telegram_sent_at is
     # NULL, and stores telegram_sent_at + telegram_message_id after delivery.

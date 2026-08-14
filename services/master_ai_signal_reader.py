@@ -84,6 +84,74 @@ def _find_date_blocks(
     return blocks
 
 
+
+def _session_summary(
+    block: list[list[Any]],
+    session: str,
+) -> tuple[
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    Decimal | None,
+    str,
+] | None:
+    """Return High/Low/Buy Base/Sell Base/Mode for one exact session."""
+
+    wanted = f"{session.strip().upper()} SESSION"
+
+    for index, row in enumerate(block):
+        normalized = [
+            _cell(row, column).strip()
+            for column in range(len(row))
+        ]
+
+        if wanted not in {
+            value.upper()
+            for value in normalized
+            if value
+        }:
+            continue
+
+        lower = [value.lower() for value in normalized]
+
+        required = {
+            "session high",
+            "session low",
+            "buy base",
+            "sell base",
+            "mode",
+        }
+
+        if not required.issubset(set(lower)):
+            continue
+
+        if index + 1 >= len(block):
+            return None
+
+        values = block[index + 1]
+
+        indexes = {
+            value.lower(): position
+            for position, value in enumerate(normalized)
+            if value
+        }
+
+        def value(name: str) -> str:
+            position = indexes.get(name.lower())
+            if position is None:
+                return ""
+            return _cell(values, position)
+
+        return (
+            _decimal(value("session high")),
+            _decimal(value("session low")),
+            _decimal(value("buy base")),
+            _decimal(value("sell base")),
+            value("mode"),
+        )
+
+    return None
+
 def parse_signal_snapshot(
     values: list[list[Any]],
     *,
@@ -242,6 +310,23 @@ def parse_signal_snapshot(
 
     buy_targets = active_targets["BUY"]
     sell_targets = active_targets["SELL"]
+
+    # Critical: Summary values and Target 1-6 must belong to the
+    # same active Morning/Evening session.
+    if latest_session is not None:
+        selected_summary = _session_summary(
+            block,
+            latest_session,
+        )
+
+        if selected_summary is not None:
+            (
+                day_high,
+                day_low,
+                buy_base,
+                sell_base,
+                mode,
+            ) = selected_summary
 
     return MasterAISignalSnapshot(
         signal_date=signal_date,

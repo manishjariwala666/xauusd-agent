@@ -979,6 +979,19 @@ def run_signal_agent(payload: dict[str, Any]) -> str:
         market_data=market_data,
         telegram=telegram,
     )
+
+    from services.captain_shadow_gate import shadow_gate_enabled
+
+    if shadow_gate_enabled():
+        logger.warning(
+            "Captain shadow mode active: target alerts, stop-loss alerts, "
+            "website publishing, Telegram and WhatsApp delivery blocked."
+        )
+        return (
+            "Signal pipeline completed in Captain shadow mode; "
+            "all outbound delivery blocked."
+        )
+
     targets_notified = _monitor_target_hits(
         market_data=market_data,
         telegram=telegram,
