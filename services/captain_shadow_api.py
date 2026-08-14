@@ -94,9 +94,10 @@ def captain_shadow_diagnostic(
 
     try:
         result = run_captain_read_only()
-    except Exception:
-        logger.exception(
-            "Captain shadow diagnostic assessment failed"
+    except Exception as exc:
+        logger.warning(
+            "Captain shadow diagnostic assessment failed: type={}",
+            type(exc).__name__,
         )
         raise HTTPException(
             503,

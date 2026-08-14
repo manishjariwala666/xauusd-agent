@@ -151,17 +151,24 @@ def load_high_impact_events(
         f"{_API_ROOT}/calendar/country/{countries}/{start}/{end}"
     )
 
-    response = requests.get(
-        url,
-        params={
-            "c": api_key,
-            "importance": 3,
-            "values": "true",
-            "f": "json",
-        },
-        timeout=8,
-    )
-    response.raise_for_status()
+    try:
+        response = requests.get(
+            url,
+            headers={
+                "Authorization": api_key,
+            },
+            params={
+                "importance": 3,
+                "values": "true",
+                "f": "json",
+            },
+            timeout=8,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(
+            "Trading Economics calendar request failed."
+        ) from exc
 
     payload = response.json()
 

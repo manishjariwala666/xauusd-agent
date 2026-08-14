@@ -149,3 +149,46 @@ def test_shadow_endpoint_runtime_failure_is_safe(
     assert "token=secret" not in body
     assert "private/path" not in body
     assert "traceback" not in body
+
+
+def test_shadow_failure_log_does_not_include_exception_message(
+    monkeypatch,
+):
+    monkeypatch.setenv("CAPTAIN_SIGNAL_SHADOW_GATE", "1")
+    monkeypatch.setattr(
+        captain_shadow_api,
+        "_require_bff",
+        lambda value: None,
+    )
+
+    logged = {}
+
+    def fake_warning(message, *args):
+        logged["message"] = message
+        logged["args"] = args
+
+    monkeypatch.setattr(
+        captain_shadow_api.logger,
+        "warning",
+        fake_warning,
+    )
+
+    def fail():
+        raise RuntimeError("TOP_SECRET_VALUE")
+
+    monkeypatch.setattr(
+        captain_shadow_api,
+        "run_captain_read_only",
+        fail,
+    )
+
+    client = TestClient(backend.app)
+    response = client.get(
+        "/internal/captain/shadow",
+        headers={"X-Admin-BFF-Key": "test-only"},
+    )
+
+    assert response.status_code == 503
+    combined = repr(logged)
+    assert "TOP_SECRET_VALUE" not in combined
+    assert "RuntimeError" in combined
