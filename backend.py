@@ -126,10 +126,29 @@ async def lifespan(_: FastAPI):
         _public_content_snapshot(force=True)
     except Exception:
         logger.exception("Public content cache warmup failed; API will remain online.")
-    try:
-        _configure_telegram_webhook()
-    except Exception:
-        logger.exception("Telegram webhook startup configuration failed")
+    captain_shadow = os.getenv(
+        "CAPTAIN_SIGNAL_SHADOW_GATE",
+        "",
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+    if captain_shadow:
+        logger.warning(
+            "Captain shadow mode active: Telegram webhook "
+            "registration skipped."
+        )
+    else:
+        try:
+            _configure_telegram_webhook()
+        except Exception:
+            logger.exception(
+                "Telegram webhook startup configuration failed"
+            )
+
     yield
 
 
