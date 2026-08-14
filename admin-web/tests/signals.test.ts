@@ -47,3 +47,30 @@ describe("Signals Admin", () => {
     expect(shell).toContain("Not live market information");
   });
 });
+
+describe("Captain Shadow Signals integration", () => {
+  it("renders live read-only Captain safety state", () => {
+    const page = source(
+      "app/admin/(protected)/signals/page.tsx",
+    );
+    const panel = source(
+      "components/captain-shadow-panel.tsx",
+    );
+    const api = source(
+      "lib/captain-shadow-api.ts",
+    );
+
+    expect(page).toContain("fetchCaptainShadow");
+    expect(page).toContain("CaptainShadowPanel");
+
+    expect(panel).toContain("Captain Shadow Mode");
+    expect(panel).toContain("ON · FAIL-CLOSED");
+    expect(panel).toContain("Decision reasons");
+    expect(panel).toContain("Signal generated");
+    expect(panel).toContain("Delivery started");
+
+    expect(api).toContain("/internal/captain/shadow");
+    expect(api).toContain('"X-Admin-BFF-Key"');
+    expect(api).toContain('cache: "no-store"');
+  });
+});
