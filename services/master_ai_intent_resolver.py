@@ -220,6 +220,30 @@ def _risk_for(action: str, approval: ApprovalLevel) -> IntentRisk:
 def _retry_target(text: str) -> tuple[str | None, str | None]:
     if _contains_any(text, ("blog agent", "blog")):
         return "run_blog_agent", "ai_blog_agent"
+    if _contains_any(
+        text,
+        (
+            "caption agent",
+            "social media agent",
+            "social caption",
+            "instagram caption",
+            "facebook caption",
+            "linkedin caption",
+        ),
+    ):
+        return "run_social_media_agent", "social_media_agent"
+
+    if _contains_any(
+        text,
+        (
+            "marketing strategy",
+            "marketing strategist",
+            "campaign planner",
+            "marketing campaign",
+        ),
+    ):
+        return "run_marketing_strategy_agent", "marketing_strategy_agent"
+
     if _contains_any(text, ("image agent", "image", "thumbnail")):
         return "run_image_agent", "image_agent"
     if _contains_any(text, ("signal agent", "signal")):

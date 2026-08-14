@@ -916,8 +916,19 @@ def _master_optional_agent(agent_key: str, handler):
     return _wrapped
 
 
+from services.social_media_agent import run_social_media_agent
+from services.marketing_strategy_agent import run_marketing_strategy_agent
+
 RUNNERS = {
     "ai_blog_agent": run_blog_agent,
+    "marketing_strategy_agent": _master_optional_agent(
+        "marketing_strategy_agent",
+        run_marketing_strategy_agent,
+    ),
+    "social_media_agent": _master_optional_agent(
+        "social_media_agent",
+        run_social_media_agent,
+    ),
     "telegram_reply_agent": run_telegram_reply_agent,
     "whatsapp_reply_agent": run_whatsapp_reply_agent,
     "signal_agent": _master_optional_agent("signal_agent", run_signal_agent),

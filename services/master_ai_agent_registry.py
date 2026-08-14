@@ -57,6 +57,42 @@ AGENTS: tuple[RegisteredAgent, ...] = (
         run_action="run_blog_agent",
     ),
     RegisteredAgent(
+        short_name="VMSA",
+        official_name="Venus Marketing Strategy Agent",
+        agent_key="marketing_strategy_agent",
+        aliases=(
+            "marketing strategist",
+            "marketing strategy agent",
+            "campaign planner",
+            "marketing team leader",
+            "marketing campaign",
+        ),
+        description=(
+            "Creates approval-ready marketing campaign plans "
+            "without publishing or external delivery."
+        ),
+        run_action="run_marketing_strategy_agent",
+    ),
+    RegisteredAgent(
+        short_name="VSMA",
+        official_name="Venus Social Media Caption Agent",
+        agent_key="social_media_agent",
+        aliases=(
+            "caption agent",
+            "caption",
+            "social media agent",
+            "social caption",
+            "instagram caption",
+            "facebook caption",
+            "linkedin caption",
+        ),
+        description=(
+            "Creates approval-ready platform-specific social "
+            "media captions and drafts without publishing."
+        ),
+        run_action="run_social_media_agent",
+    ),
+    RegisteredAgent(
         short_name="VIA",
         official_name="Venus Image Agent",
         agent_key="image_agent",
@@ -70,6 +106,39 @@ AGENTS: tuple[RegisteredAgent, ...] = (
         agent_key="announcement_agent",
         aliases=("announcement", "announcement agent", "notice"),
         description="Manages announcement preparation and status.",
+    ),
+    RegisteredAgent(
+        short_name="VMAI",
+        official_name="Venus Macro AI",
+        agent_key="macro_ai_agent",
+        aliases=(
+            "macro ai",
+            "macro agent",
+            "marco agent",
+            "marco",
+            "market macro",
+            "gold macro intelligence",
+        ),
+        description=(
+            "Provides read-only XAUUSD macro bias using approved "
+            "market sources and deterministic scoring."
+        ),
+    ),
+    RegisteredAgent(
+        short_name="VECA",
+        official_name="Venus Economic Calendar AI",
+        agent_key="economic_calendar_ai_agent",
+        aliases=(
+            "economic calendar",
+            "calendar ai",
+            "news lock",
+            "high impact news",
+            "usa news",
+            "canada news",
+        ),
+        description=(
+            "Provides read-only economic-event and news-risk guidance."
+        ),
     ),
     RegisteredAgent(
         short_name="VWHA",

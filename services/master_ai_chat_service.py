@@ -7,6 +7,19 @@ from typing import Any
 
 import httpx
 
+from services.ai_agents.macro_ai.provider import load_macro_assessment
+from services.master_ai_router import route_master_ai_request
+from services.master_ai_intelligence_orchestrator import (
+    IntelligenceDecision,
+    MarketReference,
+    format_intelligence_response,
+    synthesize_intelligence,
+)
+from services.master_ai_signal_reader import (
+    MasterAISignalSnapshot,
+    get_today_signal_snapshot,
+)
+
 SAFE_CHAT_ERROR = "⚠️ Master AI abhi response nahi de pa raha. Thodi der baad try karein."
 
 SYSTEM_INSTRUCTIONS = """
@@ -85,6 +98,195 @@ def _generate_gemini_reply(message: str) -> str:
         return ""
 
 
+def _format_market_snapshot(
+    snapshot: MasterAISignalSnapshot | None,
+) -> str:
+    """Format verified read-only Sheet1 market data for admin chat."""
+    if snapshot is None:
+        return (
+            "Aaj ka XAUUSD Google Sheet snapshot available nahi hai. "
+            "Main current price guess nahi karunga. Sheet1 ka DATE block "
+            "aur LIVE CMP value verify kijiye."
+        )
+
+    if snapshot.live_cmp is None:
+        return (
+            f"XAUUSD Sheet snapshot {snapshot.signal_date.isoformat()} ke "
+            "liye mila, lekin LIVE CMP available nahi hai. Main missing "
+            "price invent nahi karunga."
+        )
+
+    def value(item: object) -> str:
+        return str(item) if item is not None else "N/A"
+
+    return "\n".join(
+        (
+            "📊 XAUUSD — Google Sheet Reference",
+            f"Current Price: {snapshot.live_cmp}",
+            f"Date: {snapshot.signal_date.isoformat()}",
+            f"Latest Slot: {snapshot.latest_slot or 'N/A'}",
+            f"Day High: {value(snapshot.day_high)}",
+            f"Day Low: {value(snapshot.day_low)}",
+            f"Source: {snapshot.source} / Sheet1",
+            "",
+            "Read-only reference data.",
+            "Koi buy/sell signal, trade recommendation ya execution nahi hua.",
+        )
+    )
+
+
+def _market_data_reply() -> str:
+    """Read today's verified Sheet1 snapshot with safe stale fallback."""
+    try:
+        snapshot = get_today_signal_snapshot()
+    except Exception as exc:
+        print(
+            "[master-ai-chat] Market snapshot error "
+            f"type={type(exc).__name__}"
+        )
+        return (
+            "Google Sheet market-data reader temporarily unavailable hai. "
+            "Main XAUUSD price guess nahi karunga. Sheet configuration aur "
+            "Sheet1 access verify kijiye."
+        )
+
+    if snapshot is not None and snapshot.live_cmp is not None:
+        return _format_market_snapshot(snapshot)
+
+    try:
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
+        from services.master_ai_signal_reader import (
+            get_signal_snapshot_for_date,
+        )
+
+        today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+
+        for days_back in range(1, 4):
+            candidate_date = today - timedelta(days=days_back)
+            candidate = get_signal_snapshot_for_date(candidate_date)
+
+            if candidate is None or candidate.live_cmp is None:
+                continue
+
+            return "\n".join(
+                [
+                    "Latest available XAUUSD Sheet reference:",
+                    f"Reference Price: {candidate.live_cmp}",
+                    f"Sheet Date: {candidate.signal_date.isoformat()}",
+                    f"Latest Slot: {candidate.latest_slot or 'N/A'}",
+                    "Status: STALE REFERENCE — this is not current live price.",
+                    "No signal or trading recommendation was generated.",
+                ]
+            )
+    except Exception as exc:
+        print(
+            "[master-ai-chat] Stale snapshot fallback error "
+            f"type={type(exc).__name__}"
+        )
+
+    return _format_market_snapshot(snapshot)
+
+
+def _intelligence_reply(intent: str) -> str:
+    """Return a safe read-only intelligence response."""
+
+    try:
+        snapshot = get_today_signal_snapshot()
+    except Exception as exc:
+        print(
+            "[master-ai-chat] Intelligence market snapshot error "
+            f"type={type(exc).__name__}"
+        )
+        snapshot = None
+
+    market = MarketReference(
+        price=(
+            str(snapshot.live_cmp)
+            if snapshot is not None and snapshot.live_cmp is not None
+            else None
+        ),
+        observed_at=None,
+        source=(
+            snapshot.source
+            if snapshot is not None
+            else "UNAVAILABLE"
+        ),
+        fresh=bool(
+            snapshot is not None
+            and snapshot.live_cmp is not None
+        ),
+        label=(
+            "Verified current Sheet reference"
+            if snapshot is not None and snapshot.live_cmp is not None
+            else "Market reference unavailable"
+        ),
+    )
+
+    macro = None
+
+    if intent in {
+        "MARKET_OUTLOOK",
+        "MACRO_OUTLOOK",
+        "WAIT_OR_TRADE",
+    }:
+        try:
+            macro = load_macro_assessment()
+        except Exception as exc:
+            print(
+                "[master-ai-chat] Macro provider error "
+                f"type={type(exc).__name__}"
+            )
+
+    assessment = synthesize_intelligence(
+        market=market,
+        macro=macro,
+        economic_assessments=(),
+        news_lock=None,
+    )
+
+    base = format_intelligence_response(assessment)
+
+    if intent == "MACRO_OUTLOOK":
+        if macro is None:
+            return (
+                base
+                + "\nMacro provider is temporarily unavailable; "
+                "no macro bias was guessed. "
+                "No market bias was guessed."
+            )
+
+        return (
+            "Venus Macro AI\n"
+            f"Bias: {macro.bias.value}\n"
+            f"Confidence: {int(macro.confidence)}%\n"
+            "Mode: READ-ONLY\n"
+            "No trade, signal, publishing, or external delivery was executed.\n\n"
+            + base
+        )
+
+    if intent == "NEWS_RISK":
+        return (
+            base
+            + "\nEconomic calendar provider is not connected yet; "
+              "no news event was invented."
+        )
+
+    if intent == "WAIT_OR_TRADE":
+        return (
+            base
+            + "\nDecision support only: current data is incomplete, "
+              "so Master AI cannot say trading is safe."
+        )
+
+    return (
+        base
+        + "\nUnified intelligence is incomplete until macro and "
+          "economic providers are connected."
+    )
+
+
 def generate_master_ai_reply(message: str) -> str:
     """Generate one safe reply with OpenAI primary and Gemini fallback."""
     clean_message = str(message or "").strip()
@@ -95,11 +297,34 @@ def generate_master_ai_reply(message: str) -> str:
     if len(clean_message) > 4000:
         return "Message bahut lamba hai. Kripya 4000 characters ke andar bhejein."
 
+    route = route_master_ai_request(clean_message)
+
+    if route.intent == "MARKET_DATA":
+        return _market_data_reply()
+
+    if route.intent in {
+        "MARKET_OUTLOOK",
+        "MACRO_OUTLOOK",
+        "NEWS_RISK",
+        "WAIT_OR_TRADE",
+    }:
+        return _intelligence_reply(route.intent)
+
+    if route.intent == "PUBLISH":
+        return (
+            "Publish request detect hui hai, lekin publishing approval-locked "
+            "hai. Master AI review aur explicit owner approval ke bina draft "
+            "publish nahi hoga."
+        )
+
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
 
     if not api_key:
-        return "⚠️ Master AI API key configure nahi hai."
+        return (
+            _generate_gemini_reply(clean_message)
+            or "⚠️ Master AI API key configure nahi hai."
+        )
 
     try:
         with httpx.Client(timeout=45.0) as client:

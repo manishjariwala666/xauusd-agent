@@ -54,6 +54,24 @@ TASKS: dict[str, dict[str, Any]] = {
             "include_image": False,
         },
     },
+    "run_marketing_strategy_agent": {
+        "task_type": "MARKETING_STRATEGY",
+        "title": "Run Marketing Strategy Agent",
+        "objective": (
+            "Prepare an approval-ready marketing campaign plan. "
+            "Do not publish, send messages, or start campaigns."
+        ),
+        "agent_key": "marketing_strategy_agent",
+    },
+    "run_social_media_agent": {
+        "task_type": "SOCIAL_MEDIA_DRAFT",
+        "title": "Run Social Media Caption Agent",
+        "objective": (
+            "Prepare platform-specific caption drafts only. "
+            "Do not publish or send anything externally."
+        ),
+        "agent_key": "social_media_agent",
+    },
     "run_image_agent": {
         "task_type": "IMAGE",
         "title": "Prepare Image Content",
