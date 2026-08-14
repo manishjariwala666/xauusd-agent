@@ -25,6 +25,7 @@ from core.database import session_scope
 from services.admin_auth_api import router as admin_auth_router
 from services.admin_agents_api import router as admin_agents_router
 from services.admin_master_ai_api import router as admin_master_ai_router
+from services.captain_shadow_api import router as captain_shadow_router
 from services.admin_agent_approvals_api import router as admin_agent_approvals_router
 from services.admin_content_api import router as admin_content_router
 from services.admin_media_api import router as admin_media_router
@@ -164,6 +165,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1_000)
 app.include_router(admin_auth_router)
 app.include_router(admin_agents_router)
 app.include_router(admin_master_ai_router)
+app.include_router(captain_shadow_router)
 app.include_router(admin_agent_approvals_router)
 app.include_router(admin_content_router)
 app.include_router(admin_media_router)
