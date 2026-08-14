@@ -331,3 +331,35 @@ def test_conflicting_bearish_macro_reduces_buy_confidence():
         "Macro-news bias conflicts with technical direction."
         in result.reasons
     )
+
+
+def test_buy_waits_when_target1_reward_risk_is_below_one():
+    current = snap(
+        14,
+        high="4354.26",
+        low="4347.26",
+        cmp="4350.76",
+        buy_base="4350.76",
+        sell_base="4365.00",
+        buy_targets=(
+            "4352.51",
+            "4354.26",
+            "4356.01",
+            "4357.76",
+            "4359.51",
+            "4361.26",
+        ),
+    )
+
+    result = assess_captain(
+        current=current,
+        history=bullish_history(),
+    )
+
+    assert result.decision is CaptainDecision.WAIT
+    assert result.direction is CaptainDirection.BUY
+    assert result.stop_loss == Decimal("4347.26")
+    assert any(
+        "reward/risk is too weak" in reason
+        for reason in result.reasons
+    )

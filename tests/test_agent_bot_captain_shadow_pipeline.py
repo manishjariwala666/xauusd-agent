@@ -87,6 +87,11 @@ def test_shadow_pipeline_inserts_candidate_and_blocks_outbound(
         fake_whatsapp,
     )
 
+    monkeypatch.setattr(
+        "services.captain_ai_runtime.run_captain_read_only",
+        lambda: _captain_result("APPROVE", "BUY"),
+    )
+
     sheets = FakeSheets()
     market = FakeMarketData()
     telegram = FakeTelegram()
@@ -101,3 +106,107 @@ def test_shadow_pipeline_inserts_candidate_and_blocks_outbound(
     assert telegram.send_signal_calls == 1
     assert telegram.broadcast_calls == 0
     assert whatsapp_calls["count"] == 0
+
+
+def _captain_result(
+    decision,
+    direction,
+    reasons=("test",),
+):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        decision=SimpleNamespace(value=decision),
+        direction=SimpleNamespace(value=direction),
+        reasons=reasons,
+    )
+
+
+def test_wait_never_inserts_or_delivers(monkeypatch):
+    monkeypatch.delenv(
+        "CAPTAIN_SIGNAL_SHADOW_GATE",
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        "services.captain_ai_runtime.run_captain_read_only",
+        lambda: _captain_result("WAIT", "BUY"),
+    )
+
+    market = FakeMarketData()
+    telegram = FakeTelegram()
+
+    whatsapp = {"count": 0}
+
+    monkeypatch.setattr(
+        agent_bot,
+        "deliver_pending_whatsapp_signals",
+        lambda: whatsapp.__setitem__(
+            "count",
+            whatsapp["count"] + 1,
+        ),
+    )
+
+    agent_bot.run_pipeline_once(
+        FakeSheets(),
+        market,
+        telegram,
+    )
+
+    assert market.insert_calls == 0
+    assert telegram.send_signal_calls == 0
+    assert telegram.broadcast_calls == 0
+    assert whatsapp["count"] == 0
+
+
+def test_direction_mismatch_never_inserts_or_delivers(
+    monkeypatch,
+):
+    monkeypatch.delenv(
+        "CAPTAIN_SIGNAL_SHADOW_GATE",
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        "services.captain_ai_runtime.run_captain_read_only",
+        lambda: _captain_result("APPROVE", "SELL"),
+    )
+
+    market = FakeMarketData()
+    telegram = FakeTelegram()
+
+    agent_bot.run_pipeline_once(
+        FakeSheets(),
+        market,
+        telegram,
+    )
+
+    assert market.insert_calls == 0
+    assert telegram.broadcast_calls == 0
+
+
+def test_captain_failure_fails_closed(monkeypatch):
+    monkeypatch.delenv(
+        "CAPTAIN_SIGNAL_SHADOW_GATE",
+        raising=False,
+    )
+
+    def fail():
+        raise RuntimeError("captain unavailable")
+
+    monkeypatch.setattr(
+        "services.captain_ai_runtime.run_captain_read_only",
+        fail,
+    )
+
+    market = FakeMarketData()
+    telegram = FakeTelegram()
+
+    agent_bot.run_pipeline_once(
+        FakeSheets(),
+        market,
+        telegram,
+    )
+
+    assert market.insert_calls == 0
+    assert telegram.broadcast_calls == 0

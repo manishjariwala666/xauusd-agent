@@ -384,9 +384,55 @@ def assess_captain(
                 reasons=tuple(reasons),
             )
 
+        buy_risk = cmp_price - stop_loss
+        buy_t1_reward = targets[0] - cmp_price
+
+        if buy_risk <= 0:
+            reasons.append(
+                "BUY risk distance is invalid."
+            )
+            return CaptainAssessment(
+                decision=CaptainDecision.REJECT,
+                direction=direction,
+                confidence=0,
+                weekly=weekly,
+                live_cmp=cmp_price,
+                buy_base=buy_base,
+                sell_base=sell_base,
+                targets=targets,
+                stop_loss=stop_loss,
+                news_locked=False,
+                macro_bias=normalized_macro,
+                macro_confidence=normalized_macro_confidence,
+                reasons=tuple(reasons),
+            )
+
+        buy_t1_rr = buy_t1_reward / buy_risk
+
+        if buy_t1_rr < Decimal("1.0"):
+            reasons.append(
+                f"BUY Target 1 reward/risk is too weak: "
+                f"{buy_t1_rr:.2f}R; minimum is 1.00R."
+            )
+            return CaptainAssessment(
+                decision=CaptainDecision.WAIT,
+                direction=direction,
+                confidence=90,
+                weekly=weekly,
+                live_cmp=cmp_price,
+                buy_base=buy_base,
+                sell_base=sell_base,
+                targets=targets,
+                stop_loss=stop_loss,
+                news_locked=False,
+                macro_bias=normalized_macro,
+                macro_confidence=normalized_macro_confidence,
+                reasons=tuple(reasons),
+            )
+
         reasons.append(
-            "BUY location is at/below Buy Base with valid Target 1-6 "
-            "and active-session low stop loss."
+            "BUY location is at/below Buy Base with valid Target 1-6, "
+            "active-session low stop loss, and acceptable T1 reward/risk."
         )
 
     else:
@@ -505,9 +551,55 @@ def assess_captain(
                 reasons=tuple(reasons),
             )
 
+        sell_risk = stop_loss - cmp_price
+        sell_t1_reward = cmp_price - targets[0]
+
+        if sell_risk <= 0:
+            reasons.append(
+                "SELL risk distance is invalid."
+            )
+            return CaptainAssessment(
+                decision=CaptainDecision.REJECT,
+                direction=direction,
+                confidence=0,
+                weekly=weekly,
+                live_cmp=cmp_price,
+                buy_base=buy_base,
+                sell_base=sell_base,
+                targets=targets,
+                stop_loss=stop_loss,
+                news_locked=False,
+                macro_bias=normalized_macro,
+                macro_confidence=normalized_macro_confidence,
+                reasons=tuple(reasons),
+            )
+
+        sell_t1_rr = sell_t1_reward / sell_risk
+
+        if sell_t1_rr < Decimal("1.0"):
+            reasons.append(
+                f"SELL Target 1 reward/risk is too weak: "
+                f"{sell_t1_rr:.2f}R; minimum is 1.00R."
+            )
+            return CaptainAssessment(
+                decision=CaptainDecision.WAIT,
+                direction=direction,
+                confidence=90,
+                weekly=weekly,
+                live_cmp=cmp_price,
+                buy_base=buy_base,
+                sell_base=sell_base,
+                targets=targets,
+                stop_loss=stop_loss,
+                news_locked=False,
+                macro_bias=normalized_macro,
+                macro_confidence=normalized_macro_confidence,
+                reasons=tuple(reasons),
+            )
+
         reasons.append(
-            "SELL location is at/above Sell Base with valid Target 1-6 "
-            "and active-session high stop loss."
+            "SELL location is at/above Sell Base with valid Target 1-6, "
+            "active-session high stop loss, and acceptable T1 reward/risk."
         )
 
     confidence = 85 if weekly.bias != "MIXED" else 72

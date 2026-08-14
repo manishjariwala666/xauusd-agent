@@ -30,10 +30,12 @@ def run_pipeline_once(
     telegram: TelegramService,
 ) -> None:
     """Process Sheet enrichment, then deliver unsent Supabase signals."""
+    from services.captain_ai_runtime import run_captain_read_only
     from services.captain_shadow_gate import shadow_gate_enabled
 
     captain_shadow = shadow_gate_enabled()
     inserted_signal = None
+    captain_assessment = None
 
     if sheets is not None:
         sheet_signal = sheets.get_latest_signal()
@@ -58,6 +60,46 @@ def run_pipeline_once(
                     "Skipping new signal because market price is unavailable"
                 )
             else:
+                try:
+                    captain_assessment = run_captain_read_only()
+                except Exception:
+                    logger.exception(
+                        "Captain authority assessment failed; "
+                        "signal creation blocked."
+                    )
+                    return
+
+                captain_decision = str(
+                    captain_assessment.decision.value
+                )
+                captain_direction = str(
+                    captain_assessment.direction.value
+                )
+                sheet_direction = str(
+                    sheet_signal.direction or ""
+                ).strip().upper()
+
+                if captain_decision != "APPROVE":
+                    logger.warning(
+                        "Captain blocked candidate creation: "
+                        "decision={} direction={} sheet_direction={} "
+                        "reasons={}",
+                        captain_decision,
+                        captain_direction,
+                        sheet_direction,
+                        captain_assessment.reasons,
+                    )
+                    return
+
+                if captain_direction != sheet_direction:
+                    logger.warning(
+                        "Captain direction mismatch; candidate blocked: "
+                        "captain={} sheet={}",
+                        captain_direction,
+                        sheet_direction,
+                    )
+                    return
+
                 inserted_signal = market_data.insert_signal(
                     market_price=market_price,
                     signal_type=sheet_signal.direction,
