@@ -409,6 +409,35 @@ def generate_master_ai_reply(message: str) -> str:
             f"{result.message}"
         )
 
+    # Fail closed for every recognized actionable intent that this
+    # admin-chat execution path has not explicitly handled above.
+    # Never let an LLM simulate an agent/tool result.
+    if proposal.status == "CLARIFICATION_REQUIRED":
+        return (
+            "Action execute nahi hua. "
+            f"{proposal.reason or 'Request clarification required hai.'}"
+        )
+
+    if proposal.status == "APPROVAL_REQUIRED":
+        return (
+            "Action execute nahi hua. Owner approval required hai. "
+            f"{proposal.reason}"
+        ).strip()
+
+    if proposal.status == "BLOCKED":
+        return (
+            "Action blocked hai aur execute nahi hua. "
+            f"{proposal.reason}"
+        ).strip()
+
+    if proposal.status == "RESOLVED":
+        return (
+            "Registered action detect hui, lekin admin Master AI chat mein "
+            "is action ka execution handler abhi connected nahi hai. "
+            "Koi execution nahi hua."
+        )
+
+    # Only genuine NO_ACTION conversation may reach the language model.
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
 

@@ -126,20 +126,54 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
         )
 
     requested: list[tuple[str, str, dict[str, Any], str]] = []
-    if _contains_any(text, ("blog agent", "blog draft", "draft banao", "article banao", "seo blog")):
+
+    blog_requested = _contains_any(
+        text,
+        (
+            "blog agent",
+            "blog draft",
+            "draft banao",
+            "article banao",
+            "seo blog",
+            "blog post",
+            "ai_blog_agent",
+        ),
+    )
+
+    explicit_image_agent_requested = _contains_any(
+        text,
+        (
+            "image agent",
+            "thumbnail banao",
+            "image banao",
+        ),
+    )
+
+    embedded_blog_image_requested = _contains_any(
+        text,
+        (
+            "featured image",
+            "inline image",
+            "featured images",
+            "inline images",
+        ),
+    )
+
+    if blog_requested:
         requested.append(
             (
                 "run_blog_agent",
                 "ai_blog_agent",
                 {
                     "publish": False,
-                    "include_image": False,
+                    "include_image": embedded_blog_image_requested,
                     "telegram_target": "blog",
                 },
                 "Registered Blog Agent requested for draft preparation only.",
             )
         )
-    if _contains_any(text, ("image agent", "featured image", "thumbnail banao", "image banao")):
+
+    if explicit_image_agent_requested:
         requested.append(
             (
                 "run_image_agent",
