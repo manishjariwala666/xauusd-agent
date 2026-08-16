@@ -134,3 +134,28 @@ def test_unhandled_resolved_action_never_simulates_execution(monkeypatch):
 
     assert "execution handler abhi connected nahi hai" in reply
     assert "Koi execution nahi hua" in reply
+
+
+def test_blog_request_with_status_output_does_not_become_diagnostic():
+    from services.master_ai_intent_resolver import resolve_master_ai_intent
+
+    proposal = resolve_master_ai_intent(
+        "Create ONE SEO blog DRAFT using ai_blog_agent about XAUUSD "
+        "with featured image. Return DRAFT_ID, WORD_COUNT and STATUS."
+    )
+
+    assert proposal.status == "RESOLVED"
+    assert proposal.action == "run_blog_agent"
+    assert proposal.agent_key == "ai_blog_agent"
+
+
+def test_explicit_agent_status_request_remains_diagnostic():
+    from services.master_ai_intent_resolver import resolve_master_ai_intent
+
+    proposal = resolve_master_ai_intent(
+        "AI Blog Agent status batao"
+    )
+
+    assert proposal.status == "RESOLVED"
+    assert proposal.action == "read_agent_status"
+    assert proposal.agent_key == "master_ai"

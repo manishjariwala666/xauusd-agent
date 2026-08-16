@@ -274,14 +274,20 @@ def _is_registered_agent_key(agent_key: str) -> bool:
 
 
 def _is_diagnostic_request(text: str) -> bool:
-    return ("status" in text and "agent" in text) or _contains_any(
-        text,
-        (
-            "agents ka status", "agent status", "agent diagnostics",
-            "error diagnose", "error check", "error door",
-            "master ai status", "master ai ka error",
-        ),
+    diagnostic_phrases = (
+        "agents ka status",
+        "agent status",
+        "agent ka status",
+        "agent diagnostics",
+        "error diagnose",
+        "error check",
+        "error door",
+        "master ai status",
+        "master ai ka status",
+        "master ai ka error",
     )
+
+    return _contains_any(text, diagnostic_phrases)
 
 
 def _is_agent_list_request(text: str) -> bool:
