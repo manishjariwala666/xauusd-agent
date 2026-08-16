@@ -374,6 +374,13 @@ def generate_master_ai_reply(message: str) -> str:
 
     proposal = resolve_master_ai_intent(clean_message)
 
+    print(
+        "[master-ai-chat] proposal "
+        f"status={proposal.status} "
+        f"action={proposal.action or 'NONE'} "
+        f"agent={proposal.agent_key or 'NONE'}"
+    )
+
     if (
         proposal.status == "RESOLVED"
         and proposal.action == "run_blog_agent"
