@@ -78,13 +78,34 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
     require_ai_quality = bool(payload.get("require_ai_quality", False))
 
     word_ranges = {
-        "short": "700 to 900",
-        "standard": "1200 to 1600",
-        "long": "2000 to 2600",
+        "short": (700, 900),
+        "standard": (1200, 1600),
+        "long": (2000, 2600),
     }
-    target_word_range = word_ranges.get(
+
+    default_min, default_max = word_ranges.get(
         content_length,
         word_ranges["standard"],
+    )
+
+    try:
+        target_word_min = int(
+            payload.get("target_word_min", default_min)
+        )
+        target_word_max = int(
+            payload.get("target_word_max", default_max)
+        )
+    except (TypeError, ValueError):
+        target_word_min, target_word_max = default_min, default_max
+
+    if target_word_min < 300:
+        target_word_min = default_min
+
+    if target_word_max < target_word_min:
+        target_word_max = default_max
+
+    target_word_range = (
+        f"{target_word_min} to {target_word_max}"
     )
     if not topic:
         topic = "Current XAUUSD market structure and disciplined risk control"
@@ -213,6 +234,8 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         generated,
         content_length=content_length,
         include_faq=include_faq,
+        minimum_words=target_word_min,
+        maximum_words=target_word_max,
     ):
         if require_ai_quality:
             logger.warning(
@@ -1994,8 +2017,10 @@ def _valid_long_form_blog(
     *,
     content_length: str = "standard",
     include_faq: bool = True,
+    minimum_words: int | None = None,
+    maximum_words: int | None = None,
 ) -> bool:
-    """Reject short or structurally incomplete articles."""
+    """Reject articles outside the requested word range or structure."""
     body = str(generated.get("body_markdown") or "")
     faq = generated.get("faq")
     ranges = {
@@ -2003,7 +2028,20 @@ def _valid_long_form_blog(
         "standard": (800, 1900),
         "long": (1100, 3000),
     }
-    minimum, maximum = ranges.get(content_length, ranges["standard"])
+    default_minimum, default_maximum = ranges.get(
+        content_length,
+        ranges["standard"],
+    )
+    minimum = (
+        minimum_words
+        if minimum_words is not None
+        else default_minimum
+    )
+    maximum = (
+        maximum_words
+        if maximum_words is not None
+        else default_maximum
+    )
     faq_valid = (
         isinstance(faq, list) and 6 <= len(faq) <= 8
         and "<details>" in body and "<summary>" in body

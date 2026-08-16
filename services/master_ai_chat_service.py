@@ -23,6 +23,8 @@ from services.master_ai_intelligence_orchestrator import (
     synthesize_intelligence,
 )
 from services.master_ai_router import route_master_ai_request
+from services.master_ai_intent_resolver import resolve_master_ai_intent
+from services.master_ai_tool_router import execute_master_ai_action
 from services.master_ai_signal_reader import (
     MasterAISignalSnapshot,
     get_today_signal_snapshot,
@@ -368,6 +370,43 @@ def generate_master_ai_reply(message: str) -> str:
             "Publish request detect hui hai, lekin publishing approval-locked "
             "hai. Master AI review aur explicit owner approval ke bina draft "
             "publish nahi hoga."
+        )
+
+    proposal = resolve_master_ai_intent(clean_message)
+
+    if (
+        proposal.status == "RESOLVED"
+        and proposal.action == "run_blog_agent"
+        and proposal.agent_key == "ai_blog_agent"
+    ):
+        payload = dict(proposal.parameters or {})
+        payload.update(
+            {
+                "topic": clean_message,
+                "content_length": "standard",
+                "publish": False,
+                "include_image": True,
+                "require_ai_quality": True,
+                "target_word_min": 1400,
+                "target_word_max": 1600,
+            }
+        )
+
+        result = execute_master_ai_action(
+            "run_blog_agent",
+            source="ADMIN_MASTER_AI_CHAT",
+            input_payload=payload,
+        )
+
+        if not result.ok:
+            return (
+                "Blog Post AI execution blocked hai. "
+                f"Status: {result.status}. {result.message}"
+            )
+
+        return (
+            "Blog Post AI delegation accepted. "
+            f"{result.message}"
         )
 
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
