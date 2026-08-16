@@ -19,7 +19,7 @@ export async function fetchAdminSession(token: string): Promise<AdminSessionResu
         "X-Admin-BFF-Key": config.bffSecret
       },
       cache: "no-store",
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(10000)
     });
     if (response.status === 401) return { status: "unauthenticated" };
     if (response.status === 403) return { status: "forbidden" };
