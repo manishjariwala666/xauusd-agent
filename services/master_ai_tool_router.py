@@ -66,6 +66,44 @@ TASKS: dict[str, dict[str, Any]] = {
 }
 
 FAILED_STATUSES = {"BLOCKED", "CANCELLED", "ERROR", "FAILED"}
+
+
+def _load_completed_step_output(run_id: int, agent_key: str) -> str | None:
+    """Load the verified stored output of a completed orchestration step."""
+    try:
+        from sqlalchemy import text
+        from core.database import session_scope
+
+        with session_scope() as session:
+            row = (
+                session.execute(
+                    text(
+                        """
+                        SELECT output_summary
+                        FROM public.master_ai_execution_steps
+                        WHERE run_id = :run_id
+                          AND agent_key = :agent_key
+                          AND status = 'COMPLETED'
+                        ORDER BY finished_at DESC NULLS LAST, id DESC
+                        LIMIT 1
+                        """
+                    ),
+                    {
+                        "run_id": int(run_id),
+                        "agent_key": str(agent_key),
+                    },
+                )
+                .mappings()
+                .first()
+            )
+
+        if not row:
+            return None
+
+        return safe_master_reason(row.get("output_summary"))
+    except Exception:
+        # Preserve existing behavior when result lookup is unavailable.
+        return None
 UNSAFE_ERROR_MARKERS = (
     "traceback",
     "token=",
@@ -207,8 +245,8 @@ def execute_master_ai_action(
             **dict(task.get("safe_payload") or {}),
             **dict(input_payload or {}),
         }
-        # Safety controls owned by the router cannot be weakened by caller data.
-        payload.update(task.get("safe_payload") or {})
+        # Hard safety controls only.
+        payload["publish"] = False
         payload["agent_keys"] = [task["agent_key"]]
         progress = runner(
             task_type=task["task_type"],
@@ -240,11 +278,23 @@ def execute_master_ai_action(
         )
 
     summary = safe_master_reason(getattr(progress, "final_summary", None))
+
+    verified_step_output = None
+    if run_id is not None:
+        verified_step_output = _load_completed_step_output(
+            int(run_id),
+            str(task["agent_key"]),
+        )
+
     return MasterAIToolResult(
         ok=True,
         action=clean_action,
         status=status,
-        message=summary or "Master AI orchestration accepted.",
+        message=(
+            verified_step_output
+            or summary
+            or "Master AI orchestration accepted."
+        ),
         run_id=run_id,
     )
 

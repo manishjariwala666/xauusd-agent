@@ -159,3 +159,65 @@ def test_explicit_agent_status_request_remains_diagnostic():
     assert proposal.status == "RESOLVED"
     assert proposal.action == "read_agent_status"
     assert proposal.agent_key == "master_ai"
+
+
+def test_tool_router_preserves_requested_blog_image(monkeypatch):
+    from types import SimpleNamespace
+    from services.master_ai_tool_router import execute_master_ai_action
+
+    captured = {}
+
+    def runner(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            status="COMPLETED",
+            run_id=501,
+            final_summary="1/1 steps completed; 0 failed.",
+            safe_error=None,
+        )
+
+    monkeypatch.setattr(
+        "services.master_ai_tool_router._load_completed_step_output",
+        lambda run_id, agent_key: "SEO blog #987 saved as draft with 1502 words.",
+    )
+
+    result = execute_master_ai_action(
+        "run_blog_agent",
+        runner=runner,
+        input_payload={
+            "publish": False,
+            "include_image": True,
+        },
+    )
+
+    assert captured["input_payload"]["publish"] is False
+    assert captured["input_payload"]["include_image"] is True
+    assert result.ok is True
+    assert result.run_id == 501
+    assert result.message == "SEO blog #987 saved as draft with 1502 words."
+
+
+def test_tool_router_falls_back_to_progress_summary(monkeypatch):
+    from types import SimpleNamespace
+    from services.master_ai_tool_router import execute_master_ai_action
+
+    def runner(**kwargs):
+        return SimpleNamespace(
+            status="COMPLETED",
+            run_id=502,
+            final_summary="1/1 steps completed; 0 failed.",
+            safe_error=None,
+        )
+
+    monkeypatch.setattr(
+        "services.master_ai_tool_router._load_completed_step_output",
+        lambda run_id, agent_key: None,
+    )
+
+    result = execute_master_ai_action(
+        "run_blog_agent",
+        runner=runner,
+    )
+
+    assert result.ok is True
+    assert result.message == "1/1 steps completed; 0 failed."
