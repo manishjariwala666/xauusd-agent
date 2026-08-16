@@ -82,7 +82,6 @@ def _load_completed_step_output(run_id: int, agent_key: str) -> str | None:
                         SELECT output_summary
                         FROM public.master_ai_execution_steps
                         WHERE run_id = :run_id
-                          AND agent_key = :agent_key
                           AND status = 'COMPLETED'
                         ORDER BY finished_at DESC NULLS LAST, id DESC
                         LIMIT 1
@@ -90,7 +89,6 @@ def _load_completed_step_output(run_id: int, agent_key: str) -> str | None:
                     ),
                     {
                         "run_id": int(run_id),
-                        "agent_key": str(agent_key),
                     },
                 )
                 .mappings()
