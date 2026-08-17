@@ -91,6 +91,21 @@ def _durable_pending_whatsapp_signals() -> None:
         )
 
 
+def _durable_telegram_broadcast(telegram: Any, limit: int = 50) -> int:
+    """Route Telegram primary broadcasts through the shared recipient ledger."""
+    del limit  # Durable helper owns the bounded pending batch query.
+    from services.telegram_primary_delivery import deliver_pending_telegram_signals
+
+    delivered, failed = deliver_pending_telegram_signals(telegram)
+    if delivered or failed:
+        logger.info(
+            "Primary Telegram delivery completed: delivered={} failed={}",
+            delivered,
+            failed,
+        )
+    return delivered
+
+
 _legacy._deliver_pending_whatsapp_signals = _durable_pending_whatsapp_signals
 
 
@@ -107,6 +122,9 @@ def run_image_agent(payload: dict[str, Any]) -> str:
 def run_signal_agent(payload: dict[str, Any]) -> str:
     _sync_legacy_runtime()
     _legacy._deliver_pending_whatsapp_signals = _durable_pending_whatsapp_signals
+    # Signal Agent and the pipeline share the same TelegramService class object;
+    # bind its normal broadcast entry point to the durable verified ledger.
+    _legacy.TelegramService.broadcast_pending_signals = _durable_telegram_broadcast
     return _legacy.run_signal_agent(payload)
 
 
