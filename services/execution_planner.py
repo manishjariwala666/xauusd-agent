@@ -175,7 +175,7 @@ class ExecutionPlanner:
             if unavailable:
                 names = ", ".join(unavailable)
                 raise ValueError(
-                    f"Explicit registered agent unavailable or disabled: {names}. "
+                    f"{names} is unavailable or disabled. "
                     "No substitute agent was selected."
                 )
             return list(dict.fromkeys(requested))
