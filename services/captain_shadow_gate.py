@@ -1,20 +1,9 @@
-"""Read-only Captain shadow gate for candidate signal delivery.
-
-When explicitly enabled, this gate evaluates Captain AI and blocks
-external delivery regardless of APPROVE/WAIT/REJECT.
-
-It performs no signal generation, database mutation, Telegram send,
-or WhatsApp send.
-"""
-
+"""Captain verification gate for candidate signal delivery."""
 from __future__ import annotations
-
 import os
 from dataclasses import dataclass
 from typing import Any, Callable
-
 from services.captain_ai_runtime import run_captain_read_only
-
 
 @dataclass(frozen=True)
 class CaptainShadowGateResult:
@@ -28,70 +17,30 @@ class CaptainShadowGateResult:
     news_locked: bool
     reason: str
 
+def shadow_verification_enabled() -> bool:
+    return os.getenv("CAPTAIN_SIGNAL_SHADOW_GATE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 def shadow_gate_enabled() -> bool:
-    return os.getenv(
-        "CAPTAIN_SIGNAL_SHADOW_GATE",
-        "",
-    ).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    """Legacy blanket blocker is disabled; verification happens per signal."""
+    return False
 
-
-def evaluate_signal_shadow_gate(
-    signal: dict[str, Any],
-    *,
-    runner: Callable[..., Any] = run_captain_read_only,
-) -> CaptainShadowGateResult:
-    if not shadow_gate_enabled():
-        return CaptainShadowGateResult(
-            enabled=False,
-            blocked=False,
-            decision="NOT_RUN",
-            direction="NONE",
-            confidence=0,
-            macro_bias="UNKNOWN",
-            macro_confidence=0,
-            news_locked=False,
-            reason="Captain shadow gate disabled.",
-        )
-
+def evaluate_signal_shadow_gate(signal: dict[str, Any], *, runner: Callable[..., Any] = run_captain_read_only) -> CaptainShadowGateResult:
+    if not shadow_verification_enabled():
+        return CaptainShadowGateResult(False, False, "NOT_RUN", "NONE", 0, "UNKNOWN", 0, False, "Captain verification disabled.")
     try:
         assessment = runner()
     except Exception:
-        # Shadow mode must fail closed.
-        return CaptainShadowGateResult(
-            enabled=True,
-            blocked=True,
-            decision="ERROR",
-            direction="NONE",
-            confidence=0,
-            macro_bias="UNKNOWN",
-            macro_confidence=0,
-            news_locked=True,
-            reason="Captain shadow assessment failed; delivery blocked.",
-        )
-
-    reasons = tuple(
-        str(item)
-        for item in getattr(assessment, "reasons", ())
-    )
-
-    return CaptainShadowGateResult(
-        enabled=True,
-        blocked=True,
-        decision=str(assessment.decision.value),
-        direction=str(assessment.direction.value),
-        confidence=int(assessment.confidence),
-        macro_bias=str(assessment.macro_bias),
-        macro_confidence=int(assessment.macro_confidence),
-        news_locked=bool(assessment.news_locked),
-        reason=(
-            reasons[0]
-            if reasons
-            else "Captain shadow assessment completed."
-        ),
-    )
+        return CaptainShadowGateResult(True, True, "ERROR", "NONE", 0, "UNKNOWN", 0, True, "Captain assessment failed; delivery blocked.")
+    decision = str(assessment.decision.value)
+    direction = str(assessment.direction.value)
+    candidate = str(signal.get("signal_type") or "").strip().upper()
+    reasons = tuple(str(item) for item in getattr(assessment, "reasons", ()))
+    blocked = decision != "APPROVE" or direction != candidate
+    if decision != "APPROVE":
+        reason = reasons[0] if reasons else f"Captain decision is {decision}."
+    elif direction != candidate:
+        reason = f"Captain direction mismatch: captain={direction}, candidate={candidate or 'NONE'}."
+    else:
+        reason = reasons[0] if reasons else "Captain verified candidate delivery."
+    # Telegram's existing sender checks enabled; keep it synonymous with blocked.
+    return CaptainShadowGateResult(blocked, blocked, decision, direction, int(assessment.confidence), str(assessment.macro_bias), int(assessment.macro_confidence), bool(assessment.news_locked), reason)
