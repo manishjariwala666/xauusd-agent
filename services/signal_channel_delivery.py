@@ -11,6 +11,9 @@ from sqlalchemy import text
 from core.database import session_scope
 
 
+SignalVerifier = Callable[[dict[str, Any]], tuple[bool, str]]
+
+
 def _recipient_hash(recipient: str) -> str:
     return hashlib.sha256(recipient.encode("utf-8")).hexdigest()
 
@@ -22,6 +25,7 @@ def deliver_pending_signal_recipients(
     send: Callable[[str, str], Any],
     format_message: Callable[[dict[str, Any]], str],
     max_attempts: int = 3,
+    verify_signal: SignalVerifier | None = None,
 ) -> tuple[int, int]:
     """Deliver fresh signals exactly once per channel recipient.
 
@@ -30,6 +34,11 @@ def deliver_pending_signal_recipients(
     different recipient failed. Claims expire after five minutes so a crashed
     worker can safely retry. If the delivery table is unavailable, this helper
     fails closed and sends nothing.
+
+    When ``verify_signal`` is supplied, verification runs once per signal before
+    any recipient claim. A rejected or failed verification sends nothing and
+    creates no delivery claim, so Telegram and WhatsApp can share the same
+    Captain/Shadow safety semantics without manufacturing a successful state.
     """
     clean_channel = str(channel or "").strip().lower()
     if clean_channel not in {"telegram", "whatsapp"}:
@@ -76,8 +85,30 @@ def deliver_pending_signal_recipients(
     failed = 0
     for raw_signal in rows:
         signal = dict(raw_signal)
-        message = format_message(signal)
 
+        if verify_signal is not None:
+            try:
+                allowed, reason = verify_signal(signal)
+            except Exception as exc:
+                logger.warning(
+                    "Primary signal verification failed closed: channel={} "
+                    "signal_id={} category={}",
+                    clean_channel,
+                    signal.get("id"),
+                    exc.__class__.__name__,
+                )
+                continue
+            if not allowed:
+                logger.warning(
+                    "Primary signal verification blocked delivery: channel={} "
+                    "signal_id={} reason={}",
+                    clean_channel,
+                    signal.get("id"),
+                    str(reason)[:500],
+                )
+                continue
+
+        message = format_message(signal)
         for recipient in clean_recipients:
             recipient_hash = _recipient_hash(recipient)
             try:
@@ -209,10 +240,7 @@ def deliver_pending_signal_recipients(
                                   )
                                 """
                             ),
-                            {
-                                "signal_id": signal["id"],
-                                "channel": clean_channel,
-                            },
+                            {"signal_id": signal["id"], "channel": clean_channel},
                         )
             except Exception as exc:
                 logger.error(
