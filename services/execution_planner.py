@@ -70,14 +70,7 @@ class ExecutionPlanner:
         available_agents: list[AgentDescriptor],
         context: dict[str, Any],
     ) -> ExecutionPlan:
-        """Build a safe execution plan from a high-level task.
-
-        Supported explicit payload options:
-        - ``agent_keys``: ordered list of worker agent keys to execute.
-        - ``parallel``: when true, steps without dependencies can run together.
-        - ``max_attempts``: retry attempts per step, clamped to 1..5.
-        - ``requires_human_approval``: forces the plan into approval-required.
-        """
+        """Build a safe execution plan from a high-level task."""
         input_payload = dict(getattr(task, "input_payload", {}) or {})
         title = str(getattr(task, "title", "Master AI task") or "Master AI task")
         task_type = str(getattr(task, "task_type", "GENERAL") or "GENERAL")
@@ -177,21 +170,15 @@ class ExecutionPlanner:
         if isinstance(explicit_keys, str):
             explicit_keys = [explicit_keys]
         if isinstance(explicit_keys, list):
-            requested = [
-                str(key).strip()
-                for key in explicit_keys
-                if str(key).strip()
-            ]
-            selected = [
-                key
-                for key in requested
-                if key in available_by_key
-            ]
-
-            # Explicit agent selection is authoritative. Never silently
-            # substitute another enabled agent when the requested agent
-            # is unavailable or disabled.
-            return selected
+            requested = [str(key).strip() for key in explicit_keys if str(key).strip()]
+            unavailable = [key for key in requested if key not in available_by_key]
+            if unavailable:
+                names = ", ".join(unavailable)
+                raise ValueError(
+                    f"Explicit registered agent unavailable or disabled: {names}. "
+                    "No substitute agent was selected."
+                )
+            return list(dict.fromkeys(requested))
 
         haystack = " ".join(
             str(value)
