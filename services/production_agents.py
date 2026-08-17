@@ -15,7 +15,6 @@ from services import production_agents_legacy as _legacy
 from services.signal_channel_delivery import deliver_pending_signal_recipients
 
 
-# Preserve the existing module API, including private helpers used internally.
 globals().update(
     {
         name: value
@@ -26,19 +25,10 @@ globals().update(
 
 
 _RUNTIME_SYNC_NAMES = (
-    "AIProvider",
-    "session_scope",
-    "save_content",
-    "get_site_setting",
-    "get_settings",
-    "create_client",
-    "WhatsAppService",
-    "TelegramService",
-    "GoogleSheetsService",
-    "MarketDataService",
-    "run_pipeline_once",
-    "format_signal_message",
-    "logger",
+    "AIProvider", "session_scope", "save_content", "get_site_setting",
+    "get_settings", "create_client", "WhatsAppService", "TelegramService",
+    "GoogleSheetsService", "MarketDataService", "run_pipeline_once",
+    "format_signal_message", "logger",
 )
 
 
@@ -47,18 +37,28 @@ def _sync_legacy_runtime() -> None:
     for name in _RUNTIME_SYNC_NAMES:
         if name in globals():
             setattr(_legacy, name, globals()[name])
-
-    # Common helpers are sometimes patched directly by tests/admin execution.
     for name in (
-        "_blog_publish_default",
-        "_fallback_blog_payload",
-        "_valid_long_form_blog",
-        "_normalize_public_blog_sections",
+        "_blog_publish_default", "_fallback_blog_payload",
+        "_valid_long_form_blog", "_normalize_public_blog_sections",
         "_verified_whatsapp_recipients",
     ):
         value = globals().get(name)
         if value is not None and value is not globals().get("run_blog_agent"):
             setattr(_legacy, name, value)
+
+
+def _captain_delivery_verifier(signal: dict[str, Any]) -> tuple[bool, str]:
+    """Use the same Captain verification decision for durable channel delivery."""
+    from services.captain_shadow_gate import evaluate_signal_shadow_gate
+
+    result = evaluate_signal_shadow_gate(signal)
+    if not result.blocked:
+        return True, result.reason
+    return False, (
+        f"decision={result.decision}; direction={result.direction}; "
+        f"confidence={result.confidence}; macro_bias={result.macro_bias}; "
+        f"news_locked={result.news_locked}; reason={result.reason}"
+    )
 
 
 def _durable_pending_whatsapp_signals() -> None:
@@ -81,6 +81,7 @@ def _durable_pending_whatsapp_signals() -> None:
         send=service.send_text,
         format_message=_legacy.format_signal_message,
         max_attempts=3,
+        verify_signal=_captain_delivery_verifier,
     )
     if delivered or failed:
         logger.info(
@@ -90,7 +91,6 @@ def _durable_pending_whatsapp_signals() -> None:
         )
 
 
-# The legacy Signal Agent resolves this symbol from its own module globals.
 _legacy._deliver_pending_whatsapp_signals = _durable_pending_whatsapp_signals
 
 
@@ -128,7 +128,6 @@ def _deliver_pending_whatsapp_signals() -> None:
     _durable_pending_whatsapp_signals()
 
 
-# Rebind the production registry to facade-owned wrappers for repaired agents.
 RUNNERS = dict(_legacy.RUNNERS)
 RUNNERS.update(
     {
