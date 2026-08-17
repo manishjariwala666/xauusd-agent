@@ -1,21 +1,21 @@
 """Production agent facade with durable primary-signal delivery.
 
-The historical production-agent implementation is preserved verbatim in
-``production_agents_legacy`` so this repair can change only the primary
-WhatsApp delivery path. All existing public/private names remain available.
+The historical implementations remain in ``production_agents_legacy`` while
+this facade owns the repaired delivery wiring. Runtime dependencies are synced
+before delegated execution so tests, admin overrides, and dependency injection
+continue to target ``services.production_agents`` exactly as before.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from services import production_agents_legacy as _legacy
 from services.signal_channel_delivery import deliver_pending_signal_recipients
 
 
-# Preserve the existing production-agent API surface, including private helpers
-# used by tests and internal modules. Dunder module metadata intentionally stays
-# owned by this facade.
+# Preserve the existing module API, including private helpers used internally.
 globals().update(
     {
         name: value
@@ -25,8 +25,45 @@ globals().update(
 )
 
 
+_RUNTIME_SYNC_NAMES = (
+    "AIProvider",
+    "session_scope",
+    "save_content",
+    "get_site_setting",
+    "get_settings",
+    "create_client",
+    "WhatsAppService",
+    "TelegramService",
+    "GoogleSheetsService",
+    "MarketDataService",
+    "run_pipeline_once",
+    "format_signal_message",
+    "logger",
+)
+
+
+def _sync_legacy_runtime() -> None:
+    """Keep facade monkeypatch/dependency injection behavior backward-compatible."""
+    for name in _RUNTIME_SYNC_NAMES:
+        if name in globals():
+            setattr(_legacy, name, globals()[name])
+
+    # Common helpers are sometimes patched directly by tests/admin execution.
+    for name in (
+        "_blog_publish_default",
+        "_fallback_blog_payload",
+        "_valid_long_form_blog",
+        "_normalize_public_blog_sections",
+        "_verified_whatsapp_recipients",
+    ):
+        value = globals().get(name)
+        if value is not None and value is not globals().get("run_blog_agent"):
+            setattr(_legacy, name, value)
+
+
 def _durable_pending_whatsapp_signals() -> None:
     """Deliver primary BUY/SELL messages once per verified recipient."""
+    _sync_legacy_runtime()
     now = datetime.now(timezone.utc)
     if now.weekday() >= 5:
         logger.info("WhatsApp signal delivery paused for the weekend")
@@ -53,17 +90,52 @@ def _durable_pending_whatsapp_signals() -> None:
         )
 
 
-# run_signal_agent is defined in the preserved module. Its global lookup for
-# _deliver_pending_whatsapp_signals therefore must be replaced there as well as
-# on this facade. This keeps the rest of Signal Agent behavior unchanged.
+# The legacy Signal Agent resolves this symbol from its own module globals.
 _legacy._deliver_pending_whatsapp_signals = _durable_pending_whatsapp_signals
 
 
+def run_blog_agent(payload: dict[str, Any]) -> str:
+    _sync_legacy_runtime()
+    return _legacy.run_blog_agent(payload)
+
+
+def run_image_agent(payload: dict[str, Any]) -> str:
+    _sync_legacy_runtime()
+    return _legacy.run_image_agent(payload)
+
+
+def run_signal_agent(payload: dict[str, Any]) -> str:
+    _sync_legacy_runtime()
+    _legacy._deliver_pending_whatsapp_signals = _durable_pending_whatsapp_signals
+    return _legacy.run_signal_agent(payload)
+
+
+def run_telegram_reply_agent(payload: dict[str, Any]) -> str:
+    _sync_legacy_runtime()
+    return _legacy.run_telegram_reply_agent(payload)
+
+
+def run_whatsapp_reply_agent(payload: dict[str, Any]) -> str:
+    _sync_legacy_runtime()
+    return _legacy.run_whatsapp_reply_agent(payload)
+
+
 def deliver_pending_whatsapp_signals() -> None:
-    """Public compatibility entry point for durable WhatsApp signal delivery."""
     _durable_pending_whatsapp_signals()
 
 
 def _deliver_pending_whatsapp_signals() -> None:
-    """Internal compatibility entry point used by existing callers."""
     _durable_pending_whatsapp_signals()
+
+
+# Rebind the production registry to facade-owned wrappers for repaired agents.
+RUNNERS = dict(_legacy.RUNNERS)
+RUNNERS.update(
+    {
+        "ai_blog_agent": run_blog_agent,
+        "telegram_reply_agent": run_telegram_reply_agent,
+        "whatsapp_reply_agent": run_whatsapp_reply_agent,
+        "signal_agent": _master_optional_agent("signal_agent", run_signal_agent),
+        "image_agent": _master_optional_agent("image_agent", run_image_agent),
+    }
+)
