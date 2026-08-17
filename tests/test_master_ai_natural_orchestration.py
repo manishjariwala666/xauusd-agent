@@ -21,8 +21,16 @@ def _authorize(monkeypatch) -> None:
     monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
 
 
+def _verified(monkeypatch, message: str = "SEO blog #91 saved as draft with 1500 words.") -> None:
+    monkeypatch.setattr(
+        "services.master_ai_tool_router._load_completed_step_output",
+        lambda run_id, agent_key: message,
+    )
+
+
 def test_natural_blog_request_reaches_permission_router_as_draft(monkeypatch) -> None:
     _authorize(monkeypatch)
+    _verified(monkeypatch)
     calls: list[dict] = []
     result = handle_master_command_text(
         text="Blog Agent se aaj ka draft banao",
@@ -40,6 +48,7 @@ def test_natural_blog_request_reaches_permission_router_as_draft(monkeypatch) ->
 
 def test_natural_image_request_reaches_image_agent(monkeypatch) -> None:
     _authorize(monkeypatch)
+    _verified(monkeypatch, "Image generated.")
     calls: list[dict] = []
     result = handle_master_command_text(
         text="Image Agent se featured image banao",
@@ -92,6 +101,7 @@ def test_named_agent_status_does_not_run_that_agent(monkeypatch) -> None:
 
 def test_failed_blog_retry_uses_safe_registered_retry(monkeypatch) -> None:
     _authorize(monkeypatch)
+    _verified(monkeypatch)
     calls: list[dict] = []
     result = handle_master_command_text(
         text="Failed Blog Agent retry karo",
@@ -178,6 +188,7 @@ def test_invented_agent_action_is_not_executed(monkeypatch) -> None:
 
 def test_natural_action_creates_sanitized_audit_record(monkeypatch) -> None:
     _authorize(monkeypatch)
+    _verified(monkeypatch, "Image generated.")
     audit_calls: list[dict] = []
     monkeypatch.setattr(
         "services.telegram_master_ai_control._log_master_command_to_sheet",
@@ -202,6 +213,7 @@ def test_natural_action_creates_sanitized_audit_record(monkeypatch) -> None:
 
 def test_existing_slash_blog_command_still_works(monkeypatch) -> None:
     _authorize(monkeypatch)
+    _verified(monkeypatch)
     calls: list[dict] = []
     result = handle_master_command_text(
         text="/master run blog",
