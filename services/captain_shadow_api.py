@@ -10,21 +10,15 @@ from fastapi import APIRouter, Header, HTTPException, Response
 from loguru import logger
 
 from services.admin_auth_api import _require_bff
-from services.captain_ai_runtime import run_captain_read_only
+from services.captain_ai_runtime import CaptainObservedRun, run_captain_observed
 
 
 router = APIRouter()
 
 
 def _shadow_enabled() -> bool:
-    return os.getenv(
-        "CAPTAIN_SIGNAL_SHADOW_GATE",
-        "",
-    ).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
+    return os.getenv("CAPTAIN_SIGNAL_SHADOW_GATE", "").strip().lower() in {
+        "1", "true", "yes", "on",
     }
 
 
@@ -32,9 +26,34 @@ def _decimal(value: Decimal | None) -> str | None:
     return str(value) if value is not None else None
 
 
-def _assessment_payload(result: Any) -> dict[str, Any]:
-    weekly = result.weekly
+def _target_progress(observed: CaptainObservedRun) -> dict[str, Any]:
+    """Verify canonical Sheet targets against the observed trading-day range."""
+    high = observed.day_high
+    low = observed.day_low
+    buy = tuple(observed.buy_targets)
+    sell = tuple(observed.sell_targets)
+    completed_buy = tuple(value for value in buy if high is not None and high >= value)
+    completed_sell = tuple(value for value in sell if low is not None and low <= value)
+    return {
+        "source": observed.source,
+        "signal_date": observed.signal_date.isoformat(),
+        "day_high": _decimal(high),
+        "day_low": _decimal(low),
+        "buy_base": _decimal(observed.buy_base),
+        "sell_base": _decimal(observed.sell_base),
+        "buy_targets": [_decimal(value) for value in buy],
+        "sell_targets": [_decimal(value) for value in sell],
+        "completed_buy_targets": [_decimal(value) for value in completed_buy],
+        "completed_sell_targets": [_decimal(value) for value in completed_sell],
+        "next_buy_target": _decimal(buy[len(completed_buy)]) if len(completed_buy) < len(buy) else None,
+        "next_sell_target": _decimal(sell[len(completed_sell)]) if len(completed_sell) < len(sell) else None,
+        "verification": "SHEET_RANGE_ONLY",
+    }
 
+
+def _assessment_payload(observed: CaptainObservedRun) -> dict[str, Any]:
+    result = observed.assessment
+    weekly = result.weekly
     weekly_payload = None
     if weekly is not None:
         weekly_payload = {
@@ -42,9 +61,7 @@ def _assessment_payload(result: Any) -> dict[str, Any]:
             "weekly_high": _decimal(weekly.weekly_high),
             "weekly_low": _decimal(weekly.weekly_low),
             "weekly_range": _decimal(weekly.weekly_range),
-            "average_daily_range": _decimal(
-                weekly.average_daily_range
-            ),
+            "average_daily_range": _decimal(weekly.average_daily_range),
             "higher_highs": weekly.higher_highs,
             "lower_highs": weekly.lower_highs,
             "higher_lows": weekly.higher_lows,
@@ -60,10 +77,7 @@ def _assessment_payload(result: Any) -> dict[str, Any]:
         "live_cmp": _decimal(result.live_cmp),
         "buy_base": _decimal(result.buy_base),
         "sell_base": _decimal(result.sell_base),
-        "targets": [
-            _decimal(value)
-            for value in result.targets
-        ],
+        "targets": [_decimal(value) for value in result.targets],
         "stop_loss": _decimal(result.stop_loss),
         "news_locked": bool(result.news_locked),
         "macro_bias": str(result.macro_bias),
@@ -73,35 +87,28 @@ def _assessment_payload(result: Any) -> dict[str, Any]:
         "read_only": bool(result.read_only),
         "signal_generated": bool(result.signal_generated),
         "delivery_started": bool(result.delivery_started),
+        "observed_market": _target_progress(observed),
     }
 
 
 @router.get("/internal/captain/shadow")
 def captain_shadow_diagnostic(
     response: Response,
-    x_admin_bff_key: Annotated[
-        str | None,
-        Header(),
-    ] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
 ) -> dict[str, Any]:
     """Run Captain assessment without creating or delivering a signal."""
     if not _shadow_enabled():
         raise HTTPException(404, "Not found.")
-
     _require_bff(x_admin_bff_key)
-
     response.headers["Cache-Control"] = "private, no-store"
 
     try:
-        result = run_captain_read_only()
+        observed = run_captain_observed()
     except Exception as exc:
         logger.warning(
             "Captain shadow diagnostic assessment failed: type={}",
             type(exc).__name__,
         )
-        raise HTTPException(
-            503,
-            "Captain shadow assessment unavailable.",
-        ) from None
+        raise HTTPException(503, "Captain shadow assessment unavailable.") from None
 
-    return _assessment_payload(result)
+    return _assessment_payload(observed)
