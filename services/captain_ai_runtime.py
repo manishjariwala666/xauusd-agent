@@ -31,6 +31,8 @@ class CaptainObservedRun:
     live_cmp: Decimal | None
     buy_base: Decimal | None
     sell_base: Decimal | None
+    buy_targets: tuple[Decimal, ...]
+    sell_targets: tuple[Decimal, ...]
 
 
 def _trading_date(now: datetime) -> date:
@@ -122,6 +124,8 @@ def run_captain_observed(
         live_cmp=current.live_cmp,
         buy_base=current.buy_base,
         sell_base=current.sell_base,
+        buy_targets=current.buy_targets,
+        sell_targets=current.sell_targets,
     )
 
 
