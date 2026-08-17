@@ -177,9 +177,21 @@ class ExecutionPlanner:
         if isinstance(explicit_keys, str):
             explicit_keys = [explicit_keys]
         if isinstance(explicit_keys, list):
-            selected = [str(key) for key in explicit_keys if str(key) in available_by_key]
-            if selected:
-                return selected
+            requested = [
+                str(key).strip()
+                for key in explicit_keys
+                if str(key).strip()
+            ]
+            selected = [
+                key
+                for key in requested
+                if key in available_by_key
+            ]
+
+            # Explicit agent selection is authoritative. Never silently
+            # substitute another enabled agent when the requested agent
+            # is unavailable or disabled.
+            return selected
 
         haystack = " ".join(
             str(value)

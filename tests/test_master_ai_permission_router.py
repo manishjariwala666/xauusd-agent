@@ -166,3 +166,23 @@ def test_safe_telegram_run_forwards_injected_supabase(monkeypatch) -> None:
 
     assert result.status == "COMPLETED"
     assert calls[0]["supabase"] is injected_supabase
+
+
+def test_explicit_disabled_agent_never_falls_back_to_signal_agent():
+    from services.execution_planner import ExecutionPlanner, AgentDescriptor
+
+    planner = ExecutionPlanner()
+
+    selected = planner._select_agent_keys(
+        task_type="BLOG",
+        title="Prepare Blog Content",
+        payload={"agent_keys": ["ai_blog_agent"]},
+        enabled_agents=[
+            AgentDescriptor(
+                agent_key="signal_agent",
+                display_name="Signal Agent",
+            )
+        ],
+    )
+
+    assert selected == []
