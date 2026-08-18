@@ -16,6 +16,10 @@ from services.ai_agents.economic_calendar.provider import (
 from services.ai_agents.macro_ai.provider import (
     load_macro_assessment,
 )
+from services.master_ai_captain_status import (
+    is_captain_status_request,
+    latest_captain_status_reply,
+)
 from services.master_ai_intelligence_orchestrator import (
     IntelligenceDecision,
     MarketReference,
@@ -352,6 +356,12 @@ def generate_master_ai_reply(message: str) -> str:
     if len(clean_message) > 4000:
         return "Message bahut lamba hai. Kripya 4000 characters ke andar bhejein."
 
+    # Admin and Telegram both call this shared backend function. Captain/Shadow
+    # status therefore comes from one canonical audit reader, not interface-
+    # specific state and never from an LLM-simulated execution result.
+    if is_captain_status_request(clean_message):
+        return latest_captain_status_reply()
+
     route = route_master_ai_request(clean_message)
 
     if route.intent == "MARKET_DATA":
@@ -416,9 +426,6 @@ def generate_master_ai_reply(message: str) -> str:
             f"{result.message}"
         )
 
-    # Fail closed for every recognized actionable intent that this
-    # admin-chat execution path has not explicitly handled above.
-    # Never let an LLM simulate an agent/tool result.
     if proposal.status == "CLARIFICATION_REQUIRED":
         return (
             "Action execute nahi hua. "
@@ -444,7 +451,6 @@ def generate_master_ai_reply(message: str) -> str:
             "Koi execution nahi hua."
         )
 
-    # Only genuine NO_ACTION conversation may reach the language model.
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
 
