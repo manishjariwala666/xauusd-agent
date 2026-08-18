@@ -58,7 +58,7 @@ def test_shadow_gate_blocks_wait(monkeypatch):
     assert result.news_locked is True
 
 
-def test_shadow_gate_blocks_even_captain_approve(monkeypatch):
+def test_shadow_gate_allows_matching_captain_approve(monkeypatch):
     monkeypatch.setenv(
         "CAPTAIN_SIGNAL_SHADOW_GATE",
         "1",
@@ -74,10 +74,31 @@ def test_shadow_gate_blocks_even_captain_approve(monkeypatch):
         ),
     )
 
-    # Shadow mode observes APPROVE but still blocks delivery.
-    assert result.enabled is True
+    assert result.enabled is False
     assert result.decision == "APPROVE"
+    assert result.direction == "BUY"
+    assert result.blocked is False
+
+
+def test_shadow_gate_blocks_direction_mismatch(monkeypatch):
+    monkeypatch.setenv(
+        "CAPTAIN_SIGNAL_SHADOW_GATE",
+        "1",
+    )
+
+    result = evaluate_signal_shadow_gate(
+        {"signal_type": "SELL"},
+        runner=lambda: assessment(
+            decision="APPROVE",
+            direction="BUY",
+            confidence=95,
+            news_locked=False,
+        ),
+    )
+
+    assert result.enabled is True
     assert result.blocked is True
+    assert "does not match" in result.reason
 
 
 def test_shadow_gate_fails_closed_on_runtime_error(monkeypatch):
@@ -100,9 +121,7 @@ def test_shadow_gate_fails_closed_on_runtime_error(monkeypatch):
     assert result.news_locked is True
 
 
-def test_telegram_send_signal_never_calls_bot_when_shadow_gate_enabled(
-    monkeypatch,
-):
+def test_telegram_send_signal_never_calls_bot_when_gate_blocks(monkeypatch):
     from services.telegram_service import TelegramService
 
     monkeypatch.setenv(
@@ -117,7 +136,7 @@ def test_telegram_send_signal_never_calls_bot_when_shadow_gate_enabled(
         def send_message(self, *args, **kwargs):
             self.calls += 1
             raise AssertionError(
-                "Telegram network send must not execute in shadow mode."
+                "Telegram network send must not execute when verification blocks."
             )
 
     service = TelegramService.__new__(TelegramService)
@@ -133,13 +152,13 @@ def test_telegram_send_signal_never_calls_bot_when_shadow_gate_enabled(
             {
                 "enabled": True,
                 "blocked": True,
-                "decision": "APPROVE",
-                "direction": "BUY",
+                "decision": "WAIT",
+                "direction": "NONE",
                 "confidence": 95,
                 "macro_bias": "BULLISH_GOLD",
                 "macro_confidence": 95,
                 "news_locked": False,
-                "reason": "shadow test",
+                "reason": "verification blocked",
             },
         )(),
     )
