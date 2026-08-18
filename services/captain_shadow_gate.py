@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Any, Callable
-from services.captain_ai_runtime import run_captain_read_only
+from services.captain_ai_runtime import CaptainObservedRun, run_captain_observed
+
 
 @dataclass(frozen=True)
 class CaptainShadowGateResult:
@@ -16,21 +17,46 @@ class CaptainShadowGateResult:
     macro_confidence: int
     news_locked: bool
     reason: str
+    observed: CaptainObservedRun | None = None
+
 
 def shadow_verification_enabled() -> bool:
     return os.getenv("CAPTAIN_SIGNAL_SHADOW_GATE", "").strip().lower() in {"1", "true", "yes", "on"}
+
 
 def shadow_gate_enabled() -> bool:
     """Legacy blanket blocker is disabled; verification happens per signal."""
     return False
 
-def evaluate_signal_shadow_gate(signal: dict[str, Any], *, runner: Callable[..., Any] = run_captain_read_only) -> CaptainShadowGateResult:
+
+def _assessment_and_observed(value: Any) -> tuple[Any, CaptainObservedRun | None]:
+    """Accept both the new observed runtime and legacy assessment test doubles."""
+    if isinstance(value, CaptainObservedRun):
+        return value.assessment, value
+    assessment = getattr(value, "assessment", None)
+    if assessment is not None and hasattr(value, "signal_date"):
+        return assessment, value
+    return value, None
+
+
+def evaluate_signal_shadow_gate(
+    signal: dict[str, Any],
+    *,
+    runner: Callable[..., Any] = run_captain_observed,
+) -> CaptainShadowGateResult:
     if not shadow_verification_enabled():
-        return CaptainShadowGateResult(False, False, "NOT_RUN", "NONE", 0, "UNKNOWN", 0, False, "Captain verification disabled.")
+        return CaptainShadowGateResult(
+            False, False, "NOT_RUN", "NONE", 0, "UNKNOWN", 0, False,
+            "Captain verification disabled.", None,
+        )
     try:
-        assessment = runner()
+        raw = runner()
+        assessment, observed = _assessment_and_observed(raw)
     except Exception:
-        return CaptainShadowGateResult(True, True, "ERROR", "NONE", 0, "UNKNOWN", 0, True, "Captain assessment failed; delivery blocked.")
+        return CaptainShadowGateResult(
+            True, True, "ERROR", "NONE", 0, "UNKNOWN", 0, True,
+            "Captain assessment failed; delivery blocked.", None,
+        )
     decision = str(assessment.decision.value)
     direction = str(assessment.direction.value)
     candidate = str(signal.get("signal_type") or "").strip().upper()
@@ -42,5 +68,15 @@ def evaluate_signal_shadow_gate(signal: dict[str, Any], *, runner: Callable[...,
         reason = f"Captain direction mismatch: captain={direction}, candidate={candidate or 'NONE'}."
     else:
         reason = reasons[0] if reasons else "Captain verified candidate delivery."
-    # Telegram's existing sender checks enabled; keep it synonymous with blocked.
-    return CaptainShadowGateResult(blocked, blocked, decision, direction, int(assessment.confidence), str(assessment.macro_bias), int(assessment.macro_confidence), bool(assessment.news_locked), reason)
+    return CaptainShadowGateResult(
+        blocked,
+        blocked,
+        decision,
+        direction,
+        int(assessment.confidence),
+        str(assessment.macro_bias),
+        int(assessment.macro_confidence),
+        bool(assessment.news_locked),
+        reason,
+        observed,
+    )
