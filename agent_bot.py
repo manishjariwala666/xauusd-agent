@@ -32,6 +32,11 @@ def run_pipeline_once(
     """Process Sheet enrichment, then deliver unsent Supabase signals."""
     from services.captain_ai_runtime import run_captain_read_only
     from services.captain_shadow_gate import shadow_gate_enabled
+    from services.sheet_signal_risk_guard import (
+        SignalRiskGuardError,
+        protect_sheet_signal,
+        requires_risk_guard,
+    )
 
     captain_shadow = shadow_gate_enabled()
     inserted_signal = None
@@ -39,6 +44,25 @@ def run_pipeline_once(
 
     if sheets is not None:
         sheet_signal = sheets.get_latest_signal()
+        if sheet_signal and requires_risk_guard(sheet_signal):
+            try:
+                sheet_signal = protect_sheet_signal(
+                    sheet_signal,
+                    sheets._analysis_values(),
+                )
+            except SignalRiskGuardError as exc:
+                logger.warning(
+                    "Sheet signal blocked by risk guard: {}",
+                    exc,
+                )
+                return
+            except Exception:
+                logger.exception(
+                    "Sheet signal risk verification failed; "
+                    "candidate creation blocked."
+                )
+                return
+
         if sheet_signal and not market_data.signal_exists(
             sheet_signal.external_key
         ):
