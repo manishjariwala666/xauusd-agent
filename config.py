@@ -78,8 +78,6 @@ def parse_google_service_account_json(raw_value: str) -> dict[str, Any]:
 
     try:
         credentials: Any = json.loads(raw_value)
-        # Some deployment systems store the complete JSON document as a
-        # JSON-encoded string. Decode that representation one additional time.
         if isinstance(credentials, str):
             credentials = json.loads(credentials)
     except (json.JSONDecodeError, TypeError) as exc:
@@ -325,12 +323,12 @@ class Settings:
                 "BRAND_NAME",
                 "AI Market Analytics Pro",
             ),
-            ai_provider=_read_secret("AI_PROVIDER", "GEMINI").upper(),
+            ai_provider=_read_secret("AI_PROVIDER", "OPENAI").upper(),
             gemini_api_key=_read_secret("GEMINI_API_KEY"),
             openai_api_key=_read_secret("OPENAI_API_KEY"),
             ai_text_model=_read_secret(
                 "AI_TEXT_MODEL",
-                "gemini-2.5-flash",
+                "gpt-5.6-sol",
             ),
             ai_image_model=_read_secret(
                 "AI_IMAGE_MODEL",
