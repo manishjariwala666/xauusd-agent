@@ -11,6 +11,7 @@ from loguru import logger
 
 from services.admin_auth_api import _require_bff
 from services.captain_ai_runtime import CaptainObservedRun, run_captain_observed
+from services.captain_shadow_audit import record_captain_shadow_audit
 
 
 router = APIRouter()
@@ -51,7 +52,13 @@ def _target_progress(observed: CaptainObservedRun) -> dict[str, Any]:
     }
 
 
-def _assessment_payload(observed: CaptainObservedRun) -> dict[str, Any]:
+def _assessment_payload(
+    observed: CaptainObservedRun,
+    *,
+    audit_correlation_id: str | None = None,
+    audit_persisted: bool | None = None,
+    master_ai_summary: str | None = None,
+) -> dict[str, Any]:
     result = observed.assessment
     weekly = result.weekly
     weekly_payload = None
@@ -88,6 +95,11 @@ def _assessment_payload(observed: CaptainObservedRun) -> dict[str, Any]:
         "signal_generated": bool(result.signal_generated),
         "delivery_started": bool(result.delivery_started),
         "observed_market": _target_progress(observed),
+        "audit": {
+            "correlation_id": audit_correlation_id,
+            "persisted": audit_persisted,
+        },
+        "master_ai_summary": master_ai_summary,
     }
 
 
@@ -111,4 +123,31 @@ def captain_shadow_diagnostic(
         )
         raise HTTPException(503, "Captain shadow assessment unavailable.") from None
 
-    return _assessment_payload(observed)
+    decision = str(observed.assessment.decision.value).upper()
+    shadow_status = "VERIFIED" if decision == "APPROVE" else "BLOCKED"
+    shadow_reason = (
+        str(observed.assessment.reasons[0])
+        if observed.assessment.reasons
+        else f"Captain decision is {decision}."
+    )
+
+    try:
+        audit = record_captain_shadow_audit(
+            observed,
+            source_interface="SHADOW_API",
+            shadow_status=shadow_status,
+            shadow_reason=shadow_reason,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Captain shadow diagnostic audit failed: type={}",
+            type(exc).__name__,
+        )
+        audit = None
+
+    return _assessment_payload(
+        observed,
+        audit_correlation_id=(audit.correlation_id if audit else None),
+        audit_persisted=(audit.persisted if audit else False),
+        master_ai_summary=(audit.master_ai_summary if audit else None),
+    )
