@@ -29,16 +29,10 @@ def deliver_pending_signal_recipients(
 ) -> tuple[int, int]:
     """Deliver fresh signals exactly once per channel recipient.
 
-    The additive ``signal_channel_deliveries`` table is authoritative for
-    recipient state. A successful recipient is never retried merely because a
-    different recipient failed. Claims expire after five minutes so a crashed
-    worker can safely retry. If the delivery table is unavailable, this helper
-    fails closed and sends nothing.
-
-    When ``verify_signal`` is supplied, verification runs once per signal before
-    any recipient claim. A rejected or failed verification sends nothing and
-    creates no delivery claim, so Telegram and WhatsApp can share the same
-    Captain/Shadow safety semantics without manufacturing a successful state.
+    All recipient ledger rows are created before the first send. This matters
+    for compatibility columns such as ``whatsapp_sent_at``: a successful first
+    recipient must not make the whole signal look delivered while a second
+    recipient is still pending or failed.
     """
     clean_channel = str(channel or "").strip().lower()
     if clean_channel not in {"telegram", "whatsapp"}:
@@ -49,6 +43,10 @@ def deliver_pending_signal_recipients(
     )
     if not clean_recipients:
         return 0, 0
+
+    recipient_hashes = {
+        recipient: _recipient_hash(recipient) for recipient in clean_recipients
+    }
 
     try:
         with session_scope() as session:
@@ -108,11 +106,12 @@ def deliver_pending_signal_recipients(
                 )
                 continue
 
-        message = format_message(signal)
-        for recipient in clean_recipients:
-            recipient_hash = _recipient_hash(recipient)
-            try:
-                with session_scope() as session:
+        # Seed every expected recipient before any send. This guarantees that
+        # the legacy aggregate timestamp stays NULL until all recipients have
+        # actually succeeded.
+        try:
+            with session_scope() as session:
+                for recipient_hash in recipient_hashes.values():
                     session.execute(
                         text(
                             """
@@ -131,6 +130,21 @@ def deliver_pending_signal_recipients(
                             "recipient_hash": recipient_hash,
                         },
                     )
+        except Exception as exc:
+            logger.warning(
+                "Primary signal delivery ledger seed failed closed: channel={} "
+                "signal_id={} category={}",
+                clean_channel,
+                signal.get("id"),
+                exc.__class__.__name__,
+            )
+            continue
+
+        message = format_message(signal)
+        for recipient in clean_recipients:
+            recipient_hash = recipient_hashes[recipient]
+            try:
+                with session_scope() as session:
                     claim = (
                         session.execute(
                             text(
