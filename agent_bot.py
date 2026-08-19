@@ -12,6 +12,7 @@ import telebot
 from config import get_settings
 from services.google_sheets import GoogleSheetsService
 from services.market_data import MarketDataService, MarketPrice
+from services.sheet_signal_source import load_authoritative_sheet_signal
 from services.telegram_service import TelegramService
 
 
@@ -43,7 +44,7 @@ def run_pipeline_once(
     captain_assessment = None
 
     if sheets is not None:
-        sheet_signal = sheets.get_latest_signal()
+        sheet_signal = load_authoritative_sheet_signal(sheets)
         if sheet_signal and requires_risk_guard(sheet_signal):
             try:
                 sheet_signal = protect_sheet_signal(
