@@ -19,243 +19,76 @@ class RegisteredAgent:
 
 
 AGENTS: tuple[RegisteredAgent, ...] = (
+    RegisteredAgent("VMA", "Venus Master AI", "master_ai", ("master ai", "master", "brain", "venus master"), "Controls approved agents, answers admin questions and monitors operations."),
+    RegisteredAgent("VSA", "Venus Signal Agent", "signal_agent", ("signal", "signal agent", "xauusd", "gold signal"), "Runs the existing Google Sheet based XAUUSD signal workflow.", "run_signal_agent"),
+    RegisteredAgent("VWRA", "Venus WhatsApp Reply Agent", "whatsapp_reply_agent", ("whatsapp", "whatsapp agent", "wa reply", "whatsapp reply"), "Processes approved WhatsApp reply workflows.", "run_whatsapp_reply_agent"),
+    RegisteredAgent("VTRA", "Venus Telegram Reply Agent", "telegram_reply_agent", ("telegram", "telegram agent", "tg reply", "telegram reply"), "Processes approved Telegram reply workflows.", "run_telegram_reply_agent"),
+    RegisteredAgent("VBA", "Venus Blog Agent", "ai_blog_agent", ("blog", "blog agent", "article", "news content"), "Prepares admin-ready blog and SEO content.", "run_blog_agent"),
     RegisteredAgent(
-        short_name="VMA",
-        official_name="Venus Master AI",
-        agent_key="master_ai",
-        aliases=("master ai", "master", "brain", "venus master"),
-        description="Controls approved agents, answers admin questions and monitors operations.",
+        "VMDA", "Venus Market Data Agent", "market_data_agent",
+        ("market data", "live price", "xauusd price", "google finance price", "gold price"),
+        "Validates current XAUUSD market snapshots from Google Finance sheets or approved broker feeds.",
+        "run_market_data_agent",
     ),
     RegisteredAgent(
-        short_name="VSA",
-        official_name="Venus Signal Agent",
-        agent_key="signal_agent",
-        aliases=("signal", "signal agent", "xauusd", "gold signal"),
-        description="Runs the existing Google Sheet based XAUUSD signal workflow.",
-        run_action="run_signal_agent",
+        "VCSA", "Venus Customer Support Agent", "customer_support_agent",
+        ("customer support", "website support agent", "client guidance agent", "lead support agent"),
+        "Guides website visitors, qualifies new-client leads and prepares safe support escalation.",
+        "run_customer_support_agent",
     ),
     RegisteredAgent(
-        short_name="VWRA",
-        official_name="Venus WhatsApp Reply Agent",
-        agent_key="whatsapp_reply_agent",
-        aliases=("whatsapp", "whatsapp agent", "wa reply", "whatsapp reply"),
-        description="Processes approved WhatsApp reply workflows.",
-        run_action="run_whatsapp_reply_agent",
+        "VMSA", "Venus Marketing Strategy Agent", "marketing_strategy_agent",
+        ("marketing strategist", "marketing strategy agent", "campaign planner", "marketing team leader"),
+        "Creates approval-ready marketing campaign plans for published VenusRealm content.",
+        "run_marketing_strategy_agent",
     ),
     RegisteredAgent(
-        short_name="VTRA",
-        official_name="Venus Telegram Reply Agent",
-        agent_key="telegram_reply_agent",
-        aliases=("telegram", "telegram agent", "tg reply", "telegram reply"),
-        description="Processes approved Telegram reply workflows.",
-        run_action="run_telegram_reply_agent",
+        "VSMA", "Venus Social Media Agent", "social_media_agent",
+        ("social media", "social media agent", "social content", "social post drafts", "linkedin content", "instagram content", "facebook content", "x content"),
+        "Prepares platform-specific social media drafts for approved published VenusRealm content.",
+        "run_social_media_agent",
     ),
     RegisteredAgent(
-        short_name="VBA",
-        official_name="Venus Blog Agent",
-        agent_key="ai_blog_agent",
-        aliases=("blog", "blog agent", "seo", "article", "news content"),
-        description="Prepares admin-ready blog and SEO content.",
-        run_action="run_blog_agent",
+        "VMPAA", "Venus Master Publish Approval Agent", "master_publish_approval_agent",
+        ("publish approval", "publish approval agent", "owner approved publish", "master publish agent"),
+        "Publishes one reviewed draft only after explicit owner approval.",
+        "run_master_ai_publish_approval_agent",
     ),
     RegisteredAgent(
-        short_name="VMDA",
-        official_name="Venus Market Data Agent",
-        agent_key="market_data_agent",
-        aliases=(
-            "market data",
-            "live price",
-            "xauusd price",
-            "google finance price",
-            "gold price",
-        ),
-        description=(
-            "Validates current XAUUSD market snapshots from "
-            "Google Finance sheets or approved broker feeds."
-        ),
-        run_action="run_market_data_agent",
+        "VMCRA", "Venus Master Content Review Agent", "master_content_review_agent",
+        ("master content review", "content review agent", "publish review", "master ai review"),
+        "Performs read-only publish-readiness review for structured CMS drafts.",
+        "run_master_ai_content_review_agent",
     ),
     RegisteredAgent(
-        short_name="VCSA",
-        official_name="Venus Customer Support Agent",
-        agent_key="customer_support_agent",
-        aliases=(
-            "customer support",
-            "website support agent",
-            "client guidance agent",
-            "lead support agent",
-        ),
-        description=(
-            "Guides website visitors, qualifies new-client leads "
-            "and prepares safe support escalation."
-        ),
-        run_action="run_customer_support_agent",
+        "VCEA", "Venus CMS Editor Agent", "cms_editor_agent",
+        ("cms editor", "cms editor agent", "content editor agent", "studio v2 agent"),
+        "Converts approved article content into structured Studio V2 drafts.",
+        "run_cms_editor_agent",
+    ),
+    RegisteredAgent("VIA", "Venus Image Agent", "image_agent", ("image", "image agent", "creative", "thumbnail", "photo"), "Prepares admin-ready images and visual content.", "run_image_agent"),
+    RegisteredAgent("VAA", "Venus Announcement Agent", "announcement_agent", ("announcement", "announcement agent", "notice"), "Manages approved announcement delivery and status.", "run_announcement_agent"),
+    RegisteredAgent(
+        "VSEO", "Venus SEO Agent", "seo_agent",
+        ("seo agent", "seo audit", "seo metadata", "content seo"),
+        "Audits published content and can persist SEO metadata improvements only through owner-approved execution.",
+        "run_seo_agent",
     ),
     RegisteredAgent(
-        short_name="VMSA",
-        official_name="Venus Marketing Strategy Agent",
-        agent_key="marketing_strategy_agent",
-        aliases=(
-            "marketing strategist",
-            "marketing strategy agent",
-            "campaign planner",
-            "marketing team leader",
-        ),
-        description=(
-            "Creates approval-ready marketing campaign plans "
-            "for published VenusRealm content."
-        ),
-        run_action="run_marketing_strategy_agent",
+        "VMAI", "Venus Macro AI", "macro_ai_agent",
+        ("macro ai", "macro agent", "market macro", "gold macro intelligence"),
+        "Provides read-only XAUUSD macro bias using approved market snapshots, correlations and deterministic scoring.",
     ),
     RegisteredAgent(
-        short_name="VSMA",
-        official_name="Venus Social Media Agent",
-        agent_key="social_media_agent",
-        aliases=(
-            "social media",
-            "social media agent",
-            "social content",
-            "social post drafts",
-            "linkedin content",
-            "instagram content",
-            "facebook content",
-            "x content",
-        ),
-        description=(
-            "Prepares platform-specific social media drafts "
-            "for approved published VenusRealm content."
-        ),
-        run_action="run_social_media_agent",
+        "VECA", "Venus Economic Calendar AI", "economic_calendar_ai_agent",
+        ("economic calendar", "calendar ai", "news lock", "usa canada news", "high impact news"),
+        "Classifies approved USA and Canada economic events, calculates event surprise and provides read-only news-lock guidance.",
     ),
-    RegisteredAgent(
-        short_name="VMPAA",
-        official_name="Venus Master Publish Approval Agent",
-        agent_key="master_publish_approval_agent",
-        aliases=(
-            "publish approval",
-            "publish approval agent",
-            "owner approved publish",
-            "master publish agent",
-        ),
-        description=(
-            "Publishes one reviewed draft only after explicit "
-            "owner approval."
-        ),
-        run_action="run_master_ai_publish_approval_agent",
-    ),
-    RegisteredAgent(
-        short_name="VMCRA",
-        official_name="Venus Master Content Review Agent",
-        agent_key="master_content_review_agent",
-        aliases=(
-            "master content review",
-            "content review agent",
-            "publish review",
-            "master ai review",
-        ),
-        description=(
-            "Performs read-only publish-readiness review "
-            "for structured CMS drafts."
-        ),
-        run_action="run_master_ai_content_review_agent",
-    ),
-    RegisteredAgent(
-        short_name="VCEA",
-        official_name="Venus CMS Editor Agent",
-        agent_key="cms_editor_agent",
-        aliases=(
-            "cms editor",
-            "cms editor agent",
-            "content editor agent",
-            "studio v2 agent",
-        ),
-        description=(
-            "Converts approved article content into structured "
-            "Studio V2 drafts."
-        ),
-        run_action="run_cms_editor_agent",
-    ),
-    RegisteredAgent(
-        short_name="VIA",
-        official_name="Venus Image Agent",
-        agent_key="image_agent",
-        aliases=("image", "image agent", "creative", "thumbnail", "photo"),
-        description="Prepares admin-ready images and visual content.",
-        run_action="run_image_agent",
-    ),
-    RegisteredAgent(
-        short_name="VAA",
-        official_name="Venus Announcement Agent",
-        agent_key="announcement_agent",
-        aliases=("announcement", "announcement agent", "notice"),
-        description="Manages announcement preparation and status.",
-    ),
-    RegisteredAgent(
-        short_name="VMAI",
-        official_name="Venus Macro AI",
-        agent_key="macro_ai_agent",
-        aliases=(
-            "macro ai",
-            "macro agent",
-            "market macro",
-            "gold macro intelligence",
-        ),
-        description=(
-            "Provides read-only XAUUSD macro bias using approved "
-            "market snapshots, correlations and deterministic scoring."
-        ),
-    ),
-    RegisteredAgent(
-        short_name="VECA",
-        official_name="Venus Economic Calendar AI",
-        agent_key="economic_calendar_ai_agent",
-        aliases=(
-            "economic calendar",
-            "calendar ai",
-            "news lock",
-            "usa canada news",
-            "high impact news",
-        ),
-        description=(
-            "Classifies approved USA and Canada economic events, "
-            "calculates event surprise and provides read-only news-lock guidance."
-        ),
-    ),
-    RegisteredAgent(
-        short_name="VWHA",
-        official_name="Venus Website Health Agent",
-        agent_key="website_health_agent",
-        aliases=("website health", "site health", "website status", "health agent"),
-        description="Checks website and service health.",
-    ),
-    RegisteredAgent(
-        short_name="VDMA",
-        official_name="Venus Delivery Monitor Agent",
-        agent_key="delivery_monitor_agent",
-        aliases=("delivery monitor", "delivery status", "signal delivery"),
-        description="Monitors Telegram and WhatsApp delivery state.",
-    ),
-    RegisteredAgent(
-        short_name="VSC",
-        official_name="Venus Scheduler Agent",
-        agent_key="scheduler_agent",
-        aliases=("scheduler", "schedule agent", "cron", "timing"),
-        description="Tracks scheduled jobs and due agent runs.",
-    ),
-    RegisteredAgent(
-        short_name="VASA",
-        official_name="Venus Admin Support Agent",
-        agent_key="admin_support_agent",
-        aliases=("admin support", "admin agent", "support agent"),
-        description="Supports admin operations and issue summaries.",
-    ),
-    RegisteredAgent(
-        short_name="VRA",
-        official_name="Venus Report Agent",
-        agent_key="report_agent",
-        aliases=("report", "report agent", "system report", "health report"),
-        description="Creates periodic system and failure reports.",
-    ),
+    RegisteredAgent("VWHA", "Venus Website Health Agent", "website_health_agent", ("website health", "site health", "website status", "health agent"), "Checks website and service health."),
+    RegisteredAgent("VDMA", "Venus Delivery Monitor Agent", "delivery_monitor_agent", ("delivery monitor", "delivery status", "signal delivery"), "Monitors Telegram and WhatsApp delivery state."),
+    RegisteredAgent("VSC", "Venus Scheduler Agent", "scheduler_agent", ("scheduler", "schedule agent", "cron", "timing"), "Tracks scheduled jobs and due agent runs."),
+    RegisteredAgent("VASA", "Venus Admin Support Agent", "admin_support_agent", ("admin support", "admin agent", "support agent"), "Supports admin operations and issue summaries."),
+    RegisteredAgent("VRA", "Venus Report Agent", "report_agent", ("report", "report agent", "system report", "health report"), "Creates periodic system and failure reports."),
 )
 
 
@@ -265,10 +98,8 @@ def normalize_agent_text(value: str | None) -> str:
 
 def find_agent(value: str | None) -> RegisteredAgent | None:
     requested = normalize_agent_text(value)
-
     if not requested:
         return None
-
     for agent in AGENTS:
         candidates = {
             normalize_agent_text(agent.short_name),
@@ -276,24 +107,12 @@ def find_agent(value: str | None) -> RegisteredAgent | None:
             normalize_agent_text(agent.agent_key),
             *(normalize_agent_text(alias) for alias in agent.aliases),
         }
-
         if requested in candidates:
             return agent
-
     for agent in AGENTS:
-        candidates = (
-            agent.short_name,
-            agent.official_name,
-            agent.agent_key,
-            *agent.aliases,
-        )
-
-        if any(
-            normalize_agent_text(candidate) in requested
-            for candidate in candidates
-        ):
+        candidates = (agent.short_name, agent.official_name, agent.agent_key, *agent.aliases)
+        if any(normalize_agent_text(candidate) in requested for candidate in candidates):
             return agent
-
     return None
 
 
@@ -301,23 +120,16 @@ def list_registered_agents() -> tuple[RegisteredAgent, ...]:
     return AGENTS
 
 
-def format_agent_directory(
-    agents: Iterable[RegisteredAgent] = AGENTS,
-) -> str:
+def format_agent_directory(agents: Iterable[RegisteredAgent] = AGENTS) -> str:
     lines = ["🤖 VenusRealm Agent Directory"]
-
     for agent in agents:
-        lines.append(
-            f"{agent.short_name} — {agent.official_name}"
-        )
-
+        lines.append(f"{agent.short_name} — {agent.official_name}")
     return "\n".join(lines)
 
 
 def get_agent_dashboard_record(agent: RegisteredAgent) -> dict[str, Any]:
     """Return safe registry and brain metadata for dashboards and APIs."""
     brain = get_agent_brain(agent.agent_key)
-
     record: dict[str, Any] = {
         "agent_key": agent.agent_key,
         "short_name": agent.short_name,
@@ -328,38 +140,26 @@ def get_agent_dashboard_record(agent: RegisteredAgent) -> dict[str, Any]:
         "brain_configured": brain is not None,
         "can_toggle": agent.agent_key == "ai_blog_agent",
     }
-
     if brain is None:
-        record.update(
-            {
-                "purpose": agent.description,
-                "default_risk": "UNKNOWN",
-                "automatic_actions": [],
-                "approval_required_actions": [],
-                "forbidden_actions": [],
-                "output_schema": [],
-            }
-        )
+        record.update({
+            "purpose": agent.description,
+            "default_risk": "UNKNOWN",
+            "automatic_actions": [],
+            "approval_required_actions": [],
+            "forbidden_actions": [],
+            "output_schema": [],
+        })
         return record
-
-    record.update(
-        {
-            "purpose": brain.purpose,
-            "default_risk": brain.default_risk.value,
-            "automatic_actions": list(brain.automatic_actions),
-            "approval_required_actions": list(
-                brain.approval_required_actions
-            ),
-            "forbidden_actions": list(brain.forbidden_actions),
-            "output_schema": list(brain.output_schema),
-        }
-    )
+    record.update({
+        "purpose": brain.purpose,
+        "default_risk": brain.default_risk.value,
+        "automatic_actions": list(brain.automatic_actions),
+        "approval_required_actions": list(brain.approval_required_actions),
+        "forbidden_actions": list(brain.forbidden_actions),
+        "output_schema": list(brain.output_schema),
+    })
     return record
 
 
 def list_agent_dashboard_records() -> list[dict[str, Any]]:
-    """Return all registered agents as safe dashboard-ready records."""
-    return [
-        get_agent_dashboard_record(agent)
-        for agent in list_registered_agents()
-    ]
+    return [get_agent_dashboard_record(agent) for agent in list_registered_agents()]
