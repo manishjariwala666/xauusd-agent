@@ -47,8 +47,46 @@ def _sync_legacy_runtime() -> None:
             setattr(_legacy, name, value)
 
 
+def _legacy_sheet_signal_is_superseded(
+    signal: dict[str, Any],
+) -> tuple[bool, str]:
+    """Block old ``gsheet:<hash>`` rows when canonical sessions are active.
+
+    This protects both Telegram and WhatsApp from a previously persisted legacy
+    row carrying stale/mismatched SL or TP after the canonical Sheet1 session
+    layout became authoritative. Non-Sheet/manual signals are unaffected.
+    """
+    external_key = str(signal.get("external_key") or "").strip()
+    if not external_key.startswith("gsheet:"):
+        return False, ""
+
+    try:
+        sheets = GoogleSheetsService()
+        values = sheets._analysis_values()
+    except Exception:
+        return True, (
+            "Legacy Google Sheet signal blocked because canonical source "
+            "verification is unavailable."
+        )
+
+    has_canonical_sessions = any(
+        sheets._SESSION_HEADER.match(str(row[0] if row else "").strip())
+        for row in values
+    )
+    if has_canonical_sessions:
+        return True, (
+            "Legacy Google Sheet signal is superseded by canonical session "
+            "SL/TP data."
+        )
+    return False, ""
+
+
 def _captain_delivery_verifier(signal: dict[str, Any]) -> tuple[bool, str]:
-    """Use the same Captain verification decision for durable channel delivery."""
+    """Use shared source-integrity + Captain verification for delivery."""
+    superseded, source_reason = _legacy_sheet_signal_is_superseded(signal)
+    if superseded:
+        return False, source_reason
+
     from services.captain_shadow_gate import evaluate_signal_shadow_gate
 
     result = evaluate_signal_shadow_gate(signal)
