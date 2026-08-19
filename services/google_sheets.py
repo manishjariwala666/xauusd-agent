@@ -9,6 +9,8 @@ import csv
 import hashlib
 from io import StringIO
 import json
+import os
+from pathlib import Path
 import re
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -17,7 +19,10 @@ import gspread
 from loguru import logger
 import requests
 
-from config import get_settings
+from config import (
+    get_settings,
+    parse_google_service_account_json,
+)
 
 
 @dataclass(frozen=True)
@@ -32,6 +37,8 @@ class SheetSignal:
     reference_price: Decimal | None = None
     observed_at: datetime | None = None
     source: str = "GOOGLE_SHEET"
+    targets: tuple[Decimal, ...] = ()
+    target_slots: tuple[Decimal | None, ...] = ()
 
 
 class GoogleSheetsConfigurationError(RuntimeError):
@@ -47,35 +54,215 @@ class GoogleSheetsService:
     _LABEL_HEADERS = ("label", "note", "message", "remarks")
     _ANALYSIS_WORKSHEET = "Sheet1"
     _MAX_ANALYSIS_AGE = timedelta(hours=6)
+    _MIN_STOP_DISTANCE = Decimal("0.01")
     _SESSION_HEADER = re.compile(
-        r"^XAUUSD SESSION\s+(\d{4}-\d{2}-\d{2})$",
+        r"^(?:XAUUSD SESSION\s+|DATE:\s*)(\d{4}-\d{2}-\d{2})$",
         re.IGNORECASE,
     )
     _SLOT_LABEL = re.compile(
-        r"^(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$"
+        r"^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?\s*"
+        r"(?:-|TO)\s*(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$",
+        re.IGNORECASE,
     )
+
+    @classmethod
+    def _select_analysis_stop_loss(
+        cls,
+        *,
+        direction: str,
+        entry_price: Decimal,
+        explicit_stop: Decimal | None,
+        current_high: Decimal,
+        current_low: Decimal,
+        previous_high: Decimal,
+        previous_low: Decimal,
+        session_high: Decimal | None,
+        session_low: Decimal | None,
+    ) -> tuple[Decimal | None, str]:
+        """Select risk after direction is fixed, preferring local structure."""
+
+        def is_valid(value: Decimal | None) -> bool:
+            if value is None:
+                return False
+            distance = (
+                entry_price - value
+                if direction == "BUY"
+                else value - entry_price
+            )
+            return distance >= cls._MIN_STOP_DISTANCE
+
+        if is_valid(explicit_stop):
+            return explicit_stop, f"sheet {direction} SL"
+
+        session_stop = session_low if direction == "BUY" else session_high
+        if is_valid(session_stop):
+            fallback_name = (
+                "session low stop fallback"
+                if direction == "BUY"
+                else "session high stop fallback"
+            )
+            return session_stop, fallback_name
+
+        structural_candidates = (
+            (current_low, previous_low)
+            if direction == "BUY"
+            else (current_high, previous_high)
+        )
+        valid_structural = [
+            value for value in structural_candidates if is_valid(value)
+        ]
+        if valid_structural:
+            stop_loss = (
+                min(valid_structural)
+                if direction == "BUY"
+                else max(valid_structural)
+            )
+            structure_name = (
+                "recent candle low"
+                if direction == "BUY"
+                else "recent candle high"
+            )
+            return stop_loss, structure_name
+
+        return None, "no valid stop"
+
+    @classmethod
+    def _select_analysis_targets(
+        cls,
+        *,
+        direction: str,
+        entry_price: Decimal,
+        raw_targets: list[Decimal],
+        fallback_high: Decimal,
+        fallback_low: Decimal,
+    ) -> tuple[Decimal, tuple[Decimal, ...], tuple[Decimal | None, ...]] | None:
+        """Return valid configured targets without inventing a Target 1.
+
+        Target 1 is the publishability gate. Later blank, malformed,
+        duplicate, non-progressive, or directionally invalid slots are
+        excluded while their positional identity is preserved.
+
+        ``fallback_high`` and ``fallback_low`` are used only for legacy sheets
+        that contain no target table at all. They never replace an invalid
+        configured Target 1.
+        """
+
+        if not raw_targets:
+            # Legacy sheets without a target table retain their existing
+            # structural target behavior. Once a target table is present,
+            # however, Target 1 below is mandatory and no fallback is used.
+            fallback_target = (
+                fallback_high if direction == "BUY" else fallback_low
+            )
+            if (
+                direction == "BUY" and fallback_target > entry_price
+            ) or (
+                direction == "SELL" and fallback_target < entry_price
+            ):
+                return fallback_target, (), ()
+            return None
+
+        first_target = raw_targets[0]
+        if first_target <= 0:
+            return None
+        if (
+            direction == "BUY" and first_target <= entry_price
+        ) or (
+            direction == "SELL" and first_target >= entry_price
+        ):
+            return None
+
+        target_slots: list[Decimal | None] = []
+        directional_targets: list[Decimal] = []
+        previous_target: Decimal | None = None
+
+        for value in raw_targets[:6]:
+            if value <= 0:
+                target_slots.append(None)
+                continue
+
+            if direction == "BUY":
+                valid_direction = value > entry_price
+                progressive = (
+                    previous_target is None or value > previous_target
+                )
+            else:
+                valid_direction = value < entry_price
+                progressive = (
+                    previous_target is None or value < previous_target
+                )
+
+            if (
+                not valid_direction
+                or not progressive
+                or value in directional_targets
+            ):
+                target_slots.append(None)
+                continue
+
+            target_slots.append(value)
+            directional_targets.append(value)
+            previous_target = value
+
+        if not directional_targets:
+            return None
+
+        return (
+            directional_targets[0],
+            tuple(directional_targets),
+            tuple(target_slots),
+        )
 
     def __init__(self) -> None:
         settings = get_settings()
         self._public_url = settings.google_sheet_public_url
-        if (
-            not settings.google_service_account_json
-            and not self._public_url
-        ):
+        raw_credentials = str(
+            settings.google_service_account_json or ""
+        ).strip()
+
+        credentials_path = str(
+            os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON_PATH", "")
+            or ""
+        ).strip()
+
+        if not raw_credentials and credentials_path:
+            path = Path(credentials_path).expanduser()
+
+            if not path.is_file():
+                raise GoogleSheetsConfigurationError(
+                    "GOOGLE_SERVICE_ACCOUNT_JSON_PATH does not exist."
+                )
+
+            try:
+                raw_credentials = path.read_text(
+                    encoding="utf-8"
+                ).strip()
+            except OSError as exc:
+                raise GoogleSheetsConfigurationError(
+                    "Unable to read Google service-account file."
+                ) from exc
+
+        if not raw_credentials and not self._public_url:
             raise GoogleSheetsConfigurationError(
                 "Google Sheets credentials or public URL are not configured."
             )
+
         self._client: Any | None = None
-        if settings.google_service_account_json:
+
+        if raw_credentials:
             try:
-                credentials = json.loads(
-                    settings.google_service_account_json
+                credentials = parse_google_service_account_json(
+                    raw_credentials
                 )
-            except json.JSONDecodeError as exc:
+                self._client = gspread.service_account_from_dict(
+                    credentials
+                )
+            except Exception as exc:
                 raise GoogleSheetsConfigurationError(
-                    "GOOGLE_SERVICE_ACCOUNT_JSON is invalid JSON."
+                    "Google service-account credentials could not be loaded."
                 ) from exc
-            self._client = gspread.service_account_from_dict(credentials)
+
+        self._sheet_id = settings.google_sheet_id
         self._sheet_name = settings.google_sheet_name
         self._worksheet_name = settings.google_worksheet_name
 
@@ -85,7 +272,11 @@ class GoogleSheetsService:
         if self._client is not None:
             try:
                 configured_worksheet = (
-                    self._client.open(self._sheet_name)
+                    (
+                        self._client.open_by_key(self._sheet_id)
+                        if self._sheet_id
+                        else self._client.open(self._sheet_name)
+                    )
                     .worksheet(self._worksheet_name)
                 )
                 rows = configured_worksheet.get_all_records(
@@ -156,7 +347,11 @@ class GoogleSheetsService:
     def _analysis_values(self) -> list[list[str]]:
         if self._client is not None:
             return (
-                self._client.open(self._sheet_name)
+                (
+                    self._client.open_by_key(self._sheet_id)
+                    if self._sheet_id
+                    else self._client.open(self._sheet_name)
+                )
                 .worksheet(self._ANALYSIS_WORKSHEET)
                 .get_all_values()
             )
@@ -198,6 +393,16 @@ class GoogleSheetsService:
             if match:
                 session_indexes.append((index, match.group(1)))
         candidates: list[tuple[datetime, SheetSignal]] = []
+
+        # Track complete-session extremes. Initial risk must use the
+        # active session high/low, not only the immediately previous row.
+        # Keep extrema isolated by trading date and session.
+        # Historical rows from older Sheet blocks must never affect
+        # today's BUY/SELL stop loss.
+        session_extremes: dict[
+            tuple[str, str],
+            dict[str, Decimal | None],
+        ] = {}
         india = ZoneInfo("Asia/Kolkata")
         for position, (start_index, session_date) in enumerate(
             session_indexes
@@ -207,42 +412,505 @@ class GoogleSheetsService:
                 if position + 1 < len(session_indexes)
                 else len(values)
             )
-            for row in values[start_index + 1 : end_index]:
+            session_rows = values[start_index + 1 : end_index]
+            target_tables: dict[
+                str,
+                dict[str, list[Decimal]],
+            ] = {
+                "default": {"BUY": [], "SELL": []},
+                "morning": {"BUY": [], "SELL": []},
+                "evening": {"BUY": [], "SELL": []},
+            }
+
+            explicit_stop_losses: dict[
+                str,
+                dict[str, Decimal | None],
+            ] = {
+                "morning": {"BUY": None, "SELL": None},
+                "evening": {"BUY": None, "SELL": None},
+            }
+            session_bases: dict[
+                str,
+                dict[str, Decimal | None],
+            ] = {
+                "morning": {"BUY": None, "SELL": None},
+                "evening": {"BUY": None, "SELL": None},
+            }
+            session_bounds: dict[
+                str,
+                dict[str, Decimal | None],
+            ] = {
+                "morning": {"high": None, "low": None},
+                "evening": {"high": None, "low": None},
+            }
+            base_layout_sessions: set[str] = set()
+            target_section = "default"
+            explicit_target_labels = False
+            unlabeled_block_count = 0
+            pending_target_session: str | None = None
+
+            for target_index, target_row in enumerate(session_rows):
+                cells = [str(cell).strip() for cell in target_row]
+                joined = " ".join(cells).strip().lower()
+
+                header_indexes = {
+                    cell.strip().lower(): index
+                    for index, cell in enumerate(cells)
+                    if cell.strip()
+                }
+                buy_base_index = header_indexes.get("buy base")
+                sell_base_index = header_indexes.get("sell base")
+                if (
+                    buy_base_index is not None
+                    and sell_base_index is not None
+                ):
+                    if (
+                        "evening session" in joined
+                        or (
+                            "session high" in header_indexes
+                            and "session low" in header_indexes
+                        )
+                    ):
+                        base_session = "evening"
+                        high_header = "session high"
+                        low_header = "session low"
+                    elif (
+                        "morning session" in joined
+                        or (
+                            "day high" in header_indexes
+                            and "day low" in header_indexes
+                        )
+                    ):
+                        base_session = "morning"
+                        high_header = "day high"
+                        low_header = "day low"
+                    else:
+                        base_session = None
+
+                    if base_session is not None:
+                        base_layout_sessions.add(base_session)
+                        pending_target_session = base_session
+                        # An explicit summary owns this session. Invalid values
+                        # must not borrow another session/date or fall back to AVG.
+                        session_bases[base_session] = {"BUY": None, "SELL": None}
+                        session_bounds[base_session] = {"high": None, "low": None}
+
+                        if target_index + 1 < len(session_rows):
+                            value_row = session_rows[target_index + 1]
+
+                            def summary_value(
+                                column_index: int | None,
+                            ) -> Decimal | None:
+                                if (
+                                    column_index is None
+                                    or column_index >= len(value_row)
+                                ):
+                                    return None
+                                parsed = cls._decimal_or_none(
+                                    value_row[column_index]
+                                )
+                                if parsed is None or parsed <= 0:
+                                    return None
+                                return parsed
+
+                            session_bases[base_session]["BUY"] = summary_value(
+                                buy_base_index
+                            )
+                            session_bases[base_session]["SELL"] = summary_value(
+                                sell_base_index
+                            )
+                            session_bounds[base_session]["high"] = summary_value(
+                                header_indexes.get(high_header)
+                            )
+                            session_bounds[base_session]["low"] = summary_value(
+                                header_indexes.get(low_header)
+                            )
+
+                if len(cells) >= 16:
+                    session_label = cells[7].strip().lower()
+                    buy_sl_header = cells[14].strip().lower()
+                    sell_sl_header = cells[15].strip().lower()
+
+                    if (
+                        session_label in {
+                            "morning session",
+                            "evening session",
+                        }
+                        and buy_sl_header == "buy sl"
+                        and sell_sl_header == "sell sl"
+                    ):
+                        sl_session = (
+                            "morning"
+                            if session_label == "morning session"
+                            else "evening"
+                        )
+
+                        if target_index + 1 < len(session_rows):
+                            value_row = [
+                                str(cell).strip()
+                                for cell in session_rows[target_index + 1]
+                            ]
+
+                            if len(value_row) >= 16:
+                                explicit_stop_losses[sl_session]["BUY"] = (
+                                    cls._decimal_or_none(value_row[14])
+                                )
+                                explicit_stop_losses[sl_session]["SELL"] = (
+                                    cls._decimal_or_none(value_row[15])
+                                )
+
+                if "morning targets" in joined:
+                    target_section = "morning"
+                    explicit_target_labels = True
+                    continue
+                if "evening targets" in joined:
+                    target_section = "evening"
+                    explicit_target_labels = True
+                    continue
+
+                if len(cells) < 10:
+                    continue
+
+                is_target_header = (
+                    cells[7].strip().lower() == "target"
+                    and cells[8].strip().lower() == "buy level"
+                    and cells[9].strip().lower() == "sell level"
+                )
+                if is_target_header:
+                    if not explicit_target_labels:
+                        unlabeled_block_count += 1
+                        if pending_target_session is not None:
+                            target_section = pending_target_session
+                            pending_target_session = None
+                        else:
+                            target_section = (
+                                "morning"
+                                if unlabeled_block_count == 1
+                                else "evening"
+                            )
+                    continue
+
+                target_match = re.fullmatch(
+                    r"target\s*([1-6])",
+                    cells[7],
+                    re.IGNORECASE,
+                )
+                if not target_match:
+                    continue
+
+                if (
+                    not explicit_target_labels
+                    and pending_target_session is not None
+                ):
+                    target_section = pending_target_session
+                    pending_target_session = None
+
+                target_number = int(target_match.group(1))
+                buy_level = cls._decimal_or_none(cells[8])
+                sell_level = cls._decimal_or_none(cells[9])
+
+                for direction, value in (
+                    ("BUY", buy_level),
+                    ("SELL", sell_level),
+                ):
+                    targets = target_tables[target_section][direction]
+                    while len(targets) < target_number:
+                        targets.append(Decimal("0"))
+                    if value is not None:
+                        targets[target_number - 1] = value
+
+            # One unlabelled table is the legacy/default table. With two
+            # blocks, the first remains morning and the second evening.
+            if unlabeled_block_count == 1:
+                for direction in ("BUY", "SELL"):
+                    target_tables["default"][direction] = list(
+                        target_tables["morning"][direction]
+                    )
+
+            # Preserve Target 1..6 positional identity.
+            # Zero placeholders stay in-place until direction validation.
+            for table in target_tables.values():
+                for direction in ("BUY", "SELL"):
+                    while len(table[direction]) < 6:
+                        table[direction].append(Decimal("0"))
+                    table[direction] = table[direction][:6]
+
+            # Never compare a morning row with an evening row. Each trading
+            # session owns its own previous closed-bar structure.
+            previous_rows: dict[
+                str,
+                tuple[Decimal, Decimal, Decimal],
+            ] = {}
+
+            for row in session_rows:
                 normalized = [str(cell).strip() for cell in row]
                 if len(normalized) < 6:
                     continue
+
                 slot_match = cls._SLOT_LABEL.match(normalized[0])
                 if not slot_match:
                     continue
+
                 high = cls._decimal_or_none(normalized[1])
                 low = cls._decimal_or_none(normalized[2])
-                previous_average = cls._decimal_or_none(normalized[3])
+                sheet_previous_average = cls._decimal_or_none(normalized[3])
+                current_average = cls._decimal_or_none(normalized[4])
                 live_price = cls._decimal_or_none(normalized[5])
-                if None in (high, low, previous_average, live_price):
+
+                if None in (
+                    high,
+                    low,
+                    current_average,
+                    live_price,
+                ):
                     continue
+
+                start_hour = int(slot_match.group(1))
+                start_minute = int(slot_match.group(2))
+                start_meridiem = str(
+                    slot_match.group(3) or ""
+                ).upper()
+
+                if start_meridiem:
+                    start_hour %= 12
+                    if start_meridiem == "PM":
+                        start_hour += 12
+
                 observed_local = datetime.strptime(
                     (
-                        f"{session_date} {slot_match.group(1)}:"
-                        f"{slot_match.group(2)}"
+                        f"{session_date} "
+                        f"{start_hour:02d}:{start_minute:02d}"
                     ),
                     "%Y-%m-%d %H:%M",
                 ).replace(tzinfo=india)
+
                 observed_at = observed_local.astimezone(timezone.utc)
+                end_hour = int(slot_match.group(4))
+                end_minute = int(slot_match.group(5))
+                end_meridiem = str(slot_match.group(6) or "").upper()
+
+                if end_meridiem:
+                    end_hour %= 12
+                    if end_meridiem == "PM":
+                        end_hour += 12
+
+                closed_local = observed_local.replace(
+                    hour=end_hour,
+                    minute=end_minute,
+                )
+                if closed_local <= observed_local:
+                    closed_local += timedelta(days=1)
+                closed_at = closed_local.astimezone(timezone.utc)
+                local_minutes = (
+                    observed_local.hour * 60
+                    + observed_local.minute
+                )
+
+                # Morning rows start at 03:30 and end with
+                # 01:30 PM TO 02:30 PM.
+                # 02:30 PM TO 03:30 PM is the first evening row.
+                if 210 <= local_minutes < 870:
+                    target_session = "morning"
+                elif local_minutes >= 870 or local_minutes <= 150:
+                    target_session = "evening"
+                else:
+                    continue
+
+                previous_row = previous_rows.get(target_session)
+
+                session_key = (session_date, target_session)
+                extremes = session_extremes.setdefault(
+                    session_key,
+                    {"high": None, "low": None},
+                )
+
+                session_high = extremes["high"]
+                session_low = extremes["low"]
+
+                extremes["high"] = (
+                    high
+                    if session_high is None
+                    else max(session_high, high)
+                )
+                extremes["low"] = (
+                    low
+                    if session_low is None
+                    else min(session_low, low)
+                )
+
                 age = normalized_now - observed_at
                 if age < timedelta(minutes=-5) or age > max_age:
+                    previous_rows[target_session] = (
+                        high,
+                        low,
+                        current_average,
+                    )
                     continue
-                direction = (
-                    "BUY" if live_price >= previous_average else "SELL"
+
+                if previous_row is None:
+                    previous_rows[target_session] = (
+                        high,
+                        low,
+                        current_average,
+                    )
+                    continue
+
+                previous_high, previous_low, previous_avg = (
+                    previous_row
                 )
-                target = high if direction == "BUY" else low
-                stop_loss = low if direction == "BUY" else high
-                relation = (
-                    "above" if direction == "BUY" else "below"
+
+                comparison_average = (
+                    sheet_previous_average
+                    if sheet_previous_average is not None
+                    else previous_avg
                 )
+
+                # Direction is determined only by confirmed price structure.
+                # Stop-loss sources are selected later and must never reverse
+                # or otherwise influence the direction decision.
+                bullish_setup = (
+                    high > previous_high
+                    and current_average > comparison_average
+                    and live_price > current_average
+                )
+                bearish_setup = (
+                    low < previous_low
+                    and current_average < comparison_average
+                    and live_price < current_average
+                )
+
+                previous_rows[target_session] = (
+                    high,
+                    low,
+                    current_average,
+                )
+
+                # A row becomes actionable only after its configured bar has
+                # closed, preventing an intrabar reversal from being emitted.
+                if normalized_now < closed_at:
+                    continue
+
+                if bullish_setup:
+                    direction = "BUY"
+                    session_base = session_bases[target_session][direction]
+                    if target_session in base_layout_sessions:
+                        if session_base is None:
+                            continue
+                        entry_price = session_base
+                    else:
+                        entry_price = current_average
+
+                    explicit_sl = explicit_stop_losses[
+                        target_session
+                    ]["BUY"]
+
+                    stop_loss, stop_source = (
+                        cls._select_analysis_stop_loss(
+                            direction=direction,
+                            entry_price=entry_price,
+                            explicit_stop=explicit_sl,
+                            current_high=high,
+                            current_low=low,
+                            previous_high=previous_high,
+                            previous_low=previous_low,
+                            session_high=(
+                                session_bounds[target_session]["high"]
+                                or extremes["high"]
+                            ),
+                            session_low=(
+                                session_bounds[target_session]["low"]
+                                or extremes["low"]
+                            ),
+                        )
+                    )
+
+                    setup_name = (
+                        "higher high + higher average + CMP above average + "
+                        + stop_source
+                    )
+                elif bearish_setup:
+                    direction = "SELL"
+                    session_base = session_bases[target_session][direction]
+                    if target_session in base_layout_sessions:
+                        if session_base is None:
+                            continue
+                        entry_price = session_base
+                    else:
+                        entry_price = current_average
+
+                    explicit_sl = explicit_stop_losses[
+                        target_session
+                    ]["SELL"]
+
+                    stop_loss, stop_source = (
+                        cls._select_analysis_stop_loss(
+                            direction=direction,
+                            entry_price=entry_price,
+                            explicit_stop=explicit_sl,
+                            current_high=high,
+                            current_low=low,
+                            previous_high=previous_high,
+                            previous_low=previous_low,
+                            session_high=(
+                                session_bounds[target_session]["high"]
+                                or extremes["high"]
+                            ),
+                            session_low=(
+                                session_bounds[target_session]["low"]
+                                or extremes["low"]
+                            ),
+                        )
+                    )
+
+                    setup_name = (
+                        "lower low + lower average + CMP below average + "
+                        + stop_source
+                    )
+                else:
+                    continue
+
+                if stop_loss is None:
+                    continue
+
+                if (
+                    direction == "BUY"
+                    and stop_loss >= entry_price
+                ) or (
+                    direction == "SELL"
+                    and stop_loss <= entry_price
+                ):
+                    continue
+
+                session_targets = target_tables[target_session][direction]
+                default_targets = target_tables["default"][direction]
+                if target_session in base_layout_sessions:
+                    # Exact-session target ownership: never borrow a default
+                    # or opposite-session table from the same sheet/date.
+                    raw_targets = session_targets
+                elif any(value > 0 for value in session_targets):
+                    raw_targets = session_targets
+                elif any(value > 0 for value in default_targets):
+                    raw_targets = default_targets
+                else:
+                    raw_targets = []
+
+                selected_targets = cls._select_analysis_targets(
+                    direction=direction,
+                    entry_price=entry_price,
+                    raw_targets=raw_targets,
+                    fallback_high=high,
+                    fallback_low=low,
+                )
+                if selected_targets is None:
+                    continue
+
+                target, directional_targets, target_slots = selected_targets
+
                 label = (
-                    f"{session_date} {normalized[0]} · CMP {relation} "
-                    "previous average"
+                    f"{session_date} {normalized[0]} · "
+                    f"{setup_name}"
                 )
+
                 candidates.append(
                     (
                         observed_at,
@@ -251,18 +919,18 @@ class GoogleSheetsService:
                             target_price=target,
                             stop_loss=stop_loss,
                             label=label,
-                            external_key=cls._build_external_key(
-                                start_index,
-                                direction,
-                                target,
-                                stop_loss,
-                                label,
+                            external_key=(
+                                f"gsheet-session:{session_date}:"
+                                f"{target_session}:{direction}"
                             ),
-                            reference_price=live_price,
+                            reference_price=entry_price,
                             observed_at=observed_at,
                             source=(
-                                f"GOOGLE_SHEET:{cls._ANALYSIS_WORKSHEET}"
+                                f"GOOGLE_SHEET:"
+                                f"{cls._ANALYSIS_WORKSHEET}"
                             ),
+                            targets=directional_targets,
+                            target_slots=target_slots,
                         ),
                     )
                 )
@@ -306,10 +974,14 @@ class GoogleSheetsService:
         if not cleaned:
             return None
         try:
-            return Decimal(cleaned)
+            parsed = Decimal(cleaned)
         except InvalidOperation:
             logger.warning("Ignoring non-numeric Sheet price value: {}", value)
             return None
+        if not parsed.is_finite():
+            logger.warning("Ignoring non-finite Sheet price value")
+            return None
+        return parsed
 
     @staticmethod
     def _build_external_key(

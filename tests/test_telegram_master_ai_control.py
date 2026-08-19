@@ -49,6 +49,7 @@ def update(text: str, *, user_id: int = 1001, chat_id: int = 1) -> dict:
 def test_master_command_parser_accepts_bot_suffix() -> None:
     assert is_master_command("/master status")
     assert is_master_command("/master@my_bot status")
+    assert is_master_command("master status")
     assert not is_master_command("hello")
     assert parse_master_command("/master run blog") == ("run", "blog")
     assert parse_master_command("/master") == ("help", None)
@@ -59,6 +60,36 @@ def test_master_command_parser_accepts_numbered_ai_toggles() -> None:
     assert parse_master_command("/master on ai 1") == ("on", "1")
     assert parse_master_command("/master off ai 3") == ("off", "3")
     assert parse_master_command("/master enable agent 6") == ("on", "6")
+
+
+def test_natural_master_ai_error_sentence_reaches_read_only_diagnostics(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.generate_master_ai_reply",
+        lambda message: calls.append(message) or "SAFE_STUB_REPLY",
+    )
+
+    result = handle_master_command_text(
+        text="Master ai error door karo",
+        telegram_user_id=1001,
+        chat_id=55,
+        status_loader=lambda: [
+            {
+                "agent_key": "master_ai",
+                "display_name": "Master AI",
+                "status": "IDLE",
+                "is_enabled": True,
+            }
+        ],
+    )
+
+    assert is_master_command("Master ai error door karo") is False
+    assert parse_master_command("Master ai error door karo") == ("", None)
+    assert result.status == "COMPLETED"
+    assert "Master AI: IDLE" in (result.response_text or "")
+    assert calls == []
+    assert result.response_text != help_text()
 
 
 def test_help_command_requires_admin(monkeypatch) -> None:
@@ -118,9 +149,8 @@ def test_master_bot_accepts_natural_blog_text_without_env_flag(monkeypatch) -> N
     assert result.handled is True
     assert result.task_type == "BLOG"
     assert runner.calls[0].input_payload["telegram_target"] == "blog"
-    assert "Latest blog URL" in (result.response_text or "") or "Blog page" in (
-        result.response_text or ""
-    )
+    assert runner.calls[0].input_payload["publish"] is False
+    assert runner.calls[0].input_payload["include_image"] is False
 
 
 def test_telegram_blog_started_text_uses_venusrealm_public_url(monkeypatch) -> None:
@@ -152,7 +182,8 @@ def test_telegram_blog_started_text_uses_venusrealm_public_url(monkeypatch) -> N
 
     text = _run_started_text("blog", progress)
 
-    assert "Latest blog URL: https://venusrealm.net/blog?post=xauusd-usa-market" in text
+    assert "Blog workflow: DRAFT ONLY." in text
+    assert "Latest blog URL:" not in text
     assert "xauusd-buy-sell-signal.streamlit.app" not in text
     assert "streamlit.app" not in text
     assert "xauusd-agent-web-production.up.railway.app" not in text
@@ -168,30 +199,34 @@ def test_master_bot_replies_helpfully_to_unknown_admin_text(monkeypatch) -> None
     )
 
     assert result.handled is True
-    assert result.status == "IGNORED_NON_MASTER_COMMAND"
-    assert "Master AI ready" in (result.response_text or "")
+    assert result.status == "AI_CHAT_RESPONSE"
+    assert result.response_text
     assert runner.calls == []
 
 
 def test_status_command_returns_safe_summary(monkeypatch) -> None:
     monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
-    result = handle_master_command_text(
-        text="/master status",
-        telegram_user_id=1001,
-        chat_id=55,
-        status_loader=lambda limit: [
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.list_ai_agents",
+        lambda: [
             {
-                "run_id": 5,
-                "task_type": "BLOG",
-                "status": "RUNNING",
-                "completed_steps": 1,
-                "total_steps": 3,
-                "safe_error": "/secret/path/token traceback",
+                "agent_key": "ai_blog_agent",
+                "display_name": "AI Blog Agent",
+                "is_enabled": True,
+                "status": "ERROR",
+                "queue_size": 0,
+                "last_run_at": None,
+                "last_error": "/secret/path/token traceback",
             }
         ],
     )
-    assert "#5" in (result.response_text or "")
-    assert "BLOG" in (result.response_text or "")
+    result = handle_master_command_text(
+        text="/master status blog",
+        telegram_user_id=1001,
+        chat_id=55,
+    )
+    assert "AI Blog Agent status" in (result.response_text or "")
+    assert "Internal agent configuration failed." in (result.response_text or "")
     assert "secret" not in (result.response_text or "").lower()
     assert "traceback" not in (result.response_text or "").lower()
 
@@ -208,7 +243,8 @@ def test_service_exception_returns_fixed_telegram_error(monkeypatch) -> None:
         chat_id=55,
         runner=boom,
     )
-    assert result.response_text == SAFE_TELEGRAM_ERROR
+    assert result.status == "ERROR"
+    assert "Internal agent configuration failed." in (result.response_text or "")
     assert "/app" not in result.response_text
     assert "token" not in result.response_text.lower()
     assert "traceback" not in result.response_text.lower()
@@ -257,3 +293,94 @@ def test_signal_bot_does_not_replace_reply_agent_except_master_suppression(monke
     assert handled.handled is True
     assert handled.status == "IGNORED_WRONG_BOT"
     assert sent == []
+
+
+
+def test_master_ai_chat_memory_keeps_recent_same_chat_context(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    prompts: list[str] = []
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.generate_master_ai_reply",
+        lambda prompt: prompts.append(prompt) or f"reply-{len(prompts)}",
+    )
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control._MASTER_CHAT_MEMORY",
+        {},
+    )
+
+    first = handle_master_command_text(
+        text="Mera naam Manish hai.",
+        telegram_user_id=1001,
+        chat_id=501,
+    )
+    second = handle_master_command_text(
+        text="Mera naam kya hai?",
+        telegram_user_id=1001,
+        chat_id=501,
+    )
+
+    assert first.status == "AI_CHAT_RESPONSE"
+    assert second.status == "AI_CHAT_RESPONSE"
+    assert prompts[0] == "Mera naam Manish hai."
+    assert "User: Mera naam Manish hai." in prompts[1]
+    assert "MASTER AI: reply-1" in prompts[1]
+    assert prompts[1].endswith("User: Mera naam kya hai?")
+
+
+def test_master_ai_chat_memory_is_isolated_per_chat(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    prompts: list[str] = []
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.generate_master_ai_reply",
+        lambda prompt: prompts.append(prompt) or "SAFE_REPLY",
+    )
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control._MASTER_CHAT_MEMORY",
+        {},
+    )
+
+    handle_master_command_text(
+        text="Private project detail alpha.",
+        telegram_user_id=1001,
+        chat_id=601,
+    )
+    handle_master_command_text(
+        text="Hello from another chat.",
+        telegram_user_id=1001,
+        chat_id=602,
+    )
+
+    assert prompts[1] == "Hello from another chat."
+    assert "alpha" not in prompts[1]
+
+
+def test_master_ai_chat_memory_never_bypasses_signal_approval(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_ADMIN_USER_ID", "1001")
+    chat_calls: list[str] = []
+    runner_calls: list[dict] = []
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control.generate_master_ai_reply",
+        lambda prompt: chat_calls.append(prompt) or "SAFE_REPLY",
+    )
+    monkeypatch.setattr(
+        "services.telegram_master_ai_control._MASTER_CHAT_MEMORY",
+        {},
+    )
+
+    handle_master_command_text(
+        text="Mera naam Manish hai.",
+        telegram_user_id=1001,
+        chat_id=701,
+    )
+    result = handle_master_command_text(
+        text="Signal band karo",
+        telegram_user_id=1001,
+        chat_id=701,
+        runner=lambda **kwargs: runner_calls.append(kwargs),
+    )
+
+    assert result.status == "APPROVAL_REQUIRED"
+    assert "Action: disable_signal_agent" in (result.response_text or "")
+    assert "Executed: NO" in (result.response_text or "")
+    assert len(chat_calls) == 1
+    assert runner_calls == []

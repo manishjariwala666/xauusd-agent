@@ -1,14 +1,11 @@
-"""Execution planner for the Master AI Orchestrator.
-
-Phase P6.1 adds a deterministic, dependency-free planner.  It does not replace
-or modify any existing worker agent.  It only decides which enabled worker
-agents should be invoked and in what dependency order.
-"""
+"""Deterministic execution planner for the VenusRealm Master AI."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+
+from services.worker_agent_adapter import ORCHESTRATION_NATIVE_AGENT_KEYS
 
 
 @dataclass(frozen=True)
@@ -47,12 +44,7 @@ class PlanValidationResult:
 
 
 class ExecutionPlanner:
-    """Rule-based planner for Phase P6.1 orchestration.
-
-    The planner intentionally avoids LLM calls in P6.1 so the execution engine
-    is deterministic, testable, and safe.  Future phases can swap in an AI
-    planning strategy behind the same interface.
-    """
+    """Rule-based, fail-closed planner with no LLM action selection."""
 
     KEYWORD_AGENT_HINTS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
         (("telegram", "tg", "bot"), ("telegram",)),
@@ -70,14 +62,7 @@ class ExecutionPlanner:
         available_agents: list[AgentDescriptor],
         context: dict[str, Any],
     ) -> ExecutionPlan:
-        """Build a safe execution plan from a high-level task.
-
-        Supported explicit payload options:
-        - ``agent_keys``: ordered list of worker agent keys to execute.
-        - ``parallel``: when true, steps without dependencies can run together.
-        - ``max_attempts``: retry attempts per step, clamped to 1..5.
-        - ``requires_human_approval``: forces the plan into approval-required.
-        """
+        del context
         input_payload = dict(getattr(task, "input_payload", {}) or {})
         title = str(getattr(task, "title", "Master AI task") or "Master AI task")
         task_type = str(getattr(task, "task_type", "GENERAL") or "GENERAL")
@@ -86,20 +71,16 @@ class ExecutionPlanner:
         if risk_level not in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
             risk_level = "LOW"
 
-        enabled_agents = [agent for agent in available_agents if agent.is_enabled]
         selected_keys = self._select_agent_keys(
             task_type=task_type,
             title=title,
             payload=input_payload,
-            enabled_agents=enabled_agents,
+            available_agents=available_agents,
         )
 
         parallel = bool(input_payload.get("parallel", False))
         max_attempts = self._max_attempts(input_payload.get("max_attempts", 2))
-        requires_approval = bool(input_payload.get("requires_human_approval", False)) or risk_level in {
-            "HIGH",
-            "CRITICAL",
-        }
+        requires_approval = bool(input_payload.get("requires_human_approval", False)) or risk_level in {"HIGH", "CRITICAL"}
 
         steps: list[ExecutionPlanStep] = []
         previous_step_key: str | None = None
@@ -132,7 +113,6 @@ class ExecutionPlanner:
         )
 
     def validate_plan(self, *, plan: ExecutionPlan) -> PlanValidationResult:
-        """Validate dependency shape and required step fields."""
         errors: list[str] = []
         warnings: list[str] = []
         if not plan.steps:
@@ -157,12 +137,7 @@ class ExecutionPlanner:
 
         if plan.requires_human_approval:
             warnings.append("Human approval required before execution.")
-
-        return PlanValidationResult(
-            is_valid=not errors,
-            errors=tuple(errors),
-            warnings=tuple(warnings),
-        )
+        return PlanValidationResult(is_valid=not errors, errors=tuple(errors), warnings=tuple(warnings))
 
     def _select_agent_keys(
         self,
@@ -170,16 +145,40 @@ class ExecutionPlanner:
         task_type: str,
         title: str,
         payload: dict[str, Any],
-        enabled_agents: list[AgentDescriptor],
+        available_agents: list[AgentDescriptor] | None = None,
+        enabled_agents: list[AgentDescriptor] | None = None,
     ) -> list[str]:
-        available_by_key = {agent.agent_key: agent for agent in enabled_agents}
+        """Select exact agent keys while preserving the older enabled_agents API.
+
+        ``enabled_agents`` remains accepted for focused tests and callers that
+        pre-filtered the registry. Newer orchestration passes ``available_agents``
+        so configured-but-disabled workers can still be distinguished and blocked.
+        """
+        if available_agents is None:
+            available_agents = list(enabled_agents or [])
+        all_by_key = {agent.agent_key: agent for agent in available_agents}
+        active_agents = [agent for agent in available_agents if agent.is_enabled]
+        enabled_by_key = {agent.agent_key: agent for agent in active_agents}
+
         explicit_keys = payload.get("agent_keys") or payload.get("agents")
         if isinstance(explicit_keys, str):
             explicit_keys = [explicit_keys]
         if isinstance(explicit_keys, list):
-            selected = [str(key) for key in explicit_keys if str(key) in available_by_key]
-            if selected:
-                return selected
+            requested = [str(key).strip() for key in explicit_keys if str(key).strip()]
+            unavailable: list[str] = []
+            for key in requested:
+                if key in enabled_by_key:
+                    continue
+                if key in all_by_key:
+                    unavailable.append(key)
+                    continue
+                if key in ORCHESTRATION_NATIVE_AGENT_KEYS:
+                    continue
+                unavailable.append(key)
+            if unavailable:
+                names = ", ".join(unavailable)
+                raise ValueError(f"{names} is unavailable or disabled. No substitute agent was selected.")
+            return list(dict.fromkeys(requested))
 
         haystack = " ".join(
             str(value)
@@ -190,16 +189,15 @@ class ExecutionPlanner:
         for keywords, key_hints in self.KEYWORD_AGENT_HINTS:
             if not any(keyword in haystack for keyword in keywords):
                 continue
-            for agent in enabled_agents:
+            for agent in active_agents:
                 agent_key = agent.agent_key.lower()
                 display_name = agent.display_name.lower()
                 if any(hint in agent_key or hint in display_name for hint in key_hints):
                     selected.append(agent.agent_key)
-
         deduped = list(dict.fromkeys(selected))
         if deduped:
             return deduped
-        return [enabled_agents[0].agent_key] if enabled_agents else []
+        return [active_agents[0].agent_key] if active_agents else []
 
     @staticmethod
     def _safe_step_key(agent_key: str) -> str:

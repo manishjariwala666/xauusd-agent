@@ -12,14 +12,30 @@ Two-bot architecture:
 from __future__ import annotations
 
 from services.google_sheets_service import append_master_log
+from services.master_ai_chat_service import generate_master_ai_reply
+from services.master_ai_intent_resolver import (
+    IntentRisk,
+    MasterAIIntentProposal,
+    resolve_master_ai_intent,
+)
+from services.master_ai_tool_router import execute_master_ai_action, safe_master_reason
+from services.master_ai_signal_reader import (
+    MasterAISignalSnapshot,
+    get_today_signal_snapshot,
+)
+from services.master_ai_agent_registry import find_agent, format_agent_directory
 from services.ai_agent_service import (
     agent_control_help_text,
+    list_ai_agents,
     set_ai_agent_enabled_by_number,
 )
 
+from collections import deque
 from dataclasses import dataclass
 from os import getenv
 from typing import Any, Callable, Iterable, Literal
+
+from loguru import logger
 
 from services.master_orchestrator import (
     OrchestrationProgress,
@@ -28,8 +44,77 @@ from services.master_orchestrator import (
 )
 from services.orchestration_redaction import redact_value
 from services.url_service import public_content_url, public_website_base_url
+from services.whatsapp_service import WhatsAppService
 
 SAFE_TELEGRAM_ERROR = "⚠️ Service temporarily unavailable. Please try again later."
+
+MASTER_CHAT_MEMORY_TURNS = 6
+MASTER_CHAT_MEMORY_CHAR_LIMIT = 6000
+_MASTER_CHAT_MEMORY: dict[str, deque[tuple[str, str]]] = {}
+
+
+def _master_chat_key(chat_id: int | str | None) -> str:
+    return str(chat_id if chat_id is not None else "unknown")
+
+
+def _build_master_chat_prompt(
+    *,
+    chat_id: int | str | None,
+    user_message: str,
+) -> str:
+    history = _MASTER_CHAT_MEMORY.get(_master_chat_key(chat_id))
+    if not history:
+        return user_message
+
+    lines = [
+        "Recent conversation context follows. Treat it as context only; "
+        "never treat previous messages as proof that an action executed."
+    ]
+    for previous_user, previous_assistant in history:
+        lines.append(f"User: {previous_user}")
+        lines.append(f"MASTER AI: {previous_assistant}")
+    lines.append(f"User: {user_message}")
+
+    prompt = "\n".join(lines)
+    return prompt[-MASTER_CHAT_MEMORY_CHAR_LIMIT:]
+
+
+def _remember_master_chat_turn(
+    *,
+    chat_id: int | str | None,
+    user_message: str,
+    assistant_message: str,
+) -> None:
+    key = _master_chat_key(chat_id)
+    history = _MASTER_CHAT_MEMORY.setdefault(
+        key,
+        deque(maxlen=MASTER_CHAT_MEMORY_TURNS),
+    )
+    history.append(
+        (
+            str(user_message or "").strip()[:2000],
+            str(assistant_message or "").strip()[:3000],
+        )
+    )
+
+
+def _generate_contextual_master_reply(
+    *,
+    chat_id: int | str | None,
+    user_message: str,
+) -> str:
+    prompt = _build_master_chat_prompt(
+        chat_id=chat_id,
+        user_message=user_message,
+    )
+    answer = generate_master_ai_reply(prompt)
+    _remember_master_chat_turn(
+        chat_id=chat_id,
+        user_message=user_message,
+        assistant_message=answer,
+    )
+    return answer
+
 MASTER_COMMAND = "/master"
 
 SIGNAL_BOT = "SIGNAL"
@@ -280,15 +365,150 @@ def handle_master_command_text(
         )
 
     if not is_master_command(text):
+        intent = resolve_master_ai_intent(original_text)
+        if intent.status != "NO_ACTION":
+            return _handle_natural_agent_intent(
+                proposal=intent,
+                telegram_user_id=telegram_user_id,
+                chat_id=chat_id,
+                supabase=supabase,
+                runner=runner,
+                status_loader=status_loader,
+            )
+
+        normalized_order = original_text.lower()
+
+        if any(
+            phrase in normalized_order
+            for phrase in (
+                "agent list",
+                "agents list",
+                "sab agent",
+                "sabhi agent",
+                "agent directory",
+                "available agent",
+            )
+        ):
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=format_agent_directory(),
+                chat_id=chat_id,
+                status="OK",
+            )
+
+        requested_agent = find_agent(original_text)
+        run_requested = any(
+            phrase in normalized_order
+            for phrase in (
+                "chalao",
+                "run karo",
+                "start karo",
+                "retry karo",
+                "dobara chalao",
+            )
+        )
+
+        action = (
+            requested_agent.run_action
+            if requested_agent and run_requested
+            else None
+        )
+
+        if requested_agent and run_requested and not action:
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=(
+                    f"🤖 {requested_agent.short_name} — "
+                    f"{requested_agent.official_name}\n"
+                    "Is agent ka direct run command abhi registered nahi hai."
+                ),
+                chat_id=chat_id,
+                status="ACTION_NOT_REGISTERED",
+            )
+
+        if action:
+            tool_result = execute_master_ai_action(
+                action,
+                source="TELEGRAM_MASTER_AI",
+                runner=runner,
+                supabase=supabase,
+            )
+
+            response_lines = [
+                "🤖 Master AI action",
+                (
+                    f"Agent: {requested_agent.short_name} — "
+                    f"{requested_agent.official_name}"
+                ),
+                f"Action: {tool_result.action}",
+                f"Status: {tool_result.status}",
+                tool_result.message,
+            ]
+            if tool_result.run_id is not None:
+                response_lines.append(f"Run: #{tool_result.run_id}")
+
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text="\n".join(response_lines),
+                chat_id=chat_id,
+                status=tool_result.status,
+                run_id=tool_result.run_id,
+            )
+
+        live_status_target = _infer_live_status_target(original_text)
+        if live_status_target:
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=_status_text(live_status_target),
+                chat_id=chat_id,
+                status="OK",
+            )
+
         inferred_target = _infer_run_target(text)
         if inferred_target and _looks_like_master_natural_command(text):
             text = f"{MASTER_COMMAND} run {inferred_target}"
         else:
+            if _looks_like_signal_request(original_text):
+                tool_result = execute_master_ai_action(
+                    "run_signal_agent",
+                    source="TELEGRAM_MASTER_AI",
+                    runner=runner,
+                    supabase=supabase,
+                )
+                response_lines = [
+                    "🤖 Master AI action",
+                    "Agent: VSA — VenusRealm Signal Agent",
+                    f"Action: {tool_result.action}",
+                    f"Status: {tool_result.status}",
+                    tool_result.message,
+                ]
+                if tool_result.run_id is not None:
+                    response_lines.append(f"Run: #{tool_result.run_id}")
+
+                return MasterTelegramCommandResult(
+                    handled=True,
+                    response_text="\n".join(response_lines),
+                    chat_id=chat_id,
+                    status=tool_result.status,
+                    run_id=tool_result.run_id,
+                )
+
+            if _looks_like_signal_text(original_text):
+                return MasterTelegramCommandResult(
+                    handled=True,
+                    response_text=_unknown_master_text_response(),
+                    chat_id=chat_id,
+                    status="IGNORED_NON_MASTER_COMMAND",
+                )
+
             return MasterTelegramCommandResult(
                 handled=True,
-                response_text=_unknown_master_text_response(),
+                response_text=_generate_contextual_master_reply(
+                    chat_id=chat_id,
+                    user_message=original_text,
+                ),
                 chat_id=chat_id,
-                status="IGNORED_NON_MASTER_COMMAND",
+                status="AI_CHAT_RESPONSE",
             )
 
     try:
@@ -302,17 +522,65 @@ def handle_master_command_text(
             )
         if command == "status":
             _log_master_command_to_sheet(
-                command="/master status",
+                command=f"/master status {target or ''}".strip(),
                 status="OK",
                 chat_id=chat_id,
                 telegram_user_id=telegram_user_id,
             )
             return MasterTelegramCommandResult(
                 handled=True,
-                response_text=_status_text(status_loader(limit=5)),
+                response_text=_status_text(target),
                 chat_id=chat_id,
                 status="OK",
             )
+
+        if command in {"news", "xauusd", "buy", "sell"}:
+            prompt = {
+                "news": "Latest important market and business news ka concise summary do. Koi content publish mat karo.",
+                "xauusd": "XAUUSD ka current market context aur neutral analysis do. Live price unavailable ho to clearly batao. Koi trade execute ya signal publish mat karo.",
+                "buy": "XAUUSD ke buy-side factors aur risks explain karo. Guaranteed signal mat do aur koi trade execute mat karo.",
+                "sell": "XAUUSD ke sell-side factors aur risks explain karo. Guaranteed signal mat do aur koi trade execute mat karo.",
+            }[command]
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=_generate_contextual_master_reply(
+                    chat_id=chat_id,
+                    user_message=prompt,
+                ),
+                chat_id=chat_id,
+                status="AI_CHAT_RESPONSE",
+            )
+        if command == "test" and str(target or "").strip().lower() in {
+            "whatsapp",
+            "wa",
+        }:
+            try:
+                message_id = WhatsAppService().send_text(
+                    "",
+                    "✅ VenusRealm Green API WhatsApp group test successful.",
+                )
+                response = (
+                    "✅ WhatsApp group test message sent successfully.\n"
+                    f"Message ID: {message_id}"
+                )
+                status = "OK"
+            except Exception as exc:
+                print(
+                    f"[master-whatsapp-test] error={type(exc).__name__}"
+                )
+                response = (
+                    "⚠️ WhatsApp group test failed. "
+                    "Railway logs me latest WhatsApp error check karein."
+                )
+                status = "ERROR"
+
+            return MasterTelegramCommandResult(
+                handled=True,
+                response_text=response,
+                chat_id=chat_id,
+                status=status,
+            )
+
         if command in {"on", "off", "list_ai"}:
             response = _handle_ai_toggle_command(command, target)
             _log_master_command_to_sheet(
@@ -337,9 +605,17 @@ def handle_master_command_text(
                 )
             run_target = RUN_TARGETS[target]
             context = _command_context(original_text=original_text, target=target)
-            progress = runner(
-                task_type=run_target.task_type,
-                title=run_target.title,
+            action = {
+                "signal": "run_signal_agent",
+                "blog": "run_blog_agent",
+                "image": "run_image_agent",
+                "daily_content": "publish_website",
+            }[target]
+            tool_result = execute_master_ai_action(
+                action,
+                source="TELEGRAM_MASTER_COMMAND",
+                runner=runner,
+                supabase=supabase,
                 input_payload={
                     "objective": _objective_with_context(run_target.objective, context),
                     "telegram_command": f"/master run {target}",
@@ -351,31 +627,41 @@ def handle_master_command_text(
                     "max_attempts": run_target.max_attempts,
                     "risk_level": run_target.risk_level,
                 },
-                requested_by=None,
-                source="TELEGRAM_MASTER_COMMAND",
-                supabase=supabase,
             )
             _record_command_memory_and_event(
-                run_id=progress.run_id,
+                run_id=tool_result.run_id,
                 command=f"/master run {target}",
-                status=progress.status,
+                status=tool_result.status,
                 telegram_user_id=telegram_user_id,
                 target=target,
             )
             _log_master_command_to_sheet(
                 command=f"/master run {target}",
-                status=progress.status,
-                run_id=progress.run_id,
+                status=tool_result.status,
+                run_id=tool_result.run_id,
                 chat_id=chat_id,
                 telegram_user_id=telegram_user_id,
                 notes=f"target={target}",
             )
+            response_lines = [
+                "🤖 Master AI action",
+                f"Action: {tool_result.action}",
+                f"Status: {tool_result.status}",
+                tool_result.message,
+            ]
+            if tool_result.run_id is not None:
+                response_lines.append(f"Run: #{tool_result.run_id}")
+            if target == "blog":
+                response_lines.append(
+                    "Blog workflow: DRAFT ONLY. "
+                    "Review and approve it in VenusRealm Admin before publishing."
+                )
             return MasterTelegramCommandResult(
                 handled=True,
-                response_text=_run_started_text(target, progress),
+                response_text="\n".join(response_lines),
                 chat_id=chat_id,
-                status=progress.status,
-                run_id=progress.run_id,
+                status=tool_result.status,
+                run_id=tool_result.run_id,
                 task_type=run_target.task_type,
             )
     except Exception:
@@ -395,20 +681,197 @@ def handle_master_command_text(
     )
 
 
+def _handle_natural_agent_intent(
+    *,
+    proposal: MasterAIIntentProposal,
+    telegram_user_id: int | str | None,
+    chat_id: int | str | None,
+    supabase: Any | None,
+    runner: Runner,
+    status_loader: StatusLoader,
+) -> MasterTelegramCommandResult:
+    """Audit and execute one deterministic natural-language proposal."""
+    action = proposal.action or "unresolved"
+    risk = proposal.risk.value if proposal.risk else "UNRESOLVED"
+
+    if proposal.status == "CLARIFICATION_REQUIRED":
+        _log_master_command_to_sheet(
+            command="natural:clarification",
+            status=proposal.status,
+            chat_id=chat_id,
+            telegram_user_id=telegram_user_id,
+            notes="risk=UNRESOLVED",
+        )
+        return MasterTelegramCommandResult(
+            handled=True,
+            response_text=(
+                "🤖 Master AI clarification required\n"
+                f"Reason: {proposal.reason}\n"
+                "Koi agent execute nahi hua."
+            ),
+            chat_id=chat_id,
+            status=proposal.status,
+        )
+
+    if proposal.status in {"APPROVAL_REQUIRED", "BLOCKED"}:
+        result_status = (
+            "FORBIDDEN" if proposal.status == "BLOCKED" else "APPROVAL_REQUIRED"
+        )
+        _log_master_command_to_sheet(
+            command=f"natural:{action}",
+            status=result_status,
+            chat_id=chat_id,
+            telegram_user_id=telegram_user_id,
+            notes=f"risk={risk}",
+        )
+        message = (
+            "Action execute nahi hua. Explicit owner approval record required hai."
+            if result_status == "APPROVAL_REQUIRED"
+            else "Action permanently blocked hai."
+        )
+        return MasterTelegramCommandResult(
+            handled=True,
+            response_text=_natural_proposal_text(
+                proposal,
+                status=result_status,
+                message=message,
+            ),
+            chat_id=chat_id,
+            status=result_status,
+        )
+
+    if proposal.risk not in {IntentRisk.SAFE, IntentRisk.LOW_RISK}:
+        return MasterTelegramCommandResult(
+            handled=True,
+            response_text="🤖 Unsafe or unresolved action blocked.",
+            chat_id=chat_id,
+            status="UNKNOWN_ACTION",
+        )
+
+    if action == "read_signal_status":
+        try:
+            snapshot = get_today_signal_snapshot()
+            message = _format_signal_snapshot(snapshot)
+            result_status = "COMPLETED"
+        except Exception as exc:
+            reason = safe_master_reason(exc) or "Current signal snapshot unavailable."
+            message = f"⚠️ Signal status unavailable. Reason: {reason}"
+            result_status = "ERROR"
+
+        _log_master_command_to_sheet(
+            command="natural:read_signal_status",
+            status=result_status,
+            chat_id=chat_id,
+            telegram_user_id=telegram_user_id,
+            notes="risk=SAFE; read_only=true",
+        )
+        return MasterTelegramCommandResult(
+            handled=True,
+            response_text=message,
+            chat_id=chat_id,
+            status=result_status,
+        )
+
+    parameters = dict(proposal.parameters)
+    retry_action = parameters.pop("retry_action", None)
+    tool_result = execute_master_ai_action(
+        action,
+        source="TELEGRAM_MASTER_AI_NATURAL",
+        runner=runner,
+        input_payload=parameters or None,
+        status_loader=status_loader,
+        retry_action=retry_action,
+        supabase=supabase,
+    )
+    _log_master_command_to_sheet(
+        command=f"natural:{action}",
+        status=tool_result.status,
+        run_id=tool_result.run_id,
+        chat_id=chat_id,
+        telegram_user_id=telegram_user_id,
+        notes=f"risk={risk}",
+    )
+    if tool_result.run_id is not None:
+        _record_command_memory_and_event(
+            run_id=tool_result.run_id,
+            command=f"natural:{action}",
+            status=tool_result.status,
+            telegram_user_id=telegram_user_id,
+            target=proposal.agent_key or action,
+        )
+
+    return MasterTelegramCommandResult(
+        handled=True,
+        response_text=_natural_proposal_text(
+            proposal,
+            status=tool_result.status,
+            message=tool_result.message,
+            run_id=tool_result.run_id,
+        ),
+        chat_id=chat_id,
+        status=tool_result.status,
+        run_id=tool_result.run_id,
+        task_type={
+            "run_blog_agent": "BLOG",
+            "run_image_agent": "IMAGE",
+            "run_signal_agent": "SIGNAL",
+        }.get(action),
+    )
+
+
+def _natural_proposal_text(
+    proposal: MasterAIIntentProposal,
+    *,
+    status: str,
+    message: str,
+    run_id: int | None = None,
+) -> str:
+    agent_label = proposal.agent_key or "Master AI"
+    registered_agent = find_agent(proposal.agent_key)
+    if registered_agent is not None:
+        agent_label = registered_agent.official_name.removeprefix("Venus ")
+    executed = status not in {
+        "APPROVAL_REQUIRED",
+        "CLARIFICATION_REQUIRED",
+        "FORBIDDEN",
+    }
+    lines = [
+        "🤖 Master AI proposal",
+        f"Action: {proposal.action or 'unresolved'}",
+        f"Agent: {agent_label}",
+        f"Risk: {proposal.risk.value if proposal.risk else 'UNRESOLVED'}",
+        f"Reason: {proposal.reason}",
+        f"Status: {status}",
+        f"Executed: {'YES' if executed else 'NO'}",
+        message,
+    ]
+    if run_id is not None:
+        lines.append(f"Run: #{run_id}")
+    return "\n".join(lines)
+
+
 def is_master_command(text: str | None) -> bool:
     """Return True for /master commands, including common typo variants."""
     if not text:
         return False
-    first = str(text).strip().split(maxsplit=1)[0].lower()
+    value = str(text).strip()
+    first, _, remainder = value.partition(" ")
+    first = first.lower()
     command = first.split("@", 1)[0]
-    return command in {MASTER_COMMAND, "/mastr", "/mster", "master", "mastr"}
+    if command in {MASTER_COMMAND, "/mastr", "/mster"}:
+        return True
+    if command in {"master", "mastr"}:
+        return _is_recognized_bare_master_phrase(remainder)
+    return False
 
 
 def parse_master_command(text: str) -> tuple[str, str | None]:
     """Parse exact, typo, alias, and natural Master AI command shapes."""
     normalized = _normalize_master_command_text(text)
+    if not is_master_command(normalized):
+        return "", None
     parts = str(normalized or "").strip().split()
-    if not parts or not is_master_command(parts[0]):
+    if not parts:
         return "", None
     if len(parts) == 1:
         return "help", None
@@ -424,7 +887,7 @@ def parse_master_command(text: str) -> tuple[str, str | None]:
     if command in {"help", "h", "?", "commands"}:
         return "help", None
     if command in {"status", "st", "health"}:
-        return "status", None
+        return "status", tail or None
     if command in {"list", "show"} and tail.lower() in {"ai", "ais", "agents"}:
         return "list_ai", None
     if command in {"on", "off", "enable", "disable"}:
@@ -487,9 +950,49 @@ def _normalize_master_command_text(text: str | None) -> str:
         return ""
     first, sep, rest = value.partition(" ")
     command = first.lower().split("@", 1)[0]
-    if command in {"/mastr", "/mster", "master", "mastr"}:
+    if command in {"/mastr", "/mster"}:
+        return f"{MASTER_COMMAND}{sep}{rest}".strip()
+    if command in {"master", "mastr"} and _is_recognized_bare_master_phrase(rest):
         return f"{MASTER_COMMAND}{sep}{rest}".strip()
     return value
+
+
+def _is_recognized_bare_master_phrase(remainder: str | None) -> bool:
+    """Distinguish bare admin commands from conversational text starting with Master."""
+    clean = str(remainder or "").strip().lower()
+    if not clean:
+        return True
+    first_word = clean.split(maxsplit=1)[0]
+    command_words = {
+        "help",
+        "h",
+        "?",
+        "commands",
+        "status",
+        "st",
+        "health",
+        "list",
+        "show",
+        "on",
+        "off",
+        "enable",
+        "disable",
+        "run",
+        "start",
+        "create",
+        "make",
+        "generate",
+        "post",
+        "publish",
+        "do",
+        "execute",
+        "news",
+        "xauusd",
+        "buy",
+        "sell",
+        "test",
+    }
+    return first_word in command_words or first_word in RUN_TARGET_ALIASES
 
 
 def _normalize_run_target(value: str | None) -> str | None:
@@ -520,6 +1023,41 @@ def _normalize_run_target(value: str | None) -> str | None:
         "europe", "japan", "india",
     )):
         return "blog"
+    return None
+
+
+def _infer_live_status_target(text: str | None) -> str | None:
+    """Map natural owner questions to one live agent-status target."""
+    value = str(text or "").strip().lower()
+    if not value:
+        return None
+
+    status_intents = (
+        "status",
+        "on/off",
+        "on hai",
+        "off hai",
+        "last run",
+        "last error",
+        "queue",
+        "kab chala",
+        "kab hua",
+        "error kya",
+    )
+    if not any(intent in value for intent in status_intents):
+        return None
+
+    targets = (
+        (("whatsapp", "wa "), "whatsapp"),
+        (("announcement", "broadcast"), "announcement"),
+        (("telegram",), "telegram"),
+        (("signal", "xauusd"), "signal"),
+        (("blog", "news"), "blog"),
+    )
+    for keywords, target in targets:
+        if any(keyword in value for keyword in keywords):
+            return target
+
     return None
 
 
@@ -643,20 +1181,81 @@ def get_telegram_bot_token_env(bot_role: TelegramBotRole) -> str:
     return SIGNAL_BOT_TOKEN_ENV
 
 
-def _status_text(rows: Iterable[dict[str, Any]]) -> str:
-    safe_rows = list(rows or [])
-    if not safe_rows:
-        return "🤖 Master AI status\nNo orchestration runs yet."
+def _status_text(target: str | None = None) -> str:
+    """Return a clean owner-facing status menu instead of failed-run history."""
+    requested = str(target or "").strip().lower()
 
-    lines = ["🤖 Master AI status"]
-    for row in safe_rows[:5]:
-        run_id = row.get("run_id") or row.get("id") or "—"
-        status = _safe_word(row.get("status") or "UNKNOWN")
-        task_type = _safe_word(row.get("task_type") or "TASK")
-        completed = int(row.get("completed_steps") or 0)
-        total = int(row.get("total_steps") or 0)
-        lines.append(f"#{run_id} · {task_type} · {status} · {completed}/{total}")
-    return "\n".join(lines)
+    if not requested:
+        return (
+            "🤖 Master AI Status Menu\n"
+            "Jo information chahiye wahi command bhejiye:\n\n"
+            "📰 /master news\n"
+            "💰 /master xauusd\n"
+            "🟢 /master buy\n"
+            "🔴 /master sell\n"
+            "📱 /master status whatsapp\n"
+            "📢 /master status announcement\n"
+            "🤖 /master list ai"
+        )
+
+    labels = {
+        "whatsapp": "WhatsApp Reply Agent",
+        "wa": "WhatsApp Reply Agent",
+        "announcement": "Announcement Agent",
+        "announcements": "Announcement Agent",
+        "telegram": "Telegram Reply Agent",
+        "blog": "AI Blog Agent",
+        "news": "AI Blog / News Agent",
+        "signal": "Signal Agent",
+        "xauusd": "Signal Agent",
+    }
+
+    label = labels.get(requested)
+    if label:
+        key_map = {
+            "whatsapp": "whatsapp_reply_agent",
+            "wa": "whatsapp_reply_agent",
+            "announcement": "announcement_agent",
+            "announcements": "announcement_agent",
+            "telegram": "telegram_reply_agent",
+            "blog": "ai_blog_agent",
+            "news": "ai_blog_agent",
+            "signal": "signal_agent",
+            "xauusd": "signal_agent",
+        }
+        try:
+            agent = next(
+                (
+                    item for item in list_ai_agents()
+                    if item.get("agent_key") == key_map[requested]
+                ),
+                None,
+            )
+        except Exception as exc:
+            print(f"[master-ai-status] error={type(exc).__name__}")
+            agent = None
+
+        if not agent:
+            return f"🤖 {label} status unavailable."
+
+        lines = [
+            f"🤖 {label} status",
+            f"Enabled: {'ON' if agent.get('is_enabled') else 'OFF'}",
+            f"Status: {_safe_word(agent.get('status') or 'UNKNOWN')}",
+            f"Queue: {int(agent.get('queue_size') or 0)}",
+            f"Last run: {agent.get('last_run_at') or 'Never'}",
+        ]
+        last_error = str(agent.get("last_error") or "").strip()
+        if last_error:
+            safe_error = safe_master_reason(last_error)
+            if safe_error:
+                lines.append(f"Last error: {safe_error[:300]}")
+        return "\n".join(lines)
+
+    return (
+        "🤖 Unknown status option.\n"
+        "Use: whatsapp, announcement, telegram, blog, news, signal, ya xauusd."
+    )
 
 
 def _run_started_text(target: str, progress: OrchestrationProgress) -> str:
@@ -668,11 +1267,10 @@ def _run_started_text(target: str, progress: OrchestrationProgress) -> str:
         f"Progress: {progress.completed_steps}/{progress.total_steps}"
     )
     if target == "blog":
-        url = _latest_blog_public_url()
-        if url:
-            text += f"\nLatest blog URL: {url}"
-        else:
-            text += f"\nBlog page: {_public_site_url()}/blog"
+        text += (
+            "\nBlog workflow: DRAFT ONLY. "
+            "Review and approve it in VenusRealm Admin before publishing."
+        )
     return text
 
 
@@ -686,6 +1284,29 @@ def _unknown_master_text_response() -> str:
         "/master run blog\n"
         "/master list ai"
     )
+
+
+def _looks_like_signal_request(text: str) -> bool:
+    normalized = str(text or "").strip().lower()
+    has_signal = any(
+        token in normalized
+        for token in ("signal", "xauusd signal", "gold signal")
+    )
+    has_request = any(
+        token in normalized
+        for token in ("today", "aaj", "current", "latest", "provide", "do", "?")
+    )
+    return has_signal and has_request
+
+
+def _looks_like_signal_text(text: str) -> bool:
+    normalized = str(text or "").strip().lower()
+    has_side = "buy" in normalized or "sell" in normalized
+    has_market = any(
+        token in normalized
+        for token in ("xauusd", "gold", "btc", "bitcoin", "forex", "signal")
+    )
+    return has_side and has_market
 
 
 def _public_site_url() -> str:
@@ -744,9 +1365,25 @@ def _extract_message(update: dict[str, Any]) -> dict[str, Any] | None:
 
 def _is_authorized_admin(telegram_user_id: int | str | None) -> bool:
     if telegram_user_id is None:
+        logger.warning(
+            "Master Telegram authorization failed: incoming user ID missing"
+        )
         return False
+
+    incoming = str(telegram_user_id).strip()
     allowed = _allowed_admin_user_ids()
-    return str(telegram_user_id).strip() in allowed if allowed else False
+    authorized = incoming in allowed if allowed else False
+
+    if not authorized:
+        logger.warning(
+            "Master Telegram authorization failed: incoming_last4={} "
+            "allowed_last4={} allowed_count={}",
+            incoming[-4:] if incoming else "none",
+            sorted(value[-4:] for value in allowed),
+            len(allowed),
+        )
+
+    return authorized
 
 
 def _allowed_admin_user_ids() -> set[str]:
@@ -773,6 +1410,41 @@ def _allowed_admin_user_ids() -> set[str]:
 
     return {value.strip() for value in values if value and value.strip()}
 
+
+
+def _format_signal_snapshot(
+    snapshot: MasterAISignalSnapshot | None,
+) -> str:
+    """Format a read-only Sheet snapshot without creating or publishing signals."""
+    if snapshot is None:
+        return (
+            "📊 XAUUSD signal status\n"
+            "Aaj ka valid Sheet snapshot abhi available nahi hai.\n"
+            "Koi signal create, execute ya publish nahi hua."
+        )
+
+    def value(item: object) -> str:
+        return str(item) if item is not None else "N/A"
+
+    buy_targets = ", ".join(map(str, snapshot.buy_targets)) or "N/A"
+    sell_targets = ", ".join(map(str, snapshot.sell_targets)) or "N/A"
+
+    return "\n".join(
+        (
+            "📊 XAUUSD — Read-only signal status",
+            f"Date: {snapshot.signal_date.isoformat()}",
+            f"Latest slot: {snapshot.latest_slot or 'N/A'}",
+            f"Live CMP: {value(snapshot.live_cmp)}",
+            f"Day High: {value(snapshot.day_high)}",
+            f"Day Low: {value(snapshot.day_low)}",
+            f"Buy Base: {value(snapshot.buy_base)}",
+            f"Sell Base: {value(snapshot.sell_base)}",
+            f"Buy Targets: {buy_targets}",
+            f"Sell Targets: {sell_targets}",
+            f"Mode: {snapshot.mode or 'N/A'}",
+            "Read-only: koi signal create, execute ya publish nahi hua.",
+        )
+    )
 
 def _record_command_memory_and_event(
     *,

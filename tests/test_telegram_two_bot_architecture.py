@@ -178,13 +178,13 @@ def test_master_webhook_returns_safe_error(monkeypatch) -> None:
         raise RuntimeError("/app/private token=secret traceback")
 
     response = handle_master_telegram_webhook(
-        update("/master run signal"),
+        update("/master run image"),
         runner=boom,
         sender=lambda chat_id, text: sent.append((chat_id, text)),
     )
     assert response["ok"] is True
     assert response["bot"] == "master_ai"
-    assert sent[-1][1] == SAFE_TELEGRAM_ERROR
+    assert "Internal agent configuration failed." in sent[-1][1]
     assert "token" not in str(response).lower()
     assert "traceback" not in str(response).lower()
 

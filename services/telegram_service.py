@@ -17,6 +17,7 @@ import telebot
 from config import get_settings
 from core.database import session_scope
 from services.google_sheets_service import append_public_signal_log
+from services.signal_message_formatter import format_signal_message
 
 
 class TelegramConfigurationError(RuntimeError):
@@ -54,12 +55,22 @@ class TelegramService:
 
     def broadcast_pending_signals(self, limit: int = 50) -> int:
         """Send unsent BUY/SELL rows and return successful delivery count."""
+        now = datetime.now(timezone.utc)
+        if now.weekday() >= 5:
+            logger.info("Telegram signal delivery paused for the weekend")
+            return 0
+
+        cutoff = (now - self._TREND_MAX_AGE).isoformat()
+        future_limit = (now + timedelta(minutes=5)).isoformat()
+
         try:
             response = (
                 self._supabase.table("market_signals")
                 .select("*")
                 .in_("signal_type", ["BUY", "SELL"])
                 .is_("telegram_sent_at", "null")
+                .gte("signal_time", cutoff)
+                .lte("signal_time", future_limit)
                 .order("updated_at")
                 .limit(limit)
                 .execute()
@@ -79,6 +90,71 @@ class TelegramService:
     def send_signal(self, signal: dict[str, Any], test: bool = False) -> bool:
         """Send one formatted signal through the configured Telegram bot."""
         signal_id = signal.get("id")
+
+        # Captain AI shadow gate:
+        # when explicitly enabled, assess candidate but never deliver it.
+        if not test:
+            from services.captain_shadow_gate import (
+                evaluate_signal_shadow_gate,
+            )
+
+            shadow = evaluate_signal_shadow_gate(signal)
+
+            if shadow.enabled:
+                logger.warning(
+                    "Captain shadow gate blocked Telegram delivery: "
+                    "id={} decision={} direction={} confidence={} "
+                    "macro_bias={} macro_confidence={} "
+                    "news_locked={} reason={}",
+                    signal_id,
+                    shadow.decision,
+                    shadow.direction,
+                    shadow.confidence,
+                    shadow.macro_bias,
+                    shadow.macro_confidence,
+                    shadow.news_locked,
+                    shadow.reason,
+                )
+
+                try:
+                    from services.google_sheets_service import (
+                        append_signal_log,
+                    )
+
+                    append_signal_log(
+                        source="captain_shadow",
+                        status=shadow.decision,
+                        direction=str(
+                            signal.get("signal_type") or ""
+                        ),
+                        entry=signal.get("price") or "",
+                        target_1=(
+                            signal.get("target_1")
+                            or signal.get("target_price")
+                            or ""
+                        ),
+                        target_2=signal.get("target_2") or "",
+                        target_3=signal.get("target_3") or "",
+                        stop_loss=signal.get("stop_loss") or "",
+                        risk_level=str(shadow.confidence),
+                        notes=(
+                            f"signal_id={signal_id or ''}; "
+                            f"captain_direction={shadow.direction}; "
+                            f"macro_bias={shadow.macro_bias}; "
+                            f"macro_confidence={shadow.macro_confidence}; "
+                            f"news_locked={shadow.news_locked}; "
+                            f"delivery_blocked=true; "
+                            f"reason={shadow.reason}"
+                        ),
+                    )
+                except Exception:
+                    logger.exception(
+                        "Captain shadow audit logging failed: id={}",
+                        signal_id,
+                    )
+
+                return False
+
         try:
             message = self._bot.send_message(
                 self._chat_id,
@@ -288,56 +364,39 @@ class TelegramService:
         signal: dict[str, Any],
         test: bool = False,
     ) -> str:
-        """Return a clear HTML Telegram signal message."""
-        direction = str(signal.get("signal_type", "")).upper()
-        icon = "🟢" if direction == "BUY" else "🔴"
-        heading = "TEST · " if test else ""
-        observed_at = TelegramService._format_time(
-            signal.get("signal_time") or signal.get("updated_at")
+        """Return the shared English Telegram signal message as safe HTML."""
+        plain_message = format_signal_message(signal, test=test)
+        formatted = html.escape(plain_message)
+
+        replacements = (
+            ("⏱️ Timeframe: ", "Timeframe", signal.get("timeframe")),
+            ("⚠️ Risk: ", "Risk", signal.get("risk_level")),
         )
-        targets = [
-            TelegramService._value(
-                signal.get(key)
-                or (signal.get("target_price") if key == "target_1" else None)
-            )
-            for key in ("target_1", "target_2", "target_3")
-            if signal.get(key)
-            or (key == "target_1" and signal.get("target_price"))
-        ]
-        lines = [
-            f"<b>{icon} {heading}XAUUSD {html.escape(direction)}</b>",
-            "",
-            f"<b>Entry:</b> {TelegramService._value(signal.get('price'))}",
-            f"<b>Time:</b> {html.escape(observed_at)}",
-            f"<b>Targets:</b> {html.escape(', '.join(targets) or '—')}",
-            f"<b>Stop Loss:</b> {TelegramService._value(signal.get('stop_loss'))}",
-        ]
-        if signal.get("risk_level"):
-            lines.append(
-                f"<b>Risk:</b> {html.escape(str(signal.get('risk_level')))}"
-            )
-        if signal.get("timeframe"):
-            lines.append(
-                f"<b>Timeframe:</b> {html.escape(str(signal.get('timeframe')))}"
-            )
+        for prefix, label, value in replacements:
+            if value not in (None, ""):
+                escaped_line = html.escape(f"{prefix}{value}")
+                html_line = f"<b>{label}:</b> {html.escape(str(value))}"
+                formatted = formatted.replace(escaped_line, html_line)
+
+        extras = []
         if signal.get("note"):
-            lines.append(f"<b>Note:</b> {html.escape(str(signal.get('note')))}")
-        lines.extend(
-            [
-                (
-                    "<b>Sheet Label:</b> "
-                    f"{html.escape(str(signal.get('sheet_label') or '—'))}"
-                ),
-                (
-                    "<b>Source:</b> "
-                    f"{html.escape(str(signal.get('source') or '—'))}"
-                ),
-                "",
-                "<i>Manage risk carefully. This is market analysis, "
-                "not guaranteed financial advice.</i>",
-            ]
-        )
-        return "\n".join(lines)
+            extras.append(
+                f"<b>Note:</b> {html.escape(str(signal['note']))}"
+            )
+        if signal.get("source"):
+            extras.append(
+                f"<b>Source:</b> {html.escape(str(signal['source']))}"
+            )
+        if extras:
+            marker = "\n\nManage risk carefully."
+            formatted = formatted.replace(
+                marker,
+                "\n" + "\n".join(extras) + marker,
+                1,
+            )
+
+        return formatted
+
 
     def _record_failure(self, signal_id: Any, error: str) -> None:
         try:

@@ -1,12 +1,15 @@
-"""Admin-only AI-agent state, audit history, and manual execution."""
+"""Shared AI-agent registry state, audit history, and execution."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
+import json
 from typing import Any
 
 from loguru import logger
 from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 
 from core.database import session_scope
 from services.production_agents import RUNNERS
@@ -25,45 +28,77 @@ AI_AGENT_CONTROL_NUMBERS: tuple[tuple[int, str, str], ...] = (
 )
 
 
+@dataclass(frozen=True)
+class AgentStartResult:
+    run_id: int | None
+    reason: str | None = None
+
+
 def list_ai_agents() -> list[dict[str, Any]]:
-    """Return agent status records in their configured display order."""
-    with session_scope() as session:
-        rows = (
-            session.execute(
-                text(
-                    """
-                    SELECT a.agent_key, a.display_name, a.is_enabled,
-                           a.status, a.last_run_at, a.last_error,
-                           a.schedule_minutes,
-                           s.next_run_at AS next_scheduled_run_at,
-                           a.success_count, a.failure_count,
-                           COUNT(j.id) FILTER (
-                               WHERE j.status = 'QUEUED'
-                           ) AS queue_size,
-                           MAX(r.duration_ms) AS last_duration_ms
-                    FROM public.ai_agents a
-                    LEFT JOIN public.ai_agent_schedules s
-                      ON s.agent_id = a.id
-                    LEFT JOIN public.ai_agent_jobs j ON j.agent_id = a.id
-                    LEFT JOIN LATERAL (
-                        SELECT duration_ms
-                        FROM public.ai_agent_runs ar
-                        WHERE ar.agent_id = a.id
-                        ORDER BY ar.started_at DESC LIMIT 1
-                    ) r ON TRUE
-                    GROUP BY a.id, s.next_run_at
-                    ORDER BY a.display_order, a.display_name
-                    """
+    """Return the canonical shared registry used by Admin and Telegram."""
+    try:
+        with session_scope() as session:
+            rows = (
+                session.execute(
+                    text(
+                        """
+                        SELECT a.agent_key, a.display_name, a.is_enabled,
+                               a.status, a.last_run_at, a.last_error,
+                               a.schedule_minutes,
+                               s.next_run_at AS next_scheduled_run_at,
+                               a.success_count, a.failure_count,
+                               COUNT(j.id) FILTER (WHERE j.status = 'QUEUED') AS queue_size,
+                               MAX(r.duration_ms) AS last_duration_ms
+                        FROM public.ai_agents a
+                        LEFT JOIN public.ai_agent_schedules s ON s.agent_id = a.id
+                        LEFT JOIN public.ai_agent_jobs j ON j.agent_id = a.id
+                        LEFT JOIN LATERAL (
+                            SELECT duration_ms
+                            FROM public.ai_agent_runs ar
+                            WHERE ar.agent_id = a.id
+                            ORDER BY ar.started_at DESC
+                            LIMIT 1
+                        ) r ON TRUE
+                        GROUP BY a.id, s.next_run_at
+                        ORDER BY a.display_order, a.display_name
+                        """
+                    )
                 )
+                .mappings()
+                .all()
             )
-            .mappings()
-            .all()
-        )
-    return [dict(row) for row in rows]
+    except ProgrammingError as exc:
+        original = getattr(exc, "orig", None)
+        sqlstate = getattr(original, "sqlstate", None)
+        if sqlstate == "42P01":
+            logger.warning(
+                "AI-agent runtime tables are unavailable; returning read-only registry fallback."
+            )
+            return []
+        raise
+
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        key = str(item.get("agent_key") or "")
+        runner_configured = key in RUNNERS
+        enabled = bool(item.get("is_enabled"))
+        status = str(item.get("status") or "UNKNOWN").upper()
+        item["runner_configured"] = runner_configured
+        item["executable"] = enabled and runner_configured and status != "RUNNING"
+        if not runner_configured:
+            item["execution_block_reason"] = "Production runner is not configured."
+        elif not enabled:
+            item["execution_block_reason"] = "Agent is disabled in the shared registry."
+        elif status == "RUNNING":
+            item["execution_block_reason"] = "Agent is already running."
+        else:
+            item["execution_block_reason"] = None
+        result.append(item)
+    return result
 
 
 def set_ai_agent_enabled(agent_key: str, enabled: bool) -> None:
-    """Enable or disable one configured agent."""
     with session_scope() as session:
         result = session.execute(
             text(
@@ -80,24 +115,95 @@ def set_ai_agent_enabled(agent_key: str, enabled: bool) -> None:
             raise ValueError(f"Unknown AI agent: {agent_key}")
 
 
+def set_blog_agent_enabled_guarded(
+    *,
+    agent_key: str,
+    enabled: bool,
+    actor_id: int,
+    request_id: str,
+) -> dict[str, Any]:
+    normalized_key = str(agent_key or "").strip().lower()
+    if normalized_key != "ai_blog_agent":
+        raise PermissionError("Only AI Blog Agent control is enabled in this phase.")
+
+    with session_scope() as session:
+        current = session.execute(
+            text(
+                """
+                SELECT agent_key, display_name, is_enabled, status
+                FROM public.ai_agents
+                WHERE agent_key = :agent_key
+                FOR UPDATE
+                """
+            ),
+            {"agent_key": normalized_key},
+        ).mappings().first()
+        if current is None:
+            raise ValueError("AI Blog Agent is not configured.")
+
+        previous_enabled = bool(current["is_enabled"])
+        requested_enabled = bool(enabled)
+        changed = previous_enabled != requested_enabled
+        if changed:
+            session.execute(
+                text(
+                    """
+                    UPDATE public.ai_agents
+                    SET is_enabled = :enabled,
+                        updated_at = NOW()
+                    WHERE agent_key = :agent_key
+                    """
+                ),
+                {"agent_key": normalized_key, "enabled": requested_enabled},
+            )
+
+        session.execute(
+            text(
+                """
+                INSERT INTO public.admin_auth_audit_events (
+                    user_id, event_type, outcome, request_id, details
+                ) VALUES (
+                    :user_id, 'AI_BLOG_AGENT_ENABLED_STATE_CHANGED', 'SUCCESS',
+                    :request_id, CAST(:details AS JSONB)
+                )
+                """
+            ),
+            {
+                "user_id": int(actor_id),
+                "request_id": str(request_id or "unknown")[:128],
+                "details": json.dumps(
+                    {
+                        "agent_key": normalized_key,
+                        "previous_enabled": previous_enabled,
+                        "requested_enabled": requested_enabled,
+                        "changed": changed,
+                    }
+                ),
+            },
+        )
+
+    return {
+        "agent_key": normalized_key,
+        "display_name": str(current["display_name"]),
+        "enabled": requested_enabled,
+        "previous_enabled": previous_enabled,
+        "changed": changed,
+        "status": str(current["status"] or "UNKNOWN"),
+    }
+
+
 def resolve_agent_key_from_number(number: int | str) -> str:
-    """Resolve the stable owner-facing AI number to an internal agent key."""
     try:
         selected = int(str(number).strip())
     except (TypeError, ValueError) as exc:
         raise ValueError("AI number must be numeric.") from exc
-
     for agent_number, agent_key, _ in AI_AGENT_CONTROL_NUMBERS:
         if selected == agent_number:
             return agent_key
     raise ValueError(f"Unknown AI number: {selected}")
 
 
-def set_ai_agent_enabled_by_number(
-    number: int | str,
-    enabled: bool,
-) -> dict[str, Any]:
-    """Enable/disable one AI agent by stable number and return safe metadata."""
+def set_ai_agent_enabled_by_number(number: int | str, enabled: bool) -> dict[str, Any]:
     agent_key = resolve_agent_key_from_number(number)
     set_ai_agent_enabled(agent_key, enabled)
     return {
@@ -109,7 +215,6 @@ def set_ai_agent_enabled_by_number(
 
 
 def agent_control_help_text() -> str:
-    """Return safe numbered AI controls for Telegram/admin display."""
     lines = ["AI ON/OFF controls:"]
     for number, _, display_name in AI_AGENT_CONTROL_NUMBERS:
         lines.append(f"{number}. {display_name}")
@@ -125,27 +230,35 @@ def _agent_display_name(agent_key: str) -> str:
 
 def run_ai_agent(
     agent_key: str,
-    triggered_by: int,
+    triggered_by: int | None,
     supabase: Any,
     payload: dict[str, Any] | None = None,
 ) -> tuple[bool, str]:
-    """Run one enabled agent and persist its complete execution state."""
-    run_id = _start_run(agent_key, triggered_by)
-    if run_id is None:
-        return False, "Agent is disabled, unavailable, or already running."
+    """Run one exact enabled agent; never substitute another worker."""
+    clean_key = str(agent_key or "").strip()
+    if not clean_key:
+        return False, "Exact agent key is required."
+
+    runner = RUNNERS.get(clean_key)
+    if runner is None:
+        return False, f"Exact agent '{clean_key}' has no production runner configured."
+
+    start = _start_run(clean_key, triggered_by)
+    if start.run_id is None:
+        return False, start.reason or f"Exact agent '{clean_key}' cannot execute."
 
     started_at = datetime.now(timezone.utc)
     try:
-        runner = RUNNERS.get(agent_key)
-        if runner is None:
-            raise RuntimeError("Production runner is not configured.")
         result_message = runner(payload or {})
+        if not isinstance(result_message, str) or not result_message.strip():
+            raise RuntimeError("Production runner returned no verifiable result.")
+        result_message = result_message.strip()
     except Exception as exc:
         error = str(exc).strip() or exc.__class__.__name__
-        logger.exception("Manual AI agent run failed: {}", agent_key)
+        logger.exception("AI agent run failed: {}", clean_key)
         _finish_run(
-            run_id,
-            agent_key,
+            start.run_id,
+            clean_key,
             succeeded=False,
             error=error,
             result=None,
@@ -154,8 +267,8 @@ def run_ai_agent(
         return False, error
 
     _finish_run(
-        run_id,
-        agent_key,
+        start.run_id,
+        clean_key,
         succeeded=True,
         error=None,
         result=result_message,
@@ -164,8 +277,7 @@ def run_ai_agent(
     return True, result_message
 
 
-def _start_run(agent_key: str, triggered_by: int) -> int | None:
-    """Atomically mark an enabled, idle agent as running."""
+def _start_run(agent_key: str, triggered_by: int | None) -> AgentStartResult:
     with session_scope() as session:
         agent = (
             session.execute(
@@ -187,23 +299,39 @@ def _start_run(agent_key: str, triggered_by: int) -> int | None:
             .first()
         )
         if not agent:
-            return None
+            state = (
+                session.execute(
+                    text(
+                        """
+                        SELECT agent_key, is_enabled, status
+                        FROM public.ai_agents
+                        WHERE agent_key = :agent_key
+                        """
+                    ),
+                    {"agent_key": agent_key},
+                )
+                .mappings()
+                .first()
+            )
+            if state is None:
+                return AgentStartResult(None, f"Exact agent '{agent_key}' is not registered in the shared registry.")
+            if not bool(state["is_enabled"]):
+                return AgentStartResult(None, f"Exact agent '{agent_key}' is disabled in the shared registry.")
+            if str(state.get("status") or "").upper() == "RUNNING":
+                return AgentStartResult(None, f"Exact agent '{agent_key}' is already running.")
+            return AgentStartResult(None, f"Exact agent '{agent_key}' could not be reserved for execution.")
+
         run_id = session.execute(
             text(
                 """
-                INSERT INTO public.ai_agent_runs (
-                    agent_id, status, triggered_by
-                )
+                INSERT INTO public.ai_agent_runs (agent_id, status, triggered_by)
                 VALUES (:agent_id, 'RUNNING', :triggered_by)
                 RETURNING id
                 """
             ),
-            {
-                "agent_id": agent["id"],
-                "triggered_by": triggered_by,
-            },
+            {"agent_id": agent["id"], "triggered_by": triggered_by},
         ).scalar_one()
-    return int(run_id)
+    return AgentStartResult(int(run_id), None)
 
 
 def _finish_run(
@@ -214,13 +342,10 @@ def _finish_run(
     result: str | None,
     started_at: datetime,
 ) -> None:
-    """Finalize the run audit row and current agent status."""
     safe_error = error[:_MAX_ERROR_LENGTH] if error else None
     agent_status = "IDLE" if succeeded else "ERROR"
     run_status = "SUCCESS" if succeeded else "ERROR"
-    duration_ms = int(
-        (datetime.now(timezone.utc) - started_at).total_seconds() * 1000
-    )
+    duration_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
     with session_scope() as session:
         session.execute(
             text(
@@ -266,7 +391,6 @@ def _finish_run(
 
 
 def list_agent_runs(limit: int = 100) -> list[dict[str, Any]]:
-    """Return execution history without prompts, payloads, or secrets."""
     with session_scope() as session:
         rows = (
             session.execute(

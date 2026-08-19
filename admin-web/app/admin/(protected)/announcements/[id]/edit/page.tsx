@@ -1,0 +1,2 @@
+import{cookies}from"next/headers";import{notFound}from"next/navigation";import{AnnouncementEditor}from"@/components/publication-editors";import{fetchAnnouncement}from"@/lib/publications-api";import{ADMIN_SESSION_COOKIE}from"@/lib/session";
+export default async function Page({params}:{params:Promise<{id:string}>}){const{id}=await params;const x=await fetchAnnouncement(id,(await cookies()).get(ADMIN_SESSION_COOKIE)?.value||"");if(!x)notFound();return <AnnouncementEditor initial={x}/>}

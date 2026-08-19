@@ -28,6 +28,9 @@ export type ContentItem = {
   author_name?: string;
   view_count?: number;
   schema_jsonld?: Record<string, unknown>;
+  status?: string;
+  is_public?: boolean;
+  is_published?: boolean;
 };
 
 export type Signal = {

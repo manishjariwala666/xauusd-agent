@@ -5,8 +5,45 @@ type Block = { type: "heading" | "paragraph" | "quote" | "ul" | "ol"; text?: str
 
 function slugify(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 
+function decodeHtml(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
+
+function normalizeArticleBody(body: string): string {
+  if (!/<[a-z][\s\S]*>/i.test(body)) {
+    return body;
+  }
+
+  return decodeHtml(
+    body
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, "**$2**")
+      .replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, "$2")
+      .replace(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi, "# $1\n\n")
+      .replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, "## $1\n\n")
+      .replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, "### $1\n\n")
+      .replace(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi, "> $1\n\n")
+      .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, "- $1\n")
+      .replace(/<br\s*\/?\s*>/gi, "\n")
+      .replace(/<\/p\s*>/gi, "\n\n")
+      .replace(/<p\b[^>]*>/gi, "")
+      .replace(/<\/?(?:ul|ol)\b[^>]*>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
+  );
+}
+
 export function parseArticle(body: string): { blocks: Block[]; toc: TocItem[] } {
-  const lines = body.split("\n");
+  const lines = normalizeArticleBody(body).split("\n");
   const blocks: Block[] = [];
   const toc: TocItem[] = [];
   for (let index = 0; index < lines.length;) {

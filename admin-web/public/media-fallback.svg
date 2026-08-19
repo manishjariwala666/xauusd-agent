@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-labelledby="title description">
+  <title id="title">VenusRealm media preview</title>
+  <desc id="description">Professional financial media placeholder</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1734"/>
+      <stop offset="1" stop-color="#1f3f7a"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#4f86ff"/>
+      <stop offset="1" stop-color="#f4bd4f"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="400" rx="24" fill="url(#background)"/>
+  <g opacity=".13" stroke="#fff">
+    <path d="M64 80h512M64 160h512M64 240h512M64 320h512"/>
+    <path d="M128 48v304M256 48v304M384 48v304M512 48v304"/>
+  </g>
+  <path d="M72 292l92-58 76 22 84-112 80 48 98-96 66 34" fill="none" stroke="url(#line)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="502" cy="96" r="12" fill="#f4bd4f"/>
+  <text x="72" y="92" fill="#fff" font-family="Arial, sans-serif" font-size="28" font-weight="700">VenusRealm</text>
+  <text x="72" y="126" fill="#c8d5f2" font-family="Arial, sans-serif" font-size="17">Professional media preview</text>
+</svg>
