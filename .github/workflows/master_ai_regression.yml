@@ -36,6 +36,7 @@ jobs:
             tests/test_master_ai_permission_router.py \
             tests/test_captain_shadow_gate.py \
             tests/test_sheet_signal_risk_guard.py \
+            tests/test_sheet_signal_source.py \
             tests/test_telegram_primary_delivery.py \
             tests/test_whatsapp_primary_delivery.py \
             tests/test_signal_channel_delivery.py \
