@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from services.master_ai_access_policy import ApprovalLevel, get_action_policy
+from services.master_ai_action_inputs import validate_master_ai_action_input
 from services.master_ai_agent_registry import format_agent_directory
 from services.master_orchestrator import create_and_start_master_task
 from services.orchestration_redaction import safe_error_message
@@ -47,7 +48,7 @@ TASKS: dict[str, dict[str, Any]] = {
         "safe_payload": {"publish_social": False, "publish_social_post": False, "post_linkedin": False, "post_facebook": False, "post_instagram": False, "post_x": False, "post_pinterest": False, "post_youtube": False, "send_telegram": False, "send_whatsapp": False, "send_email": False, "start_campaign": False},
     },
     "run_cms_editor_agent": {"task_type": "CMS_EDITOR", "title": "Prepare CMS V2 Draft", "agent_key": "cms_editor_agent", "objective": "Convert approved article content into a Studio V2 draft only. Never publish or schedule content.", "safe_payload": {"publish": False, "scheduled_at": None}},
-    "run_master_ai_content_review_agent": {"task_type": "CONTENT_REVIEW", "title": "Review CMS Draft", "agent_key": "master_content_review_agent", "objective": "Perform read-only publish-readiness review. Do not modify or publish content.", "safe_payload": {"publish": False}},
+    "run_master_ai_content_review_agent": {"task_type": "CONTENT_REVIEW", "title": "Review CMS Draft", "agent_key": "master_content_review_agent", "objective": "Perform read-only publish-readiness review. Do not modify or publish content.", "safe_payload": {"publish": False, "send_telegram": False, "send_whatsapp": False}},
     "run_master_ai_publish_approval_agent": {"task_type": "PUBLISH_APPROVAL", "title": "Publish Reviewed CMS Draft", "agent_key": "master_publish_approval_agent", "objective": "Publish exactly one reviewed draft only after explicit owner approval."},
     "run_announcement_agent": {"task_type": "ANNOUNCEMENT", "title": "Run Announcement Agent", "agent_key": "announcement_agent", "objective": "Deliver only an explicitly approved announcement using configured channels."},
     "run_seo_agent": {"task_type": "SEO", "title": "Run SEO Audit", "agent_key": "seo_agent", "objective": "Audit published content and persist SEO metadata/files only after explicit owner approval."},
@@ -110,17 +111,46 @@ def execute_master_ai_action(
         if target_policy.approval != ApprovalLevel.AUTOMATIC:
             return MasterAIToolResult(False, clean_action, "OWNER_APPROVAL_REQUIRED", "Is agent retry ke liye owner ki explicit approval required hai.")
         return execute_master_ai_action(target, source=source, runner=runner, input_payload=input_payload, status_loader=status_loader, supabase=supabase)
+
     task = TASKS.get(clean_action)
     if task is None:
         return MasterAIToolResult(False, clean_action, "NOT_IMPLEMENTED", "Action policy me allowed hai, lekin router tool pending hai.")
+
+    # User/request fields are accepted first. Fixed safety fields are then applied
+    # last so caller input can never flip a draft/read-only guard to an external
+    # action. Agent selection and automatic execution markers are also canonical.
+    payload = {
+        "objective": task["objective"],
+        **dict(input_payload or {}),
+        **dict(task.get("safe_payload") or {}),
+        "master_ai_action": clean_action,
+        "automatic_execution": True,
+        "agent_keys": [task["agent_key"]],
+    }
+    payload["publish"] = False
+    payload.pop("owner_approved_publish", None)
+
+    input_error = validate_master_ai_action_input(clean_action, payload)
+    if input_error:
+        return MasterAIToolResult(
+            False,
+            clean_action,
+            "MISSING_INPUT",
+            f"Reason: {input_error}\nNext action: required verified input provide karke retry karein.",
+        )
+
     try:
-        payload = {"objective": task["objective"], "master_ai_action": clean_action, "automatic_execution": True, "agent_keys": [task["agent_key"]], **dict(task.get("safe_payload") or {}), **dict(input_payload or {})}
-        payload["publish"] = False
-        payload.pop("owner_approved_publish", None)
-        payload["agent_keys"] = [task["agent_key"]]
-        progress = runner(task_type=task["task_type"], title=task["title"], source=source, requested_by=None, input_payload=payload, supabase=supabase)
+        progress = runner(
+            task_type=task["task_type"],
+            title=task["title"],
+            source=source,
+            requested_by=None,
+            input_payload=payload,
+            supabase=supabase,
+        )
     except Exception as exc:
         return _failed_result(clean_action, "ERROR", safe_master_reason(exc) or "Agent start nahi hua.")
+
     status = str(getattr(progress, "status", "ACCEPTED") or "ACCEPTED").upper()
     run_id = getattr(progress, "run_id", None)
     if status in FAILED_STATUSES:
@@ -128,6 +158,7 @@ def execute_master_ai_action(
         return _failed_result(clean_action, status, reason, run_id=run_id)
     if status == "WAITING_APPROVAL":
         return MasterAIToolResult(False, clean_action, status, "Owner approval record complete hone ke baad action continue hoga.", run_id)
+
     verified_step_output = _load_completed_step_output(int(run_id), str(task["agent_key"])) if run_id is not None else None
     if status == "COMPLETED" and not verified_step_output:
         return _failed_result(clean_action, "UNVERIFIED_RESULT", f"{task['agent_key']} completed state was reported but no verified worker output was stored.", run_id=run_id)
