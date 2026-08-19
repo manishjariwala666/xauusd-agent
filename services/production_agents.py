@@ -67,12 +67,74 @@ def _legacy_sheet_signal_is_superseded(signal: dict[str, Any]) -> tuple[bool, st
     return False, ""
 
 
+def _two_bar_delivery_reversal_confirmed(signal: dict[str, Any]) -> bool:
+    """Verify the current candidate reverses a previous same-session signal."""
+    from services.sheet_reversal_guard import opposite_reversal_confirmed, signal_identity
+
+    identity = signal_identity(signal)
+    signal_id = signal.get("id")
+    candidate = str(signal.get("signal_type") or "").strip().upper()
+    if identity is None or signal_id is None or candidate not in {"BUY", "SELL"}:
+        return False
+
+    signal_date, session_name = identity
+    prefix = f"gsheet-session:{signal_date}:{session_name}:%"
+    opposite = "SELL" if candidate == "BUY" else "BUY"
+    try:
+        with session_scope() as session:
+            previous = (
+                session.execute(
+                    text(
+                        """
+                        SELECT signal_type
+                        FROM public.market_signals
+                        WHERE id <> :id
+                          AND external_key LIKE :prefix
+                          AND signal_type = :opposite
+                        ORDER BY signal_time DESC
+                        LIMIT 1
+                        """
+                    ),
+                    {
+                        "id": signal_id,
+                        "prefix": prefix,
+                        "opposite": opposite,
+                    },
+                )
+                .mappings()
+                .first()
+            )
+    except Exception:
+        logger.exception("Prior Sheet signal lookup failed; sweep override disabled.")
+        return False
+
+    if previous is None:
+        return False
+
+    try:
+        values = GoogleSheetsService()._analysis_values()
+        return opposite_reversal_confirmed(
+            values,
+            signal_date=signal_date,
+            session_name=session_name,
+            from_direction=opposite,
+            to_direction=candidate,
+            now=datetime.now(timezone.utc),
+        )
+    except Exception:
+        logger.exception("Two-bar reversal verification failed; sweep override disabled.")
+        return False
+
+
 def _captain_delivery_verifier(signal: dict[str, Any]) -> tuple[bool, str]:
     superseded, source_reason = _legacy_sheet_signal_is_superseded(signal)
     if superseded:
         return False, source_reason
     from services.captain_shadow_gate import evaluate_signal_shadow_gate
-    result = evaluate_signal_shadow_gate(signal)
+    result = evaluate_signal_shadow_gate(
+        signal,
+        structure_reversal_confirmed=_two_bar_delivery_reversal_confirmed(signal),
+    )
     if not result.blocked:
         return True, result.reason
     return False, (
