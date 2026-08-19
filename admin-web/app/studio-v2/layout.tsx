@@ -20,7 +20,20 @@ export default async function StudioV2Layout({
     redirect("/admin/forbidden");
   }
 
-  if (result.status !== "authenticated" || !result.user) {
+  if (result.status === "unauthenticated") {
+    redirect("/admin/login");
+  }
+
+  if (result.status === "unavailable") {
+    return (
+      <section className="state-panel error-state">
+        <strong>Admin session validation is temporarily unavailable.</strong>
+        <p>Your session has not been cleared. Refresh and try again.</p>
+      </section>
+    );
+  }
+
+  if (!result.user) {
     redirect("/admin/login");
   }
 

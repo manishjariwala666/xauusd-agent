@@ -331,6 +331,9 @@ def posts_plan_ai_draft(
             for key, value in generated.items()
             if value not in (None, "", [])
         },
+        # An administrator-supplied focus keyword is authoritative.
+        # AI may suggest secondary keywords but must not silently replace it.
+        "focus_keyword": keyword,
         "title_options": clean_titles,
         "recommended_title": (
             str(generated.get("recommended_title") or clean_titles[0])[:240]
@@ -361,6 +364,7 @@ def posts_generate_ai_draft(
             **payload.model_dump(),
             "publish": False,
             "include_image": False,
+            "require_ai_quality": True,
             "master_ai_action": "run_blog_agent",
         })
 

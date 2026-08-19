@@ -179,7 +179,7 @@ export function AIBlogDraftGenerator() {
         return;
       }
 
-      router.push(`/admin/posts/${result.id}/edit`);
+      router.push(`/studio-v2?draft=${result.id}`);
       router.refresh();
     } catch {
       setMessage("AI generation service is temporarily unavailable.");
@@ -221,7 +221,7 @@ export function AIBlogDraftGenerator() {
         setMessage(result.message || "PDF draft could not be generated.");
         return;
       }
-      router.push(`/admin/posts/${result.id}/edit`);
+      router.push(`/studio-v2?draft=${result.id}`);
       router.refresh();
     } catch {
       setMessage("PDF processing service is temporarily unavailable.");

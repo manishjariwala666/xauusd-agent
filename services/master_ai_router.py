@@ -94,6 +94,11 @@ CMS_TERMS = (
     "seo article",
     "content draft",
     "cms draft",
+    "blog draft",
+    "seo blog",
+    "blog post",
+    "ai_blog_agent",
+    "blog agent",
 )
 
 REVIEW_TERMS = (
@@ -106,6 +111,9 @@ REVIEW_TERMS = (
 PUBLISH_TERMS = (
     "publish article",
     "publish draft",
+    "publish blog",
+    "publish post",
+    "publish this",
     "make live",
     "go live",
 )
@@ -164,6 +172,24 @@ def route_master_ai_request(message: str | None) -> MasterAIRoute:
             reason="Unified read-only market intelligence requested.",
         )
 
+    if _contains_any(clean, PUBLISH_TERMS):
+        return MasterAIRoute(
+            intent="PUBLISH",
+            agent_key="master_publish_approval_agent",
+            confidence="HIGH",
+            execution_allowed=False,
+            reason="Publishing requires review and explicit owner approval.",
+        )
+
+    if _contains_any(clean, CMS_TERMS):
+        return MasterAIRoute(
+            intent="CMS_DRAFT",
+            agent_key="cms_editor_agent",
+            confidence="MEDIUM",
+            execution_allowed=False,
+            reason="CMS draft intent detected.",
+        )
+
     if _contains_any(clean, MARKET_TERMS):
         return MasterAIRoute(
             intent="MARKET_DATA",
@@ -198,24 +224,6 @@ def route_master_ai_request(message: str | None) -> MasterAIRoute:
             confidence="MEDIUM",
             execution_allowed=False,
             reason="Content-review intent detected.",
-        )
-
-    if _contains_any(clean, PUBLISH_TERMS):
-        return MasterAIRoute(
-            intent="PUBLISH",
-            agent_key="master_publish_approval_agent",
-            confidence="HIGH",
-            execution_allowed=False,
-            reason="Publishing requires review and explicit owner approval.",
-        )
-
-    if _contains_any(clean, CMS_TERMS):
-        return MasterAIRoute(
-            intent="CMS_DRAFT",
-            agent_key="cms_editor_agent",
-            confidence="MEDIUM",
-            execution_allowed=False,
-            reason="CMS draft intent detected.",
         )
 
     return MasterAIRoute(

@@ -213,6 +213,15 @@ export function StudioWorkspace() {
   }, []);
 
   useEffect(() => {
+    const requestedDraft = Number(
+      new URLSearchParams(window.location.search).get("draft"),
+    );
+
+    if (Number.isInteger(requestedDraft) && requestedDraft > 0) {
+      void openSavedDraft(requestedDraft);
+      return;
+    }
+
     try {
       const saved = window.localStorage.getItem(LOCAL_DRAFT_KEY);
 
@@ -647,23 +656,10 @@ export function StudioWorkspace() {
           <button
             type="button"
             className="primary-button"
-            onClick={() => void publishDraft()}
-            disabled={!isSavedDatabaseDraft || saving || publishing}
-            title={
-              document.status === "published"
-                ? "This post is published."
-                : !document.id
-                  ? "Save this draft to the database before publishing."
-                  : !isSavedDatabaseDraft
-                    ? "Save current changes before publishing."
-                    : "Publish this saved draft now."
-            }
+            disabled
+            title="Publishing is locked in this workspace."
           >
-            {publishing
-              ? "Publishing…"
-              : document.status === "published"
-                ? "Published"
-                : "Publish"}
+            {document.status === "published" ? "Published" : "Publish"}
           </button>
         </div>
       </header>
@@ -781,9 +777,7 @@ export function StudioWorkspace() {
             <small id="studio-v2-status-help">
               {document.status === "published"
                 ? "This post is published and public."
-                : document.id
-                  ? "Save current changes, then publish this database draft."
-                  : "Save this draft to the database before publishing."}
+                : "Publishing is currently locked. Draft creation, editing and preview remain available."}
               {" Scheduling is not enabled in this workspace."}
             </small>
           </label>

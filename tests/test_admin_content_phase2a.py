@@ -1,6 +1,9 @@
 from pathlib import Path
 
+import pytest
+
 from services.admin_content_api import router as content_router
+from services import admin_content_service
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,3 +56,73 @@ def test_phase2b_extends_existing_contract_without_new_seo_writes() -> None:
     assert '"stats"' in service
     assert "save_admin_content" in service
     assert '"publish": "is_public = TRUE, is_published = TRUE' in service
+
+
+def test_content_publish_transition_is_locked_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("CONTENT_PUBLISH_ENABLED", raising=False)
+
+    with pytest.raises(ValueError, match="Content publishing is currently locked"):
+        admin_content_service.transition_content(
+            kind="posts",
+            content_id=1,
+            actor_id=1,
+            action="publish",
+            request_id="content-publish-lock-test",
+        )
+
+
+def test_content_save_as_published_is_locked_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("CONTENT_PUBLISH_ENABLED", raising=False)
+
+    with pytest.raises(ValueError, match="Content publishing is currently locked"):
+        admin_content_service.save_admin_content(
+            kind="posts",
+            actor_id=1,
+            title="Locked publish test",
+            slug="locked-publish-test",
+            excerpt="",
+            body="Test body",
+            category_id=None,
+            subcategory="",
+            status="published",
+            scheduled_at=None,
+            published_at=None,
+            request_id="content-save-publish-lock-test",
+        )
+
+
+def test_content_publish_lock_can_be_explicitly_enabled(monkeypatch) -> None:
+    monkeypatch.setenv("CONTENT_PUBLISH_ENABLED", "true")
+
+    class ScalarResult:
+        def scalar_one_or_none(self):
+            return 1
+
+    class Session:
+        def execute(self, statement, params=None):
+            return ScalarResult()
+
+    class Scope:
+        def __enter__(self):
+            return Session()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(admin_content_service, "session_scope", lambda: Scope())
+    monkeypatch.setattr(admin_content_service, "_audit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        admin_content_service,
+        "get_admin_content",
+        lambda **kwargs: {"id": kwargs["content_id"], "status": "published"},
+    )
+
+    result = admin_content_service.transition_content(
+        kind="posts",
+        content_id=1,
+        actor_id=1,
+        action="publish",
+        request_id="content-publish-enabled-test",
+    )
+
+    assert result["status"] == "published"

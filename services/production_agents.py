@@ -75,15 +75,37 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         if str(item).strip()
     ][:20]
     source_material = str(payload.get("source_material") or "").strip()[:60_000]
+    require_ai_quality = bool(payload.get("require_ai_quality", False))
 
     word_ranges = {
-        "short": "700 to 900",
-        "standard": "1200 to 1600",
-        "long": "2000 to 2600",
+        "short": (700, 900),
+        "standard": (1200, 1600),
+        "long": (2000, 2600),
     }
-    target_word_range = word_ranges.get(
+
+    default_min, default_max = word_ranges.get(
         content_length,
         word_ranges["standard"],
+    )
+
+    try:
+        target_word_min = int(
+            payload.get("target_word_min", default_min)
+        )
+        target_word_max = int(
+            payload.get("target_word_max", default_max)
+        )
+    except (TypeError, ValueError):
+        target_word_min, target_word_max = default_min, default_max
+
+    if target_word_min < 300:
+        target_word_min = default_min
+
+    if target_word_max < target_word_min:
+        target_word_max = default_max
+
+    target_word_range = (
+        f"{target_word_min} to {target_word_max}"
     )
     if not topic:
         topic = "Current XAUUSD market structure and disciplined risk control"
@@ -119,8 +141,10 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         "secondary_keywords, search_intent, keyword_volume, keyword_competition, "
         "research_brief, slug, excerpt, body_markdown, internal_links, faq, "
         "schema_jsonld, image_research_brief, image_prompt, image_alt_text. "
-        f"body_markdown must contain {target_word_range} meaningful words, exactly one H1, "
-        "at least six H2 headings, and supporting H3, H4 and H5 headings. "
+        f"body_markdown must contain {target_word_range} meaningful words, "
+        "exactly one H1, at least six descriptive H2 headings, and H3 headings "
+        "only where they genuinely improve structure. The H1 should match the "
+        "article title. "
         f"FAQ requested: {include_faq}. When requested, use six to eight FAQs "
         "and include accordion-ready <details> and <summary> markup. "
         "Include actionable guidance, natural keywords, "
@@ -165,6 +189,15 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
             user_instruction=user_instruction,
         )
     except Exception as exc:
+        if require_ai_quality:
+            logger.warning(
+                "AI blog provider failed; refusing low-quality admin draft: {}",
+                exc.__class__.__name__,
+            )
+            raise RuntimeError(
+                "AI content generation failed before draft creation."
+            ) from exc
+
         logger.warning(
             "AI blog provider failed; using deterministic fallback: {}",
             exc.__class__.__name__,
@@ -201,7 +234,17 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         generated,
         content_length=content_length,
         include_faq=include_faq,
+        minimum_words=target_word_min,
+        maximum_words=target_word_max,
     ):
+        if require_ai_quality:
+            logger.warning(
+                "Generated admin blog failed quality validation; draft rejected."
+            )
+            raise RuntimeError(
+                "AI content failed quality validation; no draft was created."
+            )
+
         logger.warning(
             "Generated blog failed long-form validation; using safe fallback."
         )
@@ -211,10 +254,18 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         generated["title"] = selected_title[:240]
         generated["meta_title"] = selected_title[:60]
         generated["slug"] = _slugify(selected_title)
-        body = str(generated.get("body_markdown") or "")
-        generated["body_markdown"] = re.sub(
-            r"(?m)^#\s+.*$", f"# {selected_title[:240]}", body, count=1
-        )
+
+    # Keep the backend article contract at exactly one H1. The preview/editor
+    # suppresses a body H1 that duplicates the separately rendered title.
+    body = str(generated.get("body_markdown") or "")
+    body_without_h1 = re.sub(
+        r"(?m)^\s*#\s+.+?\s*$\n*",
+        "",
+        body,
+    ).strip()
+    generated["body_markdown"] = (
+        f"# {str(generated['title']).strip()}\n\n{body_without_h1}"
+    ).strip()
 
     generated["faq"] = (
         _normalize_blog_faq(generated.get("faq"), fallback["faq"])
@@ -951,6 +1002,19 @@ def run_signal_agent(payload: dict[str, Any]) -> str:
         market_data=market_data,
         telegram=telegram,
     )
+
+    from services.captain_shadow_gate import shadow_gate_enabled
+
+    if shadow_gate_enabled():
+        logger.warning(
+            "Captain shadow mode active: target alerts, stop-loss alerts, "
+            "website publishing, Telegram and WhatsApp delivery blocked."
+        )
+        return (
+            "Signal pipeline completed in Captain shadow mode; "
+            "all outbound delivery blocked."
+        )
+
     targets_notified = _monitor_target_hits(
         market_data=market_data,
         telegram=telegram,
@@ -1953,8 +2017,10 @@ def _valid_long_form_blog(
     *,
     content_length: str = "standard",
     include_faq: bool = True,
+    minimum_words: int | None = None,
+    maximum_words: int | None = None,
 ) -> bool:
-    """Reject short or structurally incomplete articles."""
+    """Reject articles outside the requested word range or structure."""
     body = str(generated.get("body_markdown") or "")
     faq = generated.get("faq")
     ranges = {
@@ -1962,7 +2028,20 @@ def _valid_long_form_blog(
         "standard": (800, 1900),
         "long": (1100, 3000),
     }
-    minimum, maximum = ranges.get(content_length, ranges["standard"])
+    default_minimum, default_maximum = ranges.get(
+        content_length,
+        ranges["standard"],
+    )
+    minimum = (
+        minimum_words
+        if minimum_words is not None
+        else default_minimum
+    )
+    maximum = (
+        maximum_words
+        if maximum_words is not None
+        else default_maximum
+    )
     faq_valid = (
         isinstance(faq, list) and 6 <= len(faq) <= 8
         and "<details>" in body and "<summary>" in body

@@ -10,7 +10,8 @@ const primary = [
   ["Media", "/admin/media", "▧"], ["SEO", "/admin/seo", "⌁"],
   ["Signals", "/admin/signals", "↗"], ["Announcements", "/admin/announcements", "◉"],
   ["Verified Results", "/admin/results", "✓"], ["Leads", "/admin/leads", "✦"],
-  ["Agents", "/admin/agents", "✣"]
+  ["Agents", "/admin/agents", "✣"],
+  ["Master AI", "/studio-v2/master-ai", "◆"]
 ] as const;
 const future = [["Social", "◎"], ["Logs", "≡"], ["Settings", "⚙"]] as const;
 

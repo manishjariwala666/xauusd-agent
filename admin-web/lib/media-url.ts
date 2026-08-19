@@ -56,12 +56,16 @@ function normalizeMediaRecord(
 
   const mediaId = Number(record.id);
   const hasMediaId = Number.isInteger(mediaId) && mediaId > 0;
-  const adminOrigin = new URL(fallbackUrl).origin;
+
+  // Always keep browser-facing media proxy URLs relative. This makes them
+  // same-origin on Netlify, Cloud Run and local preview regardless of reverse
+  // proxy Host/X-Forwarded-Proto handling, and ensures the admin session cookie
+  // is sent with image-byte requests.
   const originalBffUrl = hasMediaId
-    ? new URL(`/api/admin/media-file/${mediaId}?variant=original`, adminOrigin).toString()
+    ? `/api/admin/media-file/${mediaId}?variant=original`
     : fallbackUrl;
   const thumbnailBffUrl = hasMediaId
-    ? new URL(`/api/admin/media-file/${mediaId}?variant=thumbnail`, adminOrigin).toString()
+    ? `/api/admin/media-file/${mediaId}?variant=thumbnail`
     : fallbackUrl;
 
   // A durable storage URL is not necessarily public. Stream catalog records

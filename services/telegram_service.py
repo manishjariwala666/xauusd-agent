@@ -90,6 +90,71 @@ class TelegramService:
     def send_signal(self, signal: dict[str, Any], test: bool = False) -> bool:
         """Send one formatted signal through the configured Telegram bot."""
         signal_id = signal.get("id")
+
+        # Captain AI shadow gate:
+        # when explicitly enabled, assess candidate but never deliver it.
+        if not test:
+            from services.captain_shadow_gate import (
+                evaluate_signal_shadow_gate,
+            )
+
+            shadow = evaluate_signal_shadow_gate(signal)
+
+            if shadow.enabled:
+                logger.warning(
+                    "Captain shadow gate blocked Telegram delivery: "
+                    "id={} decision={} direction={} confidence={} "
+                    "macro_bias={} macro_confidence={} "
+                    "news_locked={} reason={}",
+                    signal_id,
+                    shadow.decision,
+                    shadow.direction,
+                    shadow.confidence,
+                    shadow.macro_bias,
+                    shadow.macro_confidence,
+                    shadow.news_locked,
+                    shadow.reason,
+                )
+
+                try:
+                    from services.google_sheets_service import (
+                        append_signal_log,
+                    )
+
+                    append_signal_log(
+                        source="captain_shadow",
+                        status=shadow.decision,
+                        direction=str(
+                            signal.get("signal_type") or ""
+                        ),
+                        entry=signal.get("price") or "",
+                        target_1=(
+                            signal.get("target_1")
+                            or signal.get("target_price")
+                            or ""
+                        ),
+                        target_2=signal.get("target_2") or "",
+                        target_3=signal.get("target_3") or "",
+                        stop_loss=signal.get("stop_loss") or "",
+                        risk_level=str(shadow.confidence),
+                        notes=(
+                            f"signal_id={signal_id or ''}; "
+                            f"captain_direction={shadow.direction}; "
+                            f"macro_bias={shadow.macro_bias}; "
+                            f"macro_confidence={shadow.macro_confidence}; "
+                            f"news_locked={shadow.news_locked}; "
+                            f"delivery_blocked=true; "
+                            f"reason={shadow.reason}"
+                        ),
+                    )
+                except Exception:
+                    logger.exception(
+                        "Captain shadow audit logging failed: id={}",
+                        signal_id,
+                    )
+
+                return False
+
         try:
             message = self._bot.send_message(
                 self._chat_id,

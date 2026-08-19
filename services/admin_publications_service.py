@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-import json, re
+import json, os, re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -79,6 +79,8 @@ def save_announcement(*,actor_id:int,request_id:str,item_id:int|None=None,**v:An
 
 def transition_announcement(*,item_id:int,action:str,actor_id:int,request_id:str)->dict[str,Any]:
     action=action.upper(); now=datetime.now(timezone.utc)
+    if action=="PUBLISH" and os.getenv("ANNOUNCEMENT_PUBLISH_ENABLED", "").strip().lower() not in {"1","true","yes","on"}:
+        raise PublicationConflict("Announcement publishing is currently locked.")
     with session_scope() as s:
         row=s.execute(text("SELECT status,title,excerpt,body,scheduled_at,expires_at FROM content_items WHERE id=:id AND content_type='ANNOUNCEMENT' FOR UPDATE"),{"id":item_id}).mappings().first()
         if not row: raise PublicationNotFound("Announcement was not found.")
