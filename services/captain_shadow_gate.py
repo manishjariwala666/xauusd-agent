@@ -6,6 +6,7 @@ from typing import Any, Callable
 from loguru import logger
 from services.captain_ai_runtime import CaptainObservedRun, run_captain_observed
 from services.captain_shadow_audit import record_captain_shadow_audit
+from services.captain_structure_guard import evaluate_captain_structure
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,14 @@ def evaluate_signal_shadow_gate(
         reason = f"Captain direction mismatch: captain={direction}, candidate={candidate or 'NONE'}."
     else:
         reason = reasons[0] if reasons else "Captain verified candidate delivery."
+
+    # Structural safety is authoritative when we have the exact observed Sheet
+    # context. A two-sided base sweep is ambiguous even if the directional
+    # Captain assessment otherwise says APPROVE, so Shadow must fail closed.
+    structure = evaluate_captain_structure(observed)
+    if structure.blocked:
+        blocked = True
+        reason = structure.reason
 
     correlation_id, audit_persisted, master_ai_summary = _audit_gate_decision(
         observed,
