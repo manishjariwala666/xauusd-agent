@@ -145,11 +145,20 @@ class ExecutionPlanner:
         task_type: str,
         title: str,
         payload: dict[str, Any],
-        available_agents: list[AgentDescriptor],
+        available_agents: list[AgentDescriptor] | None = None,
+        enabled_agents: list[AgentDescriptor] | None = None,
     ) -> list[str]:
+        """Select exact agent keys while preserving the older enabled_agents API.
+
+        ``enabled_agents`` remains accepted for focused tests and callers that
+        pre-filtered the registry. Newer orchestration passes ``available_agents``
+        so configured-but-disabled workers can still be distinguished and blocked.
+        """
+        if available_agents is None:
+            available_agents = list(enabled_agents or [])
         all_by_key = {agent.agent_key: agent for agent in available_agents}
-        enabled_agents = [agent for agent in available_agents if agent.is_enabled]
-        enabled_by_key = {agent.agent_key: agent for agent in enabled_agents}
+        active_agents = [agent for agent in available_agents if agent.is_enabled]
+        enabled_by_key = {agent.agent_key: agent for agent in active_agents}
 
         explicit_keys = payload.get("agent_keys") or payload.get("agents")
         if isinstance(explicit_keys, str):
@@ -161,11 +170,9 @@ class ExecutionPlanner:
                 if key in enabled_by_key:
                     continue
                 if key in all_by_key:
-                    # A configured-but-disabled worker must never be bypassed.
                     unavailable.append(key)
                     continue
                 if key in ORCHESTRATION_NATIVE_AGENT_KEYS:
-                    # Safe Master-AI-native agents are intentionally not DB scheduler rows.
                     continue
                 unavailable.append(key)
             if unavailable:
@@ -182,7 +189,7 @@ class ExecutionPlanner:
         for keywords, key_hints in self.KEYWORD_AGENT_HINTS:
             if not any(keyword in haystack for keyword in keywords):
                 continue
-            for agent in enabled_agents:
+            for agent in active_agents:
                 agent_key = agent.agent_key.lower()
                 display_name = agent.display_name.lower()
                 if any(hint in agent_key or hint in display_name for hint in key_hints):
@@ -190,7 +197,7 @@ class ExecutionPlanner:
         deduped = list(dict.fromkeys(selected))
         if deduped:
             return deduped
-        return [enabled_agents[0].agent_key] if enabled_agents else []
+        return [active_agents[0].agent_key] if active_agents else []
 
     @staticmethod
     def _safe_step_key(agent_key: str) -> str:
