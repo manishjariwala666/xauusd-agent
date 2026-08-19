@@ -30,6 +30,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           pytest -q \
+            tests/test_agent_brain_audit.py \
             tests/test_master_ai_chat_blog_delegation.py \
             tests/test_agent_units.py \
             tests/test_master_ai_natural_orchestration.py \
