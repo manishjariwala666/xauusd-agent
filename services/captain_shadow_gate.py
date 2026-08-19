@@ -36,7 +36,6 @@ def shadow_gate_enabled() -> bool:
 
 
 def _assessment_and_observed(value: Any) -> tuple[Any, CaptainObservedRun | None]:
-    """Accept both the new observed runtime and legacy assessment test doubles."""
     if isinstance(value, CaptainObservedRun):
         return value.assessment, value
     assessment = getattr(value, "assessment", None)
@@ -52,7 +51,6 @@ def _audit_gate_decision(
     blocked: bool,
     reason: str,
 ) -> tuple[str | None, bool | None, str | None]:
-    """Persist observability only; never alter the delivery decision."""
     if observed is None:
         return None, None, None
     try:
@@ -77,7 +75,14 @@ def evaluate_signal_shadow_gate(
     signal: dict[str, Any],
     *,
     runner: Callable[..., Any] = run_captain_observed,
+    structure_reversal_confirmed: bool = False,
 ) -> CaptainShadowGateResult:
+    """Verify one candidate; structural reversal may override only sweep ambiguity.
+
+    A verified two-bar reversal is allowed to override the specific two-sided
+    base-sweep ambiguity guard. It does not override Captain WAIT/ERROR, news
+    lock, direction mismatch, or any other Captain decision.
+    """
     if not shadow_verification_enabled():
         return CaptainShadowGateResult(
             False, False, "NOT_RUN", "NONE", 0, "UNKNOWN", 0, False,
@@ -105,13 +110,20 @@ def evaluate_signal_shadow_gate(
     else:
         reason = reasons[0] if reasons else "Captain verified candidate delivery."
 
-    # Structural safety is authoritative when we have the exact observed Sheet
-    # context. A two-sided base sweep is ambiguous even if the directional
-    # Captain assessment otherwise says APPROVE, so Shadow must fail closed.
     structure = evaluate_captain_structure(observed)
     if structure.blocked:
-        blocked = True
-        reason = structure.reason
+        if (
+            structure_reversal_confirmed
+            and not blocked
+            and structure.reason.startswith("Two-sided session sweep detected")
+        ):
+            reason = (
+                "Captain verified candidate delivery; two-sided base sweep "
+                "resolved by confirmed two-bar structural reversal."
+            )
+        else:
+            blocked = True
+            reason = structure.reason
 
     correlation_id, audit_persisted, master_ai_summary = _audit_gate_decision(
         observed,
