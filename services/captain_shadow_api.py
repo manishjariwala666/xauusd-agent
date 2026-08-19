@@ -1,4 +1,4 @@
-"""Authenticated read-only Captain AI shadow diagnostics."""
+"""Authenticated Captain AI shadow diagnostics and read-only status."""
 
 from __future__ import annotations
 
@@ -103,6 +103,38 @@ def _assessment_payload(
     }
 
 
+def _load_observed_status() -> CaptainObservedRun:
+    try:
+        return run_captain_observed()
+    except Exception as exc:
+        logger.warning(
+            "Captain status assessment failed: type={}",
+            type(exc).__name__,
+        )
+        raise HTTPException(503, "Captain status unavailable.") from None
+
+
+@router.get("/internal/captain/status")
+def captain_read_only_status(
+    response: Response,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Return Captain/Sheet status without audit writes, signal creation or delivery."""
+    _require_bff(x_admin_bff_key)
+    response.headers["Cache-Control"] = "private, no-store"
+    observed = _load_observed_status()
+    payload = _assessment_payload(observed)
+    payload["mode"] = "CAPTAIN_STATUS"
+    payload["audit"] = {
+        "correlation_id": None,
+        "persisted": False,
+    }
+    payload["read_only"] = True
+    payload["signal_generated"] = False
+    payload["delivery_started"] = False
+    return payload
+
+
 @router.get("/internal/captain/shadow")
 def captain_shadow_diagnostic(
     response: Response,
@@ -114,15 +146,7 @@ def captain_shadow_diagnostic(
     _require_bff(x_admin_bff_key)
     response.headers["Cache-Control"] = "private, no-store"
 
-    try:
-        observed = run_captain_observed()
-    except Exception as exc:
-        logger.warning(
-            "Captain shadow diagnostic assessment failed: type={}",
-            type(exc).__name__,
-        )
-        raise HTTPException(503, "Captain shadow assessment unavailable.") from None
-
+    observed = _load_observed_status()
     decision = str(observed.assessment.decision.value).upper()
     shadow_status = "VERIFIED" if decision == "APPROVE" else "BLOCKED"
     shadow_reason = (
