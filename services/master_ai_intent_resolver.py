@@ -29,49 +29,27 @@ class MasterAIIntentProposal:
 
 
 _ACTION_WORDS = {
-    "banao", "chalao", "create", "delete", "deploy", "diagnose",
-    "execute", "generate", "karo", "migrate", "publish", "retry",
-    "run", "send", "start", "stop", "disable", "off", "bandh",
+    "banao", "chalao", "create", "delete", "deploy", "diagnose", "execute",
+    "generate", "karo", "migrate", "publish", "retry", "run", "send",
+    "start", "stop", "disable", "off", "bandh",
 }
 
-_AGENT_ACTION_REQUESTS: tuple[
-    tuple[tuple[str, ...], str, str, dict[str, Any], str], ...
-] = (
-    (("market data agent", "market data validator", "xauusd market data"),
-     "run_market_data_agent", "market_data_agent", {},
-     "Registered Market Data Agent requested for read-only validation."),
-    (("customer support agent", "support guidance"),
-     "run_customer_support_agent", "customer_support_agent", {},
-     "Registered Customer Support Agent requested for guidance preparation only."),
-    (("marketing strategy agent", "marketing plan"),
-     "run_marketing_strategy_agent", "marketing_strategy_agent", {},
-     "Registered Marketing Strategy Agent requested for draft planning only."),
-    (("social media agent", "social media drafts", "social drafts"),
-     "run_social_media_agent", "social_media_agent", {},
-     "Registered Social Media Agent requested for draft preparation only."),
-    (("cms editor agent", "cms draft", "studio v2 draft"),
-     "run_cms_editor_agent", "cms_editor_agent", {"publish": False},
-     "Registered CMS Editor Agent requested for draft conversion only."),
-    (("content review agent", "master content review", "review cms draft"),
-     "run_master_ai_content_review_agent", "master_content_review_agent", {},
-     "Registered Master Content Review Agent requested for read-only review."),
-    (("publish approval agent", "master publish agent"),
-     "run_master_ai_publish_approval_agent", "master_publish_approval_agent", {},
-     "Registered publish approval agent requested; publishing requires explicit owner approval."),
-    (("announcement agent",),
-     "run_announcement_agent", "announcement_agent", {},
-     "Announcement Agent may perform real external delivery and requires owner approval."),
-    (("telegram reply agent",),
-     "run_telegram_reply_agent", "telegram_reply_agent", {},
-     "Telegram Reply Agent may send a real client message and requires owner approval."),
-    (("whatsapp reply agent",),
-     "run_whatsapp_reply_agent", "whatsapp_reply_agent", {},
-     "WhatsApp Reply Agent may send a real client message and requires owner approval."),
+_AGENT_ACTION_REQUESTS: tuple[tuple[tuple[str, ...], str, str, dict[str, Any], str], ...] = (
+    (("market data agent", "market data validator", "xauusd market data"), "run_market_data_agent", "market_data_agent", {}, "Registered Market Data Agent requested for read-only validation."),
+    (("customer support agent", "support guidance"), "run_customer_support_agent", "customer_support_agent", {}, "Registered Customer Support Agent requested for guidance preparation only."),
+    (("marketing strategy agent", "marketing plan"), "run_marketing_strategy_agent", "marketing_strategy_agent", {}, "Registered Marketing Strategy Agent requested for draft planning only."),
+    (("social media agent", "social media drafts", "social drafts"), "run_social_media_agent", "social_media_agent", {}, "Registered Social Media Agent requested for draft preparation only."),
+    (("cms editor agent", "cms draft", "studio v2 draft"), "run_cms_editor_agent", "cms_editor_agent", {"publish": False}, "Registered CMS Editor Agent requested for draft conversion only."),
+    (("content review agent", "master content review", "review cms draft"), "run_master_ai_content_review_agent", "master_content_review_agent", {}, "Registered Master Content Review Agent requested for read-only review."),
+    (("publish approval agent", "master publish agent"), "run_master_ai_publish_approval_agent", "master_publish_approval_agent", {}, "Registered publish approval agent requested; publishing requires explicit owner approval."),
+    (("announcement agent",), "run_announcement_agent", "announcement_agent", {}, "Announcement Agent may perform real external delivery and requires owner approval."),
+    (("seo agent", "seo audit", "seo metadata"), "run_seo_agent", "seo_agent", {}, "SEO Agent can persist production SEO metadata/files and requires owner approval."),
+    (("telegram reply agent",), "run_telegram_reply_agent", "telegram_reply_agent", {}, "Telegram Reply Agent may send a real client message and requires owner approval."),
+    (("whatsapp reply agent",), "run_whatsapp_reply_agent", "whatsapp_reply_agent", {}, "WhatsApp Reply Agent may send a real client message and requires owner approval."),
 )
 
 
 def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
-    """Resolve only deterministic, registered actions without using an LLM."""
     text = _normalize(message)
     if not text:
         return _no_action()
@@ -85,10 +63,7 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
     if _contains_any(text, ("delete production", "production data delete", "database delete")):
         return _proposal("delete_production_data", reason="Production deletion is permanently blocked.")
     if _is_signal_stop_request(text):
-        return _proposal(
-            "disable_signal_agent", agent_key="signal_agent", risk=IntentRisk.HIGH,
-            reason="Stopping or disabling the Signal Agent changes live operational state and requires explicit owner approval.",
-        )
+        return _proposal("disable_signal_agent", agent_key="signal_agent", risk=IntentRisk.HIGH, reason="Stopping or disabling the Signal Agent changes live operational state and requires explicit owner approval.")
     if _is_signal_delivery(text):
         return _proposal("publish_signal", agent_key="signal_agent", risk=IntentRisk.HIGH, reason="Real signal delivery requires explicit owner approval.")
     if _is_signal_information_request(text):
@@ -102,11 +77,7 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
             return _clarification("Retry ke liye registered automatic agent specify karein.")
         target_policy = get_action_policy(retry_action)
         risk = IntentRisk.LOW_RISK if target_policy and target_policy.approval == ApprovalLevel.AUTOMATIC else IntentRisk.APPROVAL_REQUIRED
-        return _proposal(
-            "retry_failed_agent", agent_key=agent_key, risk=risk,
-            parameters={"retry_action": retry_action},
-            reason=f"Retry target is the registered action {retry_action}.",
-        )
+        return _proposal("retry_failed_agent", agent_key=agent_key, risk=risk, parameters={"retry_action": retry_action}, reason=f"Retry target is the registered action {retry_action}.")
 
     if _is_diagnostic_request(text):
         return _proposal("read_agent_status", agent_key="master_ai", reason="Read-only registered-agent diagnostics requested.")
@@ -114,19 +85,12 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
         return _proposal("list_registered_agents", agent_key="master_ai", reason="Read-only registered-agent directory requested.")
 
     requested: list[tuple[str, str, dict[str, Any], str]] = []
-    blog_requested = _contains_any(
-        text,
-        ("blog agent", "blog draft", "seo blog", "blog post", "ai blog agent", "article banao"),
-    )
+    blog_requested = _contains_any(text, ("blog agent", "blog draft", "seo blog", "blog post", "ai blog agent", "article banao"))
     explicit_image_agent_requested = _contains_any(text, ("image agent", "thumbnail banao", "image banao"))
     embedded_blog_image_requested = _contains_any(text, ("featured image", "inline image", "featured images", "inline images"))
 
     if blog_requested:
-        requested.append((
-            "run_blog_agent", "ai_blog_agent",
-            {"publish": False, "include_image": embedded_blog_image_requested, "telegram_target": "blog"},
-            "Registered Blog Agent requested for draft preparation only.",
-        ))
+        requested.append(("run_blog_agent", "ai_blog_agent", {"publish": False, "include_image": embedded_blog_image_requested, "telegram_target": "blog"}, "Registered Blog Agent requested for draft preparation only."))
     if explicit_image_agent_requested:
         requested.append(("run_image_agent", "image_agent", {"telegram_target": "image"}, "Registered Image Agent requested for image preparation."))
     if _is_signal_run_request(text):
