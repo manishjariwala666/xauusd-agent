@@ -42,7 +42,6 @@ def _sync_legacy_runtime() -> None:
     for name in (
         "_blog_publish_default", "_fallback_blog_payload",
         "_valid_long_form_blog", "_normalize_public_blog_sections",
-        "_verified_whatsapp_recipients",
     ):
         value = globals().get(name)
         if value is not None and value is not globals().get("run_blog_agent"):
@@ -131,10 +130,16 @@ def _captain_delivery_verifier(signal: dict[str, Any]) -> tuple[bool, str]:
     if superseded:
         return False, source_reason
     from services.captain_shadow_gate import evaluate_signal_shadow_gate
-    result = evaluate_signal_shadow_gate(
-        signal,
-        structure_reversal_confirmed=_two_bar_delivery_reversal_confirmed(signal),
-    )
+    reversal_confirmed = _two_bar_delivery_reversal_confirmed(signal)
+    if reversal_confirmed:
+        result = evaluate_signal_shadow_gate(
+            signal,
+            structure_reversal_confirmed=True,
+        )
+    else:
+        # Preserve compatibility for the common path and older test/detour
+        # callables that implement the original single-argument gate contract.
+        result = evaluate_signal_shadow_gate(signal)
     if not result.blocked:
         return True, result.reason
     return False, (
@@ -191,17 +196,13 @@ def _guarded_stop_loss_monitor(*, market_data: Any, telegram: Any) -> int:
                 session.execute(
                     text(
                         """
-                        SELECT * FROM public.market_signals
+                        SELECT *
+                        FROM public.market_signals
                         WHERE signal_type IN ('BUY', 'SELL')
-                          AND stop_loss IS NOT NULL
-                          AND signal_time >= NOW() - INTERVAL '6 hours'
-                          AND telegram_sent_at IS NOT NULL
-                          AND whatsapp_sent_at IS NOT NULL
                           AND external_key LIKE 'gsheet-session:%'
-                          AND COALESCE(lifecycle_status, 'DRAFT') NOT IN (
-                              'STOPPED','CLOSED','TARGET_HIT','CANCELLED','EXPIRED','TRASHED'
-                          )
-                        ORDER BY signal_time DESC LIMIT 1
+                          AND COALESCE(status, '') NOT IN ('STOPPED', 'COMPLETED', 'CANCELLED')
+                        ORDER BY signal_time DESC
+                        LIMIT 1
                         """
                     )
                 )
@@ -209,59 +210,55 @@ def _guarded_stop_loss_monitor(*, market_data: Any, telegram: Any) -> int:
                 .first()
             )
     except Exception:
-        logger.exception("Sheet structural SL verification unavailable; stop close blocked.")
+        logger.exception("Sheet stop monitor lookup failed closed")
         return 0
 
-    if row is None:
+    if not row:
         return _LEGACY_STOP_MONITOR(market_data=market_data, telegram=telegram)
 
     signal = dict(row)
     identity = signal_identity(signal)
     if identity is None:
-        logger.warning("Sheet SL close blocked: session identity unavailable.")
         return 0
-
-    direction = str(signal.get("signal_type") or "").strip().upper()
-    opposite = "BUY" if direction == "SELL" else "SELL"
+    signal_date, original_session = identity
     try:
-        sheets = GoogleSheetsService()
-        values = sheets._analysis_values()
-        signal_date, original_session = identity
-        snapshot = parse_signal_snapshot(
-            values,
-            target_date=date.fromisoformat(signal_date),
-        )
+        values = GoogleSheetsService()._analysis_values()
+        snapshot = parse_signal_snapshot(values, signal_date=date.fromisoformat(signal_date))
         current_session = (
             session_for_slot(snapshot.latest_slot)
             if snapshot is not None and snapshot.latest_slot
             else None
-        )
-        reversal_session = current_session or original_session
-        reversed_ok = opposite_reversal_confirmed(
+        ) or original_session
+        confirmed = opposite_reversal_confirmed(
             values,
             signal_date=signal_date,
-            session_name=reversal_session,
-            from_direction=direction,
-            to_direction=opposite,
+            session_name=current_session,
+            from_direction=str(signal.get("signal_type") or "").upper(),
+            to_direction=("BUY" if str(signal.get("signal_type") or "").upper() == "SELL" else "SELL"),
             now=datetime.now(timezone.utc),
         )
     except Exception:
-        logger.exception("Sheet structural SL verification failed; stop close blocked.")
+        logger.exception("Sheet stop reversal verification failed closed")
         return 0
-
-    if not reversed_ok:
-        logger.info(
-            "Sheet SL close suppressed pending opposite two-bar confirmation: signal_id={} direction={}",
-            signal.get("id"),
-            direction,
-        )
+    if not confirmed:
+        logger.info("Sheet stop monitor waiting for opposite two-bar reversal")
         return 0
-
     return _LEGACY_STOP_MONITOR(market_data=market_data, telegram=telegram)
 
 
-_legacy._deliver_pending_whatsapp_signals = _durable_pending_whatsapp_signals
-_legacy._monitor_stop_loss_hits = _guarded_stop_loss_monitor
+def run_signal_agent(payload: dict[str, Any]) -> str:
+    _sync_legacy_runtime()
+    return _legacy.run_signal_agent(payload)
+
+
+def run_whatsapp_reply_agent(payload: dict[str, Any]) -> str:
+    _sync_legacy_runtime()
+    return _legacy.run_whatsapp_reply_agent(payload)
+
+
+def run_telegram_reply_agent(payload: dict[str, Any]) -> str:
+    _sync_legacy_runtime()
+    return _legacy.run_telegram_reply_agent(payload)
 
 
 def run_blog_agent(payload: dict[str, Any]) -> str:
@@ -274,39 +271,25 @@ def run_image_agent(payload: dict[str, Any]) -> str:
     return _legacy.run_image_agent(payload)
 
 
-def run_signal_agent(payload: dict[str, Any]) -> str:
+def run_announcement_agent(payload: dict[str, Any]) -> str:
     _sync_legacy_runtime()
-    _legacy._deliver_pending_whatsapp_signals = _durable_pending_whatsapp_signals
-    _legacy._monitor_stop_loss_hits = _guarded_stop_loss_monitor
-    _legacy.TelegramService.broadcast_pending_signals = _durable_telegram_broadcast
-    return _legacy.run_signal_agent(payload)
+    return _legacy.run_announcement_agent(payload)
 
 
-def run_telegram_reply_agent(payload: dict[str, Any]) -> str:
+def run_seo_agent(payload: dict[str, Any]) -> str:
     _sync_legacy_runtime()
-    return _legacy.run_telegram_reply_agent(payload)
-
-
-def run_whatsapp_reply_agent(payload: dict[str, Any]) -> str:
-    _sync_legacy_runtime()
-    return _legacy.run_whatsapp_reply_agent(payload)
-
-
-def deliver_pending_whatsapp_signals() -> None:
-    _durable_pending_whatsapp_signals()
-
-
-def _deliver_pending_whatsapp_signals() -> None:
-    _durable_pending_whatsapp_signals()
+    return _legacy.run_seo_agent(payload)
 
 
 RUNNERS = dict(_legacy.RUNNERS)
 RUNNERS.update(
     {
-        "ai_blog_agent": run_blog_agent,
-        "telegram_reply_agent": run_telegram_reply_agent,
+        "signal_agent": run_signal_agent,
         "whatsapp_reply_agent": run_whatsapp_reply_agent,
-        "signal_agent": _master_optional_agent("signal_agent", run_signal_agent),
-        "image_agent": _master_optional_agent("image_agent", run_image_agent),
+        "telegram_reply_agent": run_telegram_reply_agent,
+        "ai_blog_agent": run_blog_agent,
+        "image_agent": run_image_agent,
+        "announcement_agent": run_announcement_agent,
+        "seo_agent": run_seo_agent,
     }
 )
