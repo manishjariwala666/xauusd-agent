@@ -8,7 +8,7 @@ continue to target ``services.production_agents`` exactly as before.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from services import production_agents_legacy as _legacy
@@ -68,7 +68,7 @@ def _legacy_sheet_signal_is_superseded(signal: dict[str, Any]) -> tuple[bool, st
 
 
 def _two_bar_delivery_reversal_confirmed(signal: dict[str, Any]) -> bool:
-    """Verify the current candidate reverses a previous same-session signal."""
+    """Verify candidate against the previous opposite signal from the trading day."""
     from services.sheet_reversal_guard import opposite_reversal_confirmed, signal_identity
 
     identity = signal_identity(signal)
@@ -78,7 +78,7 @@ def _two_bar_delivery_reversal_confirmed(signal: dict[str, Any]) -> bool:
         return False
 
     signal_date, session_name = identity
-    prefix = f"gsheet-session:{signal_date}:{session_name}:%"
+    prefix = f"gsheet-session:{signal_date}:%"
     opposite = "SELL" if candidate == "BUY" else "BUY"
     try:
         with session_scope() as session:
@@ -178,7 +178,12 @@ def _durable_telegram_broadcast(telegram: Any, limit: int = 50) -> int:
 
 def _guarded_stop_loss_monitor(*, market_data: Any, telegram: Any) -> int:
     """Close canonical Sheet SL only after opposite two-bar structure confirms."""
-    from services.sheet_reversal_guard import opposite_reversal_confirmed, signal_identity
+    from services.master_ai_signal_reader import parse_signal_snapshot
+    from services.sheet_reversal_guard import (
+        opposite_reversal_confirmed,
+        session_for_slot,
+        signal_identity,
+    )
 
     try:
         with session_scope() as session:
@@ -221,11 +226,21 @@ def _guarded_stop_loss_monitor(*, market_data: Any, telegram: Any) -> int:
     try:
         sheets = GoogleSheetsService()
         values = sheets._analysis_values()
-        signal_date, session_name = identity
+        signal_date, original_session = identity
+        snapshot = parse_signal_snapshot(
+            values,
+            target_date=date.fromisoformat(signal_date),
+        )
+        current_session = (
+            session_for_slot(snapshot.latest_slot)
+            if snapshot is not None and snapshot.latest_slot
+            else None
+        )
+        reversal_session = current_session or original_session
         reversed_ok = opposite_reversal_confirmed(
             values,
             signal_date=signal_date,
-            session_name=session_name,
+            session_name=reversal_session,
             from_direction=direction,
             to_direction=opposite,
             now=datetime.now(timezone.utc),
