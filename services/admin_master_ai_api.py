@@ -1,4 +1,4 @@
-"""Protected conversational Master AI endpoint for local admin staging."""
+"""Protected conversational Master AI endpoint for the secured admin workspace."""
 
 from __future__ import annotations
 
@@ -32,7 +32,13 @@ def master_ai_chat(
     authorization: Annotated[str | None, Header()] = None,
     x_admin_bff_key: Annotated[str | None, Header()] = None,
 ) -> dict[str, str]:
-    """Return a conversational answer without executing agent actions."""
+    """Use the same verified Master AI backend shared with Telegram.
+
+    Safe automatic actions such as preparing an AI Blog Agent draft may route
+    through the shared orchestrator. Owner-approval actions (publishing,
+    deployment, infrastructure changes) remain policy-locked by the Master AI
+    access layer.
+    """
     _require_bff(x_admin_bff_key)
     _require_identity(_bearer_token(authorization))
 
@@ -40,6 +46,6 @@ def master_ai_chat(
 
     return {
         "reply": generate_master_ai_reply(payload.message),
-        "mode": "CONVERSATION_ONLY",
-        "execution": "LOCKED",
+        "mode": "SHARED_MASTER_AI",
+        "execution": "POLICY_GUARDED",
     }
