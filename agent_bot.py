@@ -32,7 +32,7 @@ def _active_sheet_reversal_allowed(
     market_data: MarketDataService,
     candidate: object,
 ) -> bool:
-    """Allow same-direction continuation; require two-bar proof to reverse."""
+    """Carry active daily bias across sessions; require two-bar proof to reverse."""
     from services.sheet_reversal_guard import (
         opposite_reversal_confirmed,
         signal_identity,
@@ -50,7 +50,7 @@ def _active_sheet_reversal_allowed(
             market_data._supabase.table("market_signals")
             .select("*")
             .in_("signal_type", ["BUY", "SELL"])
-            .like("external_key", f"gsheet-session:{signal_date}:{session_name}:%")
+            .like("external_key", f"gsheet-session:{signal_date}:%")
             .order("signal_time", desc=True)
             .limit(10)
             .execute()
