@@ -25,7 +25,7 @@ TASKS: dict[str, dict[str, Any]] = {
     "run_signal_agent": {"task_type": "SIGNAL", "title": "Run Signal Agent", "agent_key": "signal_agent", "objective": "Run the existing XAUUSD Signal Agent using configured Google Sheet data. Do not invent or alter signal values."},
     "run_whatsapp_reply_agent": {"task_type": "WHATSAPP_REPLY", "title": "Run WhatsApp Reply Agent", "agent_key": "whatsapp_reply_agent", "objective": "Process pending WhatsApp replies using existing rules."},
     "run_telegram_reply_agent": {"task_type": "TELEGRAM_REPLY", "title": "Run Telegram Reply Agent", "agent_key": "telegram_reply_agent", "objective": "Process pending Telegram replies using existing rules."},
-    "run_blog_agent": {"task_type": "BLOG", "title": "Prepare Blog Content", "agent_key": "ai_blog_agent", "objective": "Prepare admin-ready blog content. Do not publish automatically.", "safe_payload": {"publish": False, "include_image": False}},
+    "run_blog_agent": {"task_type": "BLOG", "title": "Prepare Blog Content", "agent_key": "ai_blog_agent", "objective": "Prepare admin-ready blog content. Do not publish automatically.", "safe_payload": {"publish": False}},
     "run_image_agent": {"task_type": "IMAGE", "title": "Prepare Image Content", "agent_key": "image_agent", "objective": "Prepare admin-ready image content. Do not publish automatically.", "safe_payload": {}},
     "run_market_data_agent": {
         "task_type": "MARKET_DATA", "title": "Validate Market Data", "agent_key": "market_data_agent",
@@ -116,12 +116,9 @@ def execute_master_ai_action(
     if task is None:
         return MasterAIToolResult(False, clean_action, "NOT_IMPLEMENTED", "Action policy me allowed hai, lekin router tool pending hai.")
 
-    # User/request fields are accepted first. Fixed safety fields are then applied
-    # last so caller input can never flip a draft/read-only guard to an external
-    # action. Agent selection and automatic execution markers are also canonical.
     payload = {
-        "objective": task["objective"],
         **dict(input_payload or {}),
+        "objective": task["objective"],
         **dict(task.get("safe_payload") or {}),
         "master_ai_action": clean_action,
         "automatic_execution": True,
