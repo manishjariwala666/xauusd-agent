@@ -1,10 +1,16 @@
+from types import SimpleNamespace
+
+import pytest
+
 from services.agent_brain_registry import get_agent_brain
+from services.execution_planner import AgentDescriptor, ExecutionPlanner
 from services.master_ai_access_policy import ApprovalLevel, get_action_policy
 from services.master_ai_agent_registry import list_registered_agents
 from services.master_ai_capability_matrix import CapabilityMode, get_agent_capability
 from services.master_ai_intent_resolver import resolve_master_ai_intent
 from services.master_ai_tool_router import TASKS, execute_master_ai_action
 from services.production_agents import RUNNERS
+from services.worker_agent_adapter import ORCHESTRATION_NATIVE_AGENT_KEYS, WorkerAgentAdapter
 
 
 def test_every_registered_agent_has_brain_and_capability():
@@ -67,6 +73,23 @@ def test_embedded_and_diagnostic_agents_are_not_fake_worker_runners():
         assert by_key[key].run_action is None
 
 
+def test_native_allowlist_contains_only_safe_automatic_agents():
+    expected = {
+        "market_data_agent",
+        "customer_support_agent",
+        "marketing_strategy_agent",
+        "social_media_agent",
+        "cms_editor_agent",
+        "master_content_review_agent",
+    }
+    assert set(ORCHESTRATION_NATIVE_AGENT_KEYS) == expected
+    by_key = {agent.agent_key: agent for agent in list_registered_agents()}
+    for key in expected:
+        action = by_key[key].run_action
+        assert action is not None
+        assert get_action_policy(action).approval == ApprovalLevel.AUTOMATIC
+
+
 def test_safe_registered_agent_intents_resolve_without_cross_agent_collision():
     cases = {
         "Run Market Data Agent": ("run_market_data_agent", "market_data_agent"),
@@ -116,3 +139,52 @@ def test_owner_approval_policy_blocks_runner_invocation():
         assert result.ok is False
         assert result.status == "OWNER_APPROVAL_REQUIRED"
     assert calls == []
+
+
+def test_planner_allows_native_agent_only_when_no_db_descriptor_exists():
+    planner = ExecutionPlanner()
+    task = SimpleNamespace(
+        task_type="CUSTOMER_SUPPORT",
+        title="Prepare support guidance",
+        input_payload={"agent_keys": ["customer_support_agent"]},
+    )
+    plan = planner.build_plan(task=task, available_agents=[], context={})
+    assert [step.agent_key for step in plan.steps] == ["customer_support_agent"]
+
+    disabled = [
+        AgentDescriptor(
+            agent_key="customer_support_agent",
+            display_name="Customer Support Agent",
+            is_enabled=False,
+        )
+    ]
+    with pytest.raises(ValueError, match="unavailable or disabled"):
+        planner.build_plan(task=task, available_agents=disabled, context={})
+
+
+def test_worker_adapter_uses_native_runner_only_for_master_ai(monkeypatch):
+    calls = []
+    monkeypatch.setitem(
+        RUNNERS,
+        "customer_support_agent",
+        lambda payload: calls.append(dict(payload)) or "support draft ready",
+    )
+    adapter = WorkerAgentAdapter()
+    result = adapter.execute_step(
+        agent_key="customer_support_agent",
+        trigger_type="MASTER_AI",
+        triggered_by=None,
+        payload={"customer_message": "How does onboarding work?"},
+    )
+    assert result.succeeded is True
+    assert result.message == "support draft ready"
+    assert calls == [{"customer_message": "How does onboarding work?"}]
+
+
+def test_scheduled_or_consequential_agent_never_uses_native_allowlist():
+    assert "signal_agent" not in ORCHESTRATION_NATIVE_AGENT_KEYS
+    assert "telegram_reply_agent" not in ORCHESTRATION_NATIVE_AGENT_KEYS
+    assert "whatsapp_reply_agent" not in ORCHESTRATION_NATIVE_AGENT_KEYS
+    assert "announcement_agent" not in ORCHESTRATION_NATIVE_AGENT_KEYS
+    assert "seo_agent" not in ORCHESTRATION_NATIVE_AGENT_KEYS
+    assert "master_publish_approval_agent" not in ORCHESTRATION_NATIVE_AGENT_KEYS
