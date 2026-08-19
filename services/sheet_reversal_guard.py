@@ -60,26 +60,18 @@ def _slot_close_at(signal_date: str, label: str) -> datetime | None:
     return end.astimezone(timezone.utc)
 
 
-def confirmed_session_direction(
+def _closed_session_rows(
     values: list[list[Any]],
     *,
     signal_date: str,
     session_name: str,
     now: datetime,
-) -> str | None:
-    """Return BUY/SELL only after reversal has two-bar structure confirmation.
-
-    First directional setup may establish the session bias. Once established,
-    SELL -> BUY requires two consecutive higher highs plus bullish AVG/CMP
-    confirmation. BUY -> SELL requires two consecutive lower lows plus bearish
-    AVG/CMP confirmation. A one-bar bounce/dip cannot flip the active bias.
-    """
+) -> list[tuple[Decimal, Decimal, Decimal | None, Decimal, Decimal]]:
     normalized_now = (
         now.replace(tzinfo=timezone.utc)
         if now.tzinfo is None
         else now.astimezone(timezone.utc)
     )
-
     start: int | None = None
     end = len(values)
     marker_a = f"DATE: {signal_date}".upper()
@@ -89,63 +81,76 @@ def confirmed_session_direction(
         if start is None and first in {marker_a, marker_b}:
             start = index + 1
             continue
-        if start is not None and (first.startswith("DATE:") or first.startswith("XAUUSD SESSION ")):
+        if start is not None and (
+            first.startswith("DATE:") or first.startswith("XAUUSD SESSION ")
+        ):
             end = index
             break
     if start is None:
-        return None
+        return []
 
-    rows: list[tuple[Decimal, Decimal, Decimal, Decimal, datetime]] = []
+    rows: list[tuple[Decimal, Decimal, Decimal | None, Decimal, Decimal]] = []
     for raw in values[start:end]:
         cells = [str(cell).strip() for cell in raw]
-        if len(cells) < 6:
-            continue
-        slot = cells[0]
-        if _session_for_slot(slot) != session_name:
+        if len(cells) < 6 or _session_for_slot(cells[0]) != session_name:
             continue
         high = _decimal(cells[1])
         low = _decimal(cells[2])
-        sheet_prev_avg = _decimal(cells[3])
+        prev_avg = _decimal(cells[3])
         avg = _decimal(cells[4])
         cmp = _decimal(cells[5])
-        closed_at = _slot_close_at(signal_date, slot)
+        closed_at = _slot_close_at(signal_date, cells[0])
         if None in (high, low, avg, cmp) or closed_at is None:
             continue
         if closed_at > normalized_now:
             continue
-        rows.append((high, low, sheet_prev_avg or avg, avg, cmp))
+        rows.append((high, low, prev_avg, avg, cmp))
+    return rows
 
-    if len(rows) < 2:
-        return None
 
-    active: str | None = None
-    for index in range(1, len(rows)):
-        high, low, sheet_prev_avg, avg, cmp = rows[index]
-        prev_high, prev_low, _prev_sheet_avg, prev_avg, _prev_cmp = rows[index - 1]
-        comparison_avg = sheet_prev_avg if sheet_prev_avg is not None else prev_avg
+def opposite_reversal_confirmed(
+    values: list[list[Any]],
+    *,
+    signal_date: str,
+    session_name: str,
+    from_direction: str,
+    to_direction: str,
+    now: datetime,
+) -> bool:
+    """Confirm an opposite signal only after two structural breaks.
 
-        bullish = high > prev_high and avg > comparison_avg and cmp > avg
-        bearish = low < prev_low and avg < comparison_avg and cmp < avg
+    SELL -> BUY requires the latest three closed bars to form two consecutive
+    higher highs and the latest bar to confirm bullish AVG/CMP structure.
+    BUY -> SELL requires two consecutive lower lows and bearish AVG/CMP.
+    """
+    source = from_direction.strip().upper()
+    target = to_direction.strip().upper()
+    if source == target or {source, target} != {"BUY", "SELL"}:
+        return source == target
 
-        candidate: str | None = "BUY" if bullish else "SELL" if bearish else None
-        if candidate is None:
-            continue
-        if active is None or candidate == active:
-            active = candidate
-            continue
+    rows = _closed_session_rows(
+        values,
+        signal_date=signal_date,
+        session_name=session_name,
+        now=now,
+    )
+    if len(rows) < 3:
+        return False
 
-        if index < 2:
-            continue
-        older_high, older_low, *_ = rows[index - 2]
+    older = rows[-3]
+    previous = rows[-2]
+    latest = rows[-1]
+    high, low, sheet_prev_avg, avg, cmp = latest
+    prev_high, prev_low, _prev_sheet_avg, prev_avg, _prev_cmp = previous
+    older_high, older_low, *_ = older
+    comparison_avg = sheet_prev_avg if sheet_prev_avg is not None else prev_avg
 
-        if active == "SELL" and candidate == "BUY":
-            if high > prev_high > older_high:
-                active = "BUY"
-        elif active == "BUY" and candidate == "SELL":
-            if low < prev_low < older_low:
-                active = "SELL"
+    if source == "SELL" and target == "BUY":
+        bullish = avg > comparison_avg and cmp > avg
+        return bullish and high > prev_high > older_high
 
-    return active
+    bearish = avg < comparison_avg and cmp < avg
+    return bearish and low < prev_low < older_low
 
 
 def signal_identity(signal: dict[str, Any]) -> tuple[str, str] | None:
