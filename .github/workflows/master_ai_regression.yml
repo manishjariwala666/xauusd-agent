@@ -38,6 +38,7 @@ jobs:
             tests/test_sheet_signal_risk_guard.py \
             tests/test_sheet_signal_source.py \
             tests/test_sheet_delivery_source_guard.py \
+            tests/test_sheet_reversal_guard.py \
             tests/test_telegram_primary_delivery.py \
             tests/test_whatsapp_primary_delivery.py \
             tests/test_signal_channel_delivery.py \
