@@ -34,6 +34,44 @@ _ACTION_WORDS = {
     "run", "send", "start", "stop", "disable", "off", "bandh",
 }
 
+# Registered worker actions beyond the historically hard-coded Blog/Image/Signal
+# paths.  These mappings intentionally resolve only clear agent requests; each
+# action still passes through master_ai_access_policy before execution.
+_AGENT_ACTION_REQUESTS: tuple[
+    tuple[tuple[str, ...], str, str, dict[str, Any], str], ...
+] = (
+    (("market data agent", "market_data_agent", "xauusd market data"),
+     "run_market_data_agent", "market_data_agent", {},
+     "Registered Market Data Agent requested for read-only validation."),
+    (("customer support agent", "customer_support_agent", "support guidance"),
+     "run_customer_support_agent", "customer_support_agent", {},
+     "Registered Customer Support Agent requested for guidance preparation only."),
+    (("marketing strategy agent", "marketing_strategy_agent", "marketing plan"),
+     "run_marketing_strategy_agent", "marketing_strategy_agent", {},
+     "Registered Marketing Strategy Agent requested for draft planning only."),
+    (("social media agent", "social_media_agent", "social media drafts"),
+     "run_social_media_agent", "social_media_agent", {},
+     "Registered Social Media Agent requested for draft preparation only."),
+    (("cms editor agent", "cms_editor_agent", "cms draft", "studio v2 draft"),
+     "run_cms_editor_agent", "cms_editor_agent", {"publish": False},
+     "Registered CMS Editor Agent requested for draft conversion only."),
+    (("content review agent", "master content review", "master_content_review_agent", "review cms draft"),
+     "run_master_ai_content_review_agent", "master_content_review_agent", {},
+     "Registered Master Content Review Agent requested for read-only review."),
+    (("publish approval agent", "master publish agent", "master_publish_approval_agent"),
+     "run_master_ai_publish_approval_agent", "master_publish_approval_agent", {},
+     "Registered publish approval agent requested; publishing requires explicit owner approval."),
+    (("announcement agent", "announcement_agent"),
+     "run_announcement_agent", "announcement_agent", {},
+     "Announcement Agent may perform real external delivery and requires owner approval."),
+    (("telegram reply agent", "telegram_reply_agent"),
+     "run_telegram_reply_agent", "telegram_reply_agent", {},
+     "Telegram Reply Agent may send a real client message and requires owner approval."),
+    (("whatsapp reply agent", "whatsapp_reply_agent"),
+     "run_whatsapp_reply_agent", "whatsapp_reply_agent", {},
+     "WhatsApp Reply Agent may send a real client message and requires owner approval."),
+)
+
 
 def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
     """Resolve only deterministic, registered actions without using an LLM."""
@@ -96,7 +134,7 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
         retry_action, agent_key = _retry_target(text)
         if not retry_action:
             return _clarification(
-                "Retry ke liye registered Blog Agent ya Image Agent specify karein."
+                "Retry ke liye registered automatic agent specify karein."
             )
         target_policy = get_action_policy(retry_action)
         risk = (
@@ -136,7 +174,7 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
             "article banao",
             "seo blog",
             "blog post",
-            "ai_blog_agent",
+            "ai blog agent",
         ),
     )
 
@@ -192,7 +230,13 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
             )
         )
 
-    if len({item[0] for item in requested}) > 1:
+    for phrases, action, agent_key, parameters, reason in _AGENT_ACTION_REQUESTS:
+        if _contains_any(text, phrases):
+            requested.append((action, agent_key, dict(parameters), reason))
+
+    # One natural-language command must resolve to exactly one worker action.
+    unique_actions = {item[0] for item in requested}
+    if len(unique_actions) > 1:
         return _clarification(
             "Request mein multiple agent actions hain. Ek registered agent choose karein."
         )
@@ -260,12 +304,20 @@ def _risk_for(action: str, approval: ApprovalLevel) -> IntentRisk:
 
 
 def _retry_target(text: str) -> tuple[str | None, str | None]:
-    if _contains_any(text, ("blog agent", "blog")):
-        return "run_blog_agent", "ai_blog_agent"
-    if _contains_any(text, ("image agent", "image", "thumbnail")):
-        return "run_image_agent", "image_agent"
-    if _contains_any(text, ("signal agent", "signal")):
-        return "run_signal_agent", "signal_agent"
+    mappings = (
+        (("blog agent", "blog"), "run_blog_agent", "ai_blog_agent"),
+        (("image agent", "image", "thumbnail"), "run_image_agent", "image_agent"),
+        (("market data agent", "market data"), "run_market_data_agent", "market_data_agent"),
+        (("customer support agent", "support guidance"), "run_customer_support_agent", "customer_support_agent"),
+        (("marketing strategy agent", "marketing plan"), "run_marketing_strategy_agent", "marketing_strategy_agent"),
+        (("social media agent", "social drafts"), "run_social_media_agent", "social_media_agent"),
+        (("cms editor agent", "cms draft"), "run_cms_editor_agent", "cms_editor_agent"),
+        (("content review agent", "content review"), "run_master_ai_content_review_agent", "master_content_review_agent"),
+        (("signal agent", "signal"), "run_signal_agent", "signal_agent"),
+    )
+    for phrases, action, agent_key in mappings:
+        if _contains_any(text, phrases):
+            return action, agent_key
     return None, None
 
 
