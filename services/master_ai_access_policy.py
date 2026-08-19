@@ -42,7 +42,54 @@ POLICIES: dict[str, MasterAIActionPolicy] = {
         "Read enabled state, last run, queue and last error.",
     ),
 
-    # Safe operational commands
+    # Safe internal/draft agent execution
+    "run_blog_agent": MasterAIActionPolicy(
+        "run_blog_agent",
+        ApprovalLevel.AUTOMATIC,
+        "Prepare and save a blog draft; publishing remains locked.",
+    ),
+    "run_image_agent": MasterAIActionPolicy(
+        "run_image_agent",
+        ApprovalLevel.AUTOMATIC,
+        "Prepare internal image assets without publishing them.",
+    ),
+    "run_market_data_agent": MasterAIActionPolicy(
+        "run_market_data_agent",
+        ApprovalLevel.AUTOMATIC,
+        "Validate supplied approved XAUUSD market data without generating a signal.",
+    ),
+    "run_customer_support_agent": MasterAIActionPolicy(
+        "run_customer_support_agent",
+        ApprovalLevel.AUTOMATIC,
+        "Prepare safe customer guidance and lead qualification without sending messages or changing accounts.",
+    ),
+    "run_marketing_strategy_agent": MasterAIActionPolicy(
+        "run_marketing_strategy_agent",
+        ApprovalLevel.AUTOMATIC,
+        "Prepare a marketing campaign plan for already-published content without starting a campaign.",
+    ),
+    "run_social_media_agent": MasterAIActionPolicy(
+        "run_social_media_agent",
+        ApprovalLevel.AUTOMATIC,
+        "Prepare social-media drafts without posting or sending them.",
+    ),
+    "run_cms_editor_agent": MasterAIActionPolicy(
+        "run_cms_editor_agent",
+        ApprovalLevel.AUTOMATIC,
+        "Create a Studio V2 draft only; publishing and scheduling remain locked.",
+    ),
+    "run_master_ai_content_review_agent": MasterAIActionPolicy(
+        "run_master_ai_content_review_agent",
+        ApprovalLevel.AUTOMATIC,
+        "Perform read-only publish-readiness review of a CMS draft.",
+    ),
+    "retry_failed_agent": MasterAIActionPolicy(
+        "retry_failed_agent",
+        ApprovalLevel.AUTOMATIC,
+        "Retry an approved automatic agent within configured retry limits.",
+    ),
+
+    # Real external or consequential agent execution
     "run_signal_agent": MasterAIActionPolicy(
         "run_signal_agent",
         ApprovalLevel.OWNER_APPROVAL,
@@ -63,20 +110,15 @@ POLICIES: dict[str, MasterAIActionPolicy] = {
         ApprovalLevel.OWNER_APPROVAL,
         "Run the Telegram Reply Agent, which may send a real client message.",
     ),
-    "run_blog_agent": MasterAIActionPolicy(
-        "run_blog_agent",
-        ApprovalLevel.AUTOMATIC,
-        "Prepare blog content through the existing agent.",
+    "run_master_ai_publish_approval_agent": MasterAIActionPolicy(
+        "run_master_ai_publish_approval_agent",
+        ApprovalLevel.OWNER_APPROVAL,
+        "Publish one reviewed CMS draft only after explicit owner approval.",
     ),
-    "run_image_agent": MasterAIActionPolicy(
-        "run_image_agent",
-        ApprovalLevel.AUTOMATIC,
-        "Prepare image content through the existing agent.",
-    ),
-    "retry_failed_agent": MasterAIActionPolicy(
-        "retry_failed_agent",
-        ApprovalLevel.AUTOMATIC,
-        "Retry an approved failed agent within configured retry limits.",
+    "run_announcement_agent": MasterAIActionPolicy(
+        "run_announcement_agent",
+        ApprovalLevel.OWNER_APPROVAL,
+        "Run an announcement that may deliver real Telegram or WhatsApp messages.",
     ),
     "send_health_report": MasterAIActionPolicy(
         "send_health_report",
