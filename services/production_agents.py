@@ -31,6 +31,8 @@ _RUNTIME_SYNC_NAMES = (
     "format_signal_message", "logger",
 )
 
+_LEGACY_STOP_MONITOR = _legacy._monitor_stop_loss_hits
+
 
 def _sync_legacy_runtime() -> None:
     """Keep facade monkeypatch/dependency injection behavior backward-compatible."""
@@ -50,12 +52,7 @@ def _sync_legacy_runtime() -> None:
 def _legacy_sheet_signal_is_superseded(
     signal: dict[str, Any],
 ) -> tuple[bool, str]:
-    """Block old ``gsheet:<hash>`` rows when canonical sessions are active.
-
-    This protects both Telegram and WhatsApp from a previously persisted legacy
-    row carrying stale/mismatched SL or TP after the canonical Sheet1 session
-    layout became authoritative. Non-Sheet/manual signals are unaffected.
-    """
+    """Block old ``gsheet:<hash>`` rows when canonical sessions are active."""
     external_key = str(signal.get("external_key") or "").strip()
     if not external_key.startswith("gsheet:"):
         return False, ""
@@ -131,7 +128,7 @@ def _durable_pending_whatsapp_signals() -> None:
 
 def _durable_telegram_broadcast(telegram: Any, limit: int = 50) -> int:
     """Route Telegram primary broadcasts through the shared recipient ledger."""
-    del limit  # Durable helper owns the bounded pending batch query.
+    del limit
     from services.telegram_primary_delivery import deliver_pending_telegram_signals
 
     delivered, failed = deliver_pending_telegram_signals(telegram)
@@ -144,7 +141,98 @@ def _durable_telegram_broadcast(telegram: Any, limit: int = 50) -> int:
     return delivered
 
 
+def _guarded_stop_loss_monitor(*, market_data: Any, telegram: Any) -> int:
+    """Keep canonical Sheet bias alive until the opposite structure confirms.
+
+    A single wick/pullback through a stored SL must not close a Sheet-driven
+    signal while the two-bar session structure still confirms the original
+    direction. This prevents false STOP LOSS HIT messages such as the 18 Aug
+    SELL that later continued sharply lower.
+    """
+    from services.sheet_reversal_guard import (
+        confirmed_session_direction,
+        signal_identity,
+    )
+
+    try:
+        with session_scope() as session:
+            row = (
+                session.execute(
+                    text(
+                        """
+                        SELECT *
+                        FROM public.market_signals
+                        WHERE signal_type IN ('BUY', 'SELL')
+                          AND stop_loss IS NOT NULL
+                          AND signal_time >= NOW() - INTERVAL '6 hours'
+                          AND telegram_sent_at IS NOT NULL
+                          AND whatsapp_sent_at IS NOT NULL
+                          AND external_key LIKE 'gsheet-session:%'
+                          AND COALESCE(lifecycle_status, 'DRAFT') NOT IN (
+                              'STOPPED', 'CLOSED', 'TARGET_HIT', 'CANCELLED',
+                              'EXPIRED', 'TRASHED'
+                          )
+                        ORDER BY signal_time DESC
+                        LIMIT 1
+                        """
+                    )
+                )
+                .mappings()
+                .first()
+            )
+    except Exception:
+        logger.exception(
+            "Sheet structural SL verification unavailable; stop close blocked."
+        )
+        return 0
+
+    if row is None:
+        return _LEGACY_STOP_MONITOR(
+            market_data=market_data,
+            telegram=telegram,
+        )
+
+    signal = dict(row)
+    identity = signal_identity(signal)
+    if identity is None:
+        logger.warning("Sheet SL close blocked: session identity unavailable.")
+        return 0
+
+    try:
+        sheets = GoogleSheetsService()
+        values = sheets._analysis_values()
+        signal_date, session_name = identity
+        confirmed = confirmed_session_direction(
+            values,
+            signal_date=signal_date,
+            session_name=session_name,
+            now=datetime.now(timezone.utc),
+        )
+    except Exception:
+        logger.exception(
+            "Sheet structural SL verification failed; stop close blocked."
+        )
+        return 0
+
+    direction = str(signal.get("signal_type") or "").strip().upper()
+    if confirmed is None or confirmed == direction:
+        logger.info(
+            "Sheet SL close suppressed pending opposite two-bar confirmation: "
+            "signal_id={} direction={} confirmed={}",
+            signal.get("id"),
+            direction,
+            confirmed,
+        )
+        return 0
+
+    return _LEGACY_STOP_MONITOR(
+        market_data=market_data,
+        telegram=telegram,
+    )
+
+
 _legacy._deliver_pending_whatsapp_signals = _durable_pending_whatsapp_signals
+_legacy._monitor_stop_loss_hits = _guarded_stop_loss_monitor
 
 
 def run_blog_agent(payload: dict[str, Any]) -> str:
@@ -160,8 +248,7 @@ def run_image_agent(payload: dict[str, Any]) -> str:
 def run_signal_agent(payload: dict[str, Any]) -> str:
     _sync_legacy_runtime()
     _legacy._deliver_pending_whatsapp_signals = _durable_pending_whatsapp_signals
-    # Signal Agent and the pipeline share the same TelegramService class object;
-    # bind its normal broadcast entry point to the durable verified ledger.
+    _legacy._monitor_stop_loss_hits = _guarded_stop_loss_monitor
     _legacy.TelegramService.broadcast_pending_signals = _durable_telegram_broadcast
     return _legacy.run_signal_agent(payload)
 
