@@ -137,8 +137,6 @@ def _captain_delivery_verifier(signal: dict[str, Any]) -> tuple[bool, str]:
             structure_reversal_confirmed=True,
         )
     else:
-        # Preserve compatibility for the common path and older test/detour
-        # callables that implement the original single-argument gate contract.
         result = evaluate_signal_shadow_gate(signal)
     if not result.blocked:
         return True, result.reason
@@ -150,7 +148,9 @@ def _captain_delivery_verifier(signal: dict[str, Any]) -> tuple[bool, str]:
 
 
 def _durable_pending_whatsapp_signals() -> None:
-    _sync_legacy_runtime()
+    # This delivery path already owns explicit legacy delivery hooks. Do not run
+    # the broad facade sync here because it can overwrite injected/verified
+    # recipient and provider implementations immediately before delivery.
     now = datetime.now(timezone.utc)
     if now.weekday() >= 5:
         logger.info("WhatsApp signal delivery paused for the weekend")
