@@ -58,14 +58,44 @@ def test_ambiguous_agent_request_never_reaches_llm(monkeypatch):
     assert "created" not in reply.lower()
 
 
-def test_unhandled_resolved_action_never_simulates_execution(monkeypatch):
-    def fail_llm(*args, **kwargs):
-        raise AssertionError("LLM fallback must not run")
-    monkeypatch.setattr("services.master_ai_chat_service._generate_gemini_reply", fail_llm)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+def test_image_agent_resolved_action_uses_shared_execution_router(monkeypatch):
+    calls = []
+    def fake_execute(action, **kwargs):
+        calls.append((action, kwargs))
+        return MasterAIToolResult(True, action, "COMPLETED", "Image draft #77 prepared.", 77)
+    monkeypatch.setattr("services.master_ai_chat_service.execute_master_ai_action", fake_execute)
     reply = generate_master_ai_reply("Image Agent se thumbnail banao")
-    assert "execution handler abhi connected nahi hai" in reply
-    assert "Koi execution nahi hua" in reply
+    assert calls[0][0] == "run_image_agent"
+    assert calls[0][1]["input_payload"]["request_text"] == "Image Agent se thumbnail banao"
+    assert "Image draft #77 prepared." in reply
+
+
+def test_all_safe_resolved_agents_reach_exact_shared_action(monkeypatch):
+    cases = {
+        "Customer Support Agent se guidance banao": "run_customer_support_agent",
+        "Marketing Strategy Agent se marketing plan banao": "run_marketing_strategy_agent",
+        "Social Media Agent se drafts banao": "run_social_media_agent",
+        "CMS Editor Agent se draft banao": "run_cms_editor_agent",
+        "Content Review Agent se review karo": "run_master_ai_content_review_agent",
+    }
+    for message, expected_action in cases.items():
+        calls = []
+        def fake_execute(action, **kwargs):
+            calls.append((action, kwargs))
+            return MasterAIToolResult(True, action, "COMPLETED", f"{action} verified output.", 900)
+        monkeypatch.setattr("services.master_ai_chat_service.execute_master_ai_action", fake_execute)
+        reply = generate_master_ai_reply(message)
+        assert calls and calls[0][0] == expected_action, (message, calls)
+        assert calls[0][1]["input_payload"]["request_text"] == message
+        assert "verified output" in reply
+
+
+def test_owner_gated_agent_request_never_calls_execution_router(monkeypatch):
+    calls = []
+    monkeypatch.setattr("services.master_ai_chat_service.execute_master_ai_action", lambda *args, **kwargs: calls.append((args, kwargs)))
+    reply = generate_master_ai_reply("SEO Agent chalao")
+    assert "Owner approval required" in reply
+    assert calls == []
 
 
 def test_blog_request_with_status_output_does_not_become_diagnostic():
