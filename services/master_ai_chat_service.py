@@ -7,28 +7,16 @@ from typing import Any
 
 import httpx
 
-from services.ai_agents.economic_calendar.engine import (
-    EconomicCalendarAI,
-)
-from services.ai_agents.economic_calendar.provider import (
-    load_high_impact_events,
-)
-from services.ai_agents.macro_ai.provider import (
-    load_macro_assessment,
-)
-from services.master_ai_intelligence_orchestrator import (
-    IntelligenceDecision,
-    MarketReference,
-    format_intelligence_response,
-    synthesize_intelligence,
-)
+from services.ai_agents.economic_calendar.engine import EconomicCalendarAI
+from services.ai_agents.economic_calendar.provider import load_high_impact_events
+from services.ai_agents.macro_ai.provider import load_macro_assessment
+from services.master_ai_approval_bridge import queue_master_ai_owner_approval
+from services.master_ai_captain_status import is_captain_status_request, latest_captain_status_reply
+from services.master_ai_intelligence_orchestrator import MarketReference, format_intelligence_response, synthesize_intelligence
 from services.master_ai_router import route_master_ai_request
 from services.master_ai_intent_resolver import resolve_master_ai_intent
 from services.master_ai_tool_router import execute_master_ai_action
-from services.master_ai_signal_reader import (
-    MasterAISignalSnapshot,
-    get_today_signal_snapshot,
-)
+from services.master_ai_signal_reader import MasterAISignalSnapshot, get_today_signal_snapshot
 
 SAFE_CHAT_ERROR = "⚠️ Master AI abhi response nahi de pa raha. Thodi der baad try karein."
 
@@ -73,414 +61,218 @@ def _extract_output_text(payload: dict[str, Any]) -> str:
     direct = payload.get("output_text")
     if isinstance(direct, str) and direct.strip():
         return direct.strip()
-
     parts: list[str] = []
-
     for item in payload.get("output") or []:
         if not isinstance(item, dict):
             continue
-
         for content in item.get("content") or []:
             if not isinstance(content, dict):
                 continue
-
             text = content.get("text")
             if isinstance(text, str) and text.strip():
                 parts.append(text.strip())
-
     return "\n".join(parts).strip()
 
 
 def _generate_gemini_reply(message: str) -> str:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
-
     if not api_key:
         return ""
-
     try:
         from google import genai
-
         client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=model,
-            contents=f"{SYSTEM_INSTRUCTIONS.strip()}\n\nUser message:\n{message}",
-        )
-        answer = str(getattr(response, "text", "") or "").strip()
-        return answer
+        response = client.models.generate_content(model=model, contents=f"{SYSTEM_INSTRUCTIONS.strip()}\n\nUser message:\n{message}")
+        return str(getattr(response, "text", "") or "").strip()
     except Exception as exc:
         print(f"[master-ai-chat] Gemini error type={type(exc).__name__}")
         return ""
 
 
-def _format_market_snapshot(
-    snapshot: MasterAISignalSnapshot | None,
-) -> str:
-    """Format verified read-only Sheet1 market data for admin chat."""
+def _format_market_snapshot(snapshot: MasterAISignalSnapshot | None) -> str:
     if snapshot is None:
-        return (
-            "Aaj ka XAUUSD Google Sheet snapshot available nahi hai. "
-            "Main current price guess nahi karunga. Sheet1 ka DATE block "
-            "aur LIVE CMP value verify kijiye."
-        )
-
+        return "Aaj ka XAUUSD Google Sheet snapshot available nahi hai. Main current price guess nahi karunga. Sheet1 ka DATE block aur LIVE CMP value verify kijiye."
     if snapshot.live_cmp is None:
-        return (
-            f"XAUUSD Sheet snapshot {snapshot.signal_date.isoformat()} ke "
-            "liye mila, lekin LIVE CMP available nahi hai. Main missing "
-            "price invent nahi karunga."
-        )
-
+        return f"XAUUSD Sheet snapshot {snapshot.signal_date.isoformat()} ke liye mila, lekin LIVE CMP available nahi hai. Main missing price invent nahi karunga."
     def value(item: object) -> str:
         return str(item) if item is not None else "N/A"
-
-    return "\n".join(
-        (
-            "📊 XAUUSD — Google Sheet Reference",
-            f"Current Price: {snapshot.live_cmp}",
-            f"Date: {snapshot.signal_date.isoformat()}",
-            f"Latest Slot: {snapshot.latest_slot or 'N/A'}",
-            f"Day High: {value(snapshot.day_high)}",
-            f"Day Low: {value(snapshot.day_low)}",
-            f"Source: {snapshot.source} / Sheet1",
-            "",
-            "Read-only reference data.",
-            "Koi buy/sell signal, trade recommendation ya execution nahi hua.",
-        )
-    )
+    return "\n".join((
+        "📊 XAUUSD — Google Sheet Reference",
+        f"Current Price: {snapshot.live_cmp}",
+        f"Date: {snapshot.signal_date.isoformat()}",
+        f"Latest Slot: {snapshot.latest_slot or 'N/A'}",
+        f"Day High: {value(snapshot.day_high)}",
+        f"Day Low: {value(snapshot.day_low)}",
+        f"Source: {snapshot.source} / Sheet1",
+        "",
+        "Read-only reference data.",
+        "Koi buy/sell signal, trade recommendation ya execution nahi hua.",
+    ))
 
 
 def _market_data_reply() -> str:
-    """Read today's verified Sheet1 snapshot with safe stale fallback."""
     try:
         snapshot = get_today_signal_snapshot()
     except Exception as exc:
-        print(
-            "[master-ai-chat] Market snapshot error "
-            f"type={type(exc).__name__}"
-        )
-        return (
-            "Google Sheet market-data reader temporarily unavailable hai. "
-            "Main XAUUSD price guess nahi karunga. Sheet configuration aur "
-            "Sheet1 access verify kijiye."
-        )
-
+        print(f"[master-ai-chat] Market snapshot error type={type(exc).__name__}")
+        return "Google Sheet market-data reader temporarily unavailable hai. Main XAUUSD price guess nahi karunga. Sheet configuration aur Sheet1 access verify kijiye."
     if snapshot is not None and snapshot.live_cmp is not None:
         return _format_market_snapshot(snapshot)
-
     try:
         from datetime import datetime, timedelta
         from zoneinfo import ZoneInfo
-
-        from services.master_ai_signal_reader import (
-            get_signal_snapshot_for_date,
-        )
-
+        from services.master_ai_signal_reader import get_signal_snapshot_for_date
         today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
-
         for days_back in range(1, 4):
-            candidate_date = today - timedelta(days=days_back)
-            candidate = get_signal_snapshot_for_date(candidate_date)
-
+            candidate = get_signal_snapshot_for_date(today - timedelta(days=days_back))
             if candidate is None or candidate.live_cmp is None:
                 continue
-
-            return "\n".join(
-                [
-                    "Latest available XAUUSD Sheet reference:",
-                    f"Reference Price: {candidate.live_cmp}",
-                    f"Sheet Date: {candidate.signal_date.isoformat()}",
-                    f"Latest Slot: {candidate.latest_slot or 'N/A'}",
-                    "Status: STALE REFERENCE — this is not current live price.",
-                    "No signal or trading recommendation was generated.",
-                ]
-            )
+            return "\n".join([
+                "Latest available XAUUSD Sheet reference:",
+                f"Reference Price: {candidate.live_cmp}",
+                f"Sheet Date: {candidate.signal_date.isoformat()}",
+                f"Latest Slot: {candidate.latest_slot or 'N/A'}",
+                "Status: STALE REFERENCE — this is not current live price.",
+                "No signal or trading recommendation was generated.",
+            ])
     except Exception as exc:
-        print(
-            "[master-ai-chat] Stale snapshot fallback error "
-            f"type={type(exc).__name__}"
-        )
-
+        print(f"[master-ai-chat] Stale snapshot fallback error type={type(exc).__name__}")
     return _format_market_snapshot(snapshot)
 
 
 def _intelligence_reply(intent: str) -> str:
-    """Return a safe read-only intelligence response."""
-
     try:
         snapshot = get_today_signal_snapshot()
     except Exception as exc:
-        print(
-            "[master-ai-chat] Intelligence market snapshot error "
-            f"type={type(exc).__name__}"
-        )
+        print(f"[master-ai-chat] Intelligence market snapshot error type={type(exc).__name__}")
         snapshot = None
-
     market = MarketReference(
-        price=(
-            str(snapshot.live_cmp)
-            if snapshot is not None and snapshot.live_cmp is not None
-            else None
-        ),
+        price=str(snapshot.live_cmp) if snapshot is not None and snapshot.live_cmp is not None else None,
         observed_at=None,
-        source=(
-            snapshot.source
-            if snapshot is not None
-            else "UNAVAILABLE"
-        ),
-        fresh=bool(
-            snapshot is not None
-            and snapshot.live_cmp is not None
-        ),
-        label=(
-            "Verified current Sheet reference"
-            if snapshot is not None and snapshot.live_cmp is not None
-            else "Market reference unavailable"
-        ),
+        source=snapshot.source if snapshot is not None else "UNAVAILABLE",
+        fresh=bool(snapshot is not None and snapshot.live_cmp is not None),
+        label="Verified current Sheet reference" if snapshot is not None and snapshot.live_cmp is not None else "Market reference unavailable",
     )
-
     macro = None
-
-    if intent in {
-        "MARKET_OUTLOOK",
-        "MACRO_OUTLOOK",
-        "WAIT_OR_TRADE",
-    }:
+    if intent in {"MARKET_OUTLOOK", "MACRO_OUTLOOK", "WAIT_OR_TRADE"}:
         try:
             macro = load_macro_assessment()
         except Exception as exc:
-            print(
-                "[master-ai-chat] Macro provider error "
-                f"type={type(exc).__name__}"
-            )
-
+            print(f"[master-ai-chat] Macro provider error type={type(exc).__name__}")
     economic_assessments = ()
     news_lock = None
-    economic_provider_configured = bool(
-        os.getenv("TRADING_ECONOMICS_API_KEY", "").strip()
-    )
+    economic_provider_configured = bool(os.getenv("TRADING_ECONOMICS_API_KEY", "").strip())
     economic_events_loaded = False
-
-    if intent in {
-        "MARKET_OUTLOOK",
-        "NEWS_RISK",
-        "WAIT_OR_TRADE",
-    }:
+    if intent in {"MARKET_OUTLOOK", "NEWS_RISK", "WAIT_OR_TRADE"}:
         try:
             events = load_high_impact_events()
             calendar_ai = EconomicCalendarAI()
             economic_events_loaded = bool(events)
-
-            economic_assessments = tuple(
-                calendar_ai.assess_event(event)
-                for event in events
-                if event.actual is not None
-                and event.forecast is not None
-            )
-
+            economic_assessments = tuple(calendar_ai.assess_event(event) for event in events if event.actual is not None and event.forecast is not None)
             if events:
                 news_lock = calendar_ai.should_lock_signals(events)
         except Exception as exc:
-            print(
-                "[master-ai-chat] Economic provider error "
-                f"type={type(exc).__name__}"
-            )
-
-    assessment = synthesize_intelligence(
-        market=market,
-        macro=macro,
-        economic_assessments=economic_assessments,
-        news_lock=news_lock,
-    )
-
+            print(f"[master-ai-chat] Economic provider error type={type(exc).__name__}")
+    assessment = synthesize_intelligence(market=market, macro=macro, economic_assessments=economic_assessments, news_lock=news_lock)
     base = format_intelligence_response(assessment)
-
     if intent == "MACRO_OUTLOOK":
-        if macro is None:
-            return (
-                base
-                + "\nMacro provider is temporarily unavailable; "
-                  "no macro bias was guessed."
-            )
-        return base
-
+        return base if macro is not None else base + "\nMacro provider is temporarily unavailable; no macro bias was guessed."
     if intent == "NEWS_RISK":
         if not economic_provider_configured:
-            return (
-                base
-                + "\nEconomic calendar provider is unavailable or "
-                  "not configured; no news event was invented."
-            )
-
+            return base + "\nEconomic calendar provider is unavailable or not configured; no news event was invented."
         if not economic_events_loaded:
-            return (
-                base
-                + "\nConfigured economic provider returned no nearby "
-                  "USA/Canada high-impact events."
-            )
-
+            return base + "\nConfigured economic provider returned no nearby USA/Canada high-impact events."
         return base
-
     if intent == "WAIT_OR_TRADE":
         if news_lock is not None and news_lock.locked:
-            return (
-                base
-                + "\nDecision support only: high-impact news window active hai, "
-                  "isliye WAIT recommended hai. No execution occurred."
-            )
+            return base + "\nDecision support only: high-impact news window active hai, isliye WAIT recommended hai. No execution occurred."
+        return base + "\nDecision support only: Master AI trade execution ya profit guarantee nahi deta."
+    return base + "\nUnified intelligence is incomplete until macro and economic providers are connected."
 
-        return (
-            base
-            + "\nDecision support only: Master AI trade execution ya "
-              "profit guarantee nahi deta."
-        )
 
-    return (
-        base
-        + "\nUnified intelligence is incomplete until macro and "
-          "economic providers are connected."
-    )
+def _execute_resolved_action(clean_message: str, proposal: Any) -> str:
+    action = str(proposal.action or "").strip()
+    if not action:
+        return "Action execute nahi hua. Registered action missing hai."
+    payload = dict(proposal.parameters or {})
+    payload.setdefault("request_text", clean_message)
+    if action == "run_blog_agent":
+        payload.update({
+            "topic": clean_message,
+            "content_length": "standard",
+            "publish": False,
+            "include_image": True,
+            "require_ai_quality": True,
+            "target_word_min": 1400,
+            "target_word_max": 1600,
+        })
+    elif action == "run_customer_support_agent":
+        payload.setdefault("customer_message", clean_message)
+    elif action in {"run_marketing_strategy_agent", "run_social_media_agent"}:
+        payload.setdefault("campaign_request", clean_message)
+    elif action == "run_cms_editor_agent":
+        payload.setdefault("editor_request", clean_message)
+    elif action == "run_master_ai_content_review_agent":
+        payload.setdefault("review_request", clean_message)
+    result = execute_master_ai_action(action, source="ADMIN_MASTER_AI_CHAT", input_payload=payload)
+    if not result.ok:
+        return f"{proposal.agent_key or 'Agent'} execution blocked/failed. Status: {result.status}. {result.message}"
+    return f"{proposal.agent_key or 'Agent'} delegation accepted. {result.message}"
 
 
 def generate_master_ai_reply(message: str) -> str:
-    """Generate one safe reply with deterministic routing and LLM fallback."""
     clean_message = str(message or "").strip()
-
     if not clean_message:
         return "Apna message likhiye."
-
     if len(clean_message) > 4000:
         return "Message bahut lamba hai. Kripya 4000 characters ke andar bhejein."
-
+    if is_captain_status_request(clean_message):
+        return latest_captain_status_reply()
     route = route_master_ai_request(clean_message)
-
     if route.intent == "MARKET_DATA":
         return _market_data_reply()
-
-    if route.intent in {
-        "MARKET_OUTLOOK",
-        "MACRO_OUTLOOK",
-        "NEWS_RISK",
-        "WAIT_OR_TRADE",
-    }:
+    if route.intent in {"MARKET_OUTLOOK", "MACRO_OUTLOOK", "NEWS_RISK", "WAIT_OR_TRADE"}:
         return _intelligence_reply(route.intent)
-
     if route.intent == "PUBLISH":
-        return (
-            "Publish request detect hui hai, lekin publishing approval-locked "
-            "hai. Master AI review aur explicit owner approval ke bina draft "
-            "publish nahi hoga."
-        )
+        return "Publish request detect hui hai, lekin publishing approval-locked hai. Master AI review aur explicit owner approval ke bina draft publish nahi hoga."
 
     proposal = resolve_master_ai_intent(clean_message)
-
-    print(
-        "[master-ai-chat] proposal "
-        f"status={proposal.status} "
-        f"action={proposal.action or 'NONE'} "
-        f"agent={proposal.agent_key or 'NONE'}"
-    )
-
-    if (
-        proposal.status == "RESOLVED"
-        and proposal.action == "run_blog_agent"
-        and proposal.agent_key == "ai_blog_agent"
-    ):
-        payload = dict(proposal.parameters or {})
-        payload.update(
-            {
-                "topic": clean_message,
-                "content_length": "standard",
-                "publish": False,
-                "include_image": True,
-                "require_ai_quality": True,
-                "target_word_min": 1400,
-                "target_word_max": 1600,
-            }
-        )
-
-        result = execute_master_ai_action(
-            "run_blog_agent",
-            source="ADMIN_MASTER_AI_CHAT",
-            input_payload=payload,
-        )
-
-        if not result.ok:
-            return (
-                "Blog Post AI execution blocked hai. "
-                f"Status: {result.status}. {result.message}"
-            )
-
-        return (
-            "Blog Post AI delegation accepted. "
-            f"{result.message}"
-        )
-
-    # Fail closed for every recognized actionable intent that this
-    # admin-chat execution path has not explicitly handled above.
-    # Never let an LLM simulate an agent/tool result.
+    print(f"[master-ai-chat] proposal status={proposal.status} action={proposal.action or 'NONE'} agent={proposal.agent_key or 'NONE'}")
     if proposal.status == "CLARIFICATION_REQUIRED":
-        return (
-            "Action execute nahi hua. "
-            f"{proposal.reason or 'Request clarification required hai.'}"
-        )
-
+        return "Action execute nahi hua. " + (proposal.reason or "Request clarification required hai.")
     if proposal.status == "APPROVAL_REQUIRED":
-        return (
-            "Action execute nahi hua. Owner approval required hai. "
-            f"{proposal.reason}"
-        ).strip()
-
-    if proposal.status == "BLOCKED":
-        return (
-            "Action blocked hai aur execute nahi hua. "
-            f"{proposal.reason}"
-        ).strip()
-
-    if proposal.status == "RESOLVED":
-        return (
-            "Registered action detect hui, lekin admin Master AI chat mein "
-            "is action ka execution handler abhi connected nahi hai. "
-            "Koi execution nahi hua."
+        queued = queue_master_ai_owner_approval(
+            action=str(proposal.action or ""),
+            agent_key=proposal.agent_key,
+            reason=proposal.reason,
+            source="MASTER_AI_CHAT",
         )
+        if queued.queued:
+            return (
+                f"Owner approval required hai. Approval request #{queued.approval_id} PENDING queue mein save ho gaya. "
+                "Koi agent execution, message send, publish ya production change nahi hua. Approval decision bhi automatic execution nahi karega."
+            )
+        return "Action execute nahi hua. Owner approval required hai. Approval queue unavailable hai; request fail-closed raha."
+    if proposal.status == "BLOCKED":
+        return ("Action blocked hai aur execute nahi hua. " + proposal.reason).strip()
+    if proposal.status == "RESOLVED":
+        return _execute_resolved_action(clean_message, proposal)
 
-    # Only genuine NO_ACTION conversation may reach the language model.
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     model = os.getenv("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
-
     if not api_key:
-        return (
-            _generate_gemini_reply(clean_message)
-            or "⚠️ Master AI API key configure nahi hai."
-        )
-
+        return _generate_gemini_reply(clean_message) or "⚠️ Master AI API key configure nahi hai."
     try:
         with httpx.Client(timeout=45.0) as client:
             response = client.post(
                 "https://api.openai.com/v1/responses",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "instructions": SYSTEM_INSTRUCTIONS.strip(),
-                    "input": clean_message,
-                    "store": False,
-                },
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": model, "instructions": SYSTEM_INSTRUCTIONS.strip(), "input": clean_message, "store": False},
             )
-
             response.raise_for_status()
-            answer = _extract_output_text(response.json())
-
-            return answer or SAFE_CHAT_ERROR
+            return _extract_output_text(response.json()) or SAFE_CHAT_ERROR
     except httpx.HTTPStatusError as exc:
-        status_code = exc.response.status_code
-        request_id = exc.response.headers.get("x-request-id", "unknown")
-        print(
-            f"[master-ai-chat] OpenAI HTTP error status={status_code} "
-            f"request_id={request_id}"
-        )
+        print(f"[master-ai-chat] OpenAI HTTP error status={exc.response.status_code} request_id={exc.response.headers.get('x-request-id', 'unknown')}")
         return _generate_gemini_reply(clean_message) or SAFE_CHAT_ERROR
     except httpx.RequestError as exc:
         print(f"[master-ai-chat] OpenAI network error type={type(exc).__name__}")

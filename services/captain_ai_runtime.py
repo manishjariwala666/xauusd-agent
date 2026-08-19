@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from services.ai_agents.economic_calendar.engine import EconomicCalendarAI
@@ -13,83 +15,80 @@ from services.captain_ai_engine import CaptainAssessment, assess_captain
 from services.marketaux_news_provider import load_marketaux_xauusd_context
 from services.marketaux_macro_bias import assess_marketaux_macro_bias
 from services.google_sheets import GoogleSheetsService
-from services.master_ai_signal_reader import parse_signal_snapshot
+from services.master_ai_signal_reader import MasterAISignalSnapshot, parse_signal_snapshot
 
 
 INDIA_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 
-def _trading_date(now: datetime) -> datetime.date:
+@dataclass(frozen=True)
+class CaptainObservedRun:
+    assessment: CaptainAssessment
+    signal_date: date
+    source: str
+    day_high: Decimal | None
+    day_low: Decimal | None
+    live_cmp: Decimal | None
+    buy_base: Decimal | None
+    sell_base: Decimal | None
+    buy_targets: tuple[Decimal, ...]
+    sell_targets: tuple[Decimal, ...]
+
+
+def _trading_date(now: datetime) -> date:
     current = now.astimezone(INDIA_TIMEZONE)
     if (current.hour, current.minute) < (3, 30):
         current = current - timedelta(days=1)
     return current.date()
 
 
-def run_captain_read_only(
-    *,
-    now: datetime | None = None,
-) -> CaptainAssessment:
-    current_time = now or datetime.now(INDIA_TIMEZONE)
-
-    if current_time.tzinfo is None:
-        current_time = current_time.replace(tzinfo=INDIA_TIMEZONE)
-    else:
-        current_time = current_time.astimezone(INDIA_TIMEZONE)
-
+def _load_current_and_history(
+    current_time: datetime,
+) -> tuple[MasterAISignalSnapshot, tuple[MasterAISignalSnapshot, ...]]:
     target_date = _trading_date(current_time)
-
-    sheets = GoogleSheetsService()
-    values = sheets._analysis_values()
-
-    current = parse_signal_snapshot(
-        values,
-        target_date=target_date,
-    )
+    values = GoogleSheetsService()._analysis_values()
+    current = parse_signal_snapshot(values, target_date=target_date)
 
     if current is None:
         raise RuntimeError(
             f"Current Sheet snapshot not found for {target_date.isoformat()}."
         )
 
-    history = []
-
+    history: list[MasterAISignalSnapshot] = []
     candidate = target_date - timedelta(days=1)
-
-    # Scan backwards far enough to collect previous five actual Sheet dates,
-    # skipping weekends/holidays/missing blocks safely.
     for _ in range(14):
         if len(history) >= 5:
             break
-
-        snapshot = parse_signal_snapshot(
-            values,
-            target_date=candidate,
-        )
-
+        snapshot = parse_signal_snapshot(values, target_date=candidate)
         if snapshot is not None:
             history.append(snapshot)
-
         candidate -= timedelta(days=1)
-
     history.reverse()
+    return current, tuple(history)
 
-    news_api_key = os.getenv(
-        "TRADING_ECONOMICS_API_KEY",
-        "",
-    ).strip()
 
+def _normalize_now(now: datetime | None) -> datetime:
+    current_time = now or datetime.now(INDIA_TIMEZONE)
+    if current_time.tzinfo is None:
+        return current_time.replace(tzinfo=INDIA_TIMEZONE)
+    return current_time.astimezone(INDIA_TIMEZONE)
+
+
+def run_captain_observed(
+    *,
+    now: datetime | None = None,
+) -> CaptainObservedRun:
+    """Run Captain once and retain the exact Sheet market context used."""
+    current_time = _normalize_now(now)
+    current, history = _load_current_and_history(current_time)
+
+    news_api_key = os.getenv("TRADING_ECONOMICS_API_KEY", "").strip()
     if not news_api_key:
-        from services.ai_agents.economic_calendar.models import (
-            NewsLockDecision,
-        )
+        from services.ai_agents.economic_calendar.models import NewsLockDecision
 
         news_lock = NewsLockDecision(
             locked=True,
-            reason=(
-                "Economic calendar unavailable; "
-                "Captain fails closed."
-            ),
+            reason="Economic calendar unavailable; Captain fails closed.",
             event_id=None,
             seconds_to_event=None,
         )
@@ -99,30 +98,40 @@ def run_captain_read_only(
             hours_before=2,
             hours_after=24,
         )
-
-        calendar = EconomicCalendarAI()
-
-        # Captain uses a stricter XAUUSD safety window than the
-        # shared economic-calendar defaults.
-        news_lock = calendar.should_lock_signals(
+        news_lock = EconomicCalendarAI().should_lock_signals(
             events,
             now=current_time,
             pre_lock_minutes=30,
             post_lock_minutes=30,
         )
 
-    macro_context = load_marketaux_xauusd_context(
-        now=current_time,
-    )
-
     macro = assess_marketaux_macro_bias(
-        macro_context,
+        load_marketaux_xauusd_context(now=current_time)
     )
-
-    return assess_captain(
+    assessment = assess_captain(
         current=current,
-        history=tuple(history),
+        history=history,
         news_lock=news_lock,
         macro_bias=macro.bias.value,
         macro_confidence=macro.confidence,
     )
+    return CaptainObservedRun(
+        assessment=assessment,
+        signal_date=current.signal_date,
+        source=current.source,
+        day_high=current.day_high,
+        day_low=current.day_low,
+        live_cmp=current.live_cmp,
+        buy_base=current.buy_base,
+        sell_base=current.sell_base,
+        buy_targets=current.buy_targets,
+        sell_targets=current.sell_targets,
+    )
+
+
+def run_captain_read_only(
+    *,
+    now: datetime | None = None,
+) -> CaptainAssessment:
+    """Backward-compatible Captain assessment entry point."""
+    return run_captain_observed(now=now).assessment

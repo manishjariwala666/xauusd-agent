@@ -1,0 +1,67 @@
+name: Master AI Shared Execution Regression
+
+on:
+  push:
+    branches:
+      - fix/captain-shadow-master-observability
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  focused-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Run focused Master AI and delivery regressions
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest -q \
+            tests/test_agent_brain_audit.py \
+            tests/test_agent_runtime_truth.py \
+            tests/test_master_ai_action_input_safety.py \
+            tests/test_master_ai_chat_blog_delegation.py \
+            tests/test_agent_units.py \
+            tests/test_master_ai_natural_orchestration.py \
+            tests/test_master_ai_permission_router.py \
+            tests/test_admin_operations_status.py \
+            tests/test_captain_shadow_gate.py \
+            tests/test_captain_reversal_override.py \
+            tests/test_sheet_signal_risk_guard.py \
+            tests/test_sheet_signal_source.py \
+            tests/test_sheet_delivery_source_guard.py \
+            tests/test_sheet_reversal_guard.py \
+            tests/test_telegram_primary_delivery.py \
+            tests/test_whatsapp_primary_delivery.py \
+            tests/test_signal_channel_delivery.py \
+            tests/test_master_ai_captain_status.py
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.0"
+
+      - name: Typecheck Admin Panel
+        working-directory: admin-web
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+
+      - name: Check latest commit whitespace
+        run: git diff --check HEAD^ HEAD

@@ -1,19 +1,12 @@
-"""Read-only Captain shadow gate for candidate signal delivery.
-
-When explicitly enabled, this gate evaluates Captain AI and blocks
-external delivery regardless of APPROVE/WAIT/REJECT.
-
-It performs no signal generation, database mutation, Telegram send,
-or WhatsApp send.
-"""
-
+"""Captain verification gate for candidate signal delivery."""
 from __future__ import annotations
-
 import os
 from dataclasses import dataclass
 from typing import Any, Callable
-
-from services.captain_ai_runtime import run_captain_read_only
+from loguru import logger
+from services.captain_ai_runtime import CaptainObservedRun, run_captain_observed
+from services.captain_shadow_audit import record_captain_shadow_audit
+from services.captain_structure_guard import evaluate_captain_structure
 
 
 @dataclass(frozen=True)
@@ -27,71 +20,130 @@ class CaptainShadowGateResult:
     macro_confidence: int
     news_locked: bool
     reason: str
+    observed: CaptainObservedRun | None = None
+    audit_correlation_id: str | None = None
+    audit_persisted: bool | None = None
+    master_ai_summary: str | None = None
+
+
+def shadow_verification_enabled() -> bool:
+    return os.getenv("CAPTAIN_SIGNAL_SHADOW_GATE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def shadow_gate_enabled() -> bool:
-    return os.getenv(
-        "CAPTAIN_SIGNAL_SHADOW_GATE",
-        "",
-    ).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    """Legacy blanket blocker is disabled; verification happens per signal."""
+    return False
+
+
+def _assessment_and_observed(value: Any) -> tuple[Any, CaptainObservedRun | None]:
+    if isinstance(value, CaptainObservedRun):
+        return value.assessment, value
+    assessment = getattr(value, "assessment", None)
+    if assessment is not None and hasattr(value, "signal_date"):
+        return assessment, value
+    return value, None
+
+
+def _audit_gate_decision(
+    observed: CaptainObservedRun | None,
+    *,
+    signal: dict[str, Any],
+    blocked: bool,
+    reason: str,
+) -> tuple[str | None, bool | None, str | None]:
+    if observed is None:
+        return None, None, None
+    try:
+        signal_id = signal.get("id")
+        audit = record_captain_shadow_audit(
+            observed,
+            source_interface="SIGNAL_AGENT",
+            shadow_status="BLOCKED" if blocked else "VERIFIED",
+            shadow_reason=reason,
+            signal_id=int(signal_id) if signal_id is not None else None,
+        )
+        return audit.correlation_id, audit.persisted, audit.master_ai_summary
+    except Exception as exc:
+        logger.warning(
+            "Captain/Shadow delivery audit failed without changing gate decision: type={}",
+            type(exc).__name__,
+        )
+        return None, False, None
 
 
 def evaluate_signal_shadow_gate(
     signal: dict[str, Any],
     *,
-    runner: Callable[..., Any] = run_captain_read_only,
+    runner: Callable[..., Any] = run_captain_observed,
+    structure_reversal_confirmed: bool = False,
 ) -> CaptainShadowGateResult:
-    if not shadow_gate_enabled():
-        return CaptainShadowGateResult(
-            enabled=False,
-            blocked=False,
-            decision="NOT_RUN",
-            direction="NONE",
-            confidence=0,
-            macro_bias="UNKNOWN",
-            macro_confidence=0,
-            news_locked=False,
-            reason="Captain shadow gate disabled.",
-        )
+    """Verify one candidate; structural reversal may override only sweep ambiguity.
 
+    A verified two-bar reversal is allowed to override the specific two-sided
+    base-sweep ambiguity guard. It does not override Captain WAIT/ERROR, news
+    lock, direction mismatch, or any other Captain decision.
+    """
+    if not shadow_verification_enabled():
+        return CaptainShadowGateResult(
+            False, False, "NOT_RUN", "NONE", 0, "UNKNOWN", 0, False,
+            "Captain verification disabled.", None, None, None, None,
+        )
     try:
-        assessment = runner()
+        raw = runner()
+        assessment, observed = _assessment_and_observed(raw)
     except Exception:
-        # Shadow mode must fail closed.
         return CaptainShadowGateResult(
-            enabled=True,
-            blocked=True,
-            decision="ERROR",
-            direction="NONE",
-            confidence=0,
-            macro_bias="UNKNOWN",
-            macro_confidence=0,
-            news_locked=True,
-            reason="Captain shadow assessment failed; delivery blocked.",
+            True, True, "ERROR", "NONE", 0, "UNKNOWN", 0, True,
+            "Captain assessment failed; delivery blocked.", None, None, False, None,
         )
 
-    reasons = tuple(
-        str(item)
-        for item in getattr(assessment, "reasons", ())
+    decision = str(assessment.decision.value)
+    direction = str(assessment.direction.value)
+    candidate = str(signal.get("signal_type") or "").strip().upper()
+    reasons = tuple(str(item) for item in getattr(assessment, "reasons", ()))
+    blocked = decision != "APPROVE" or direction != candidate
+
+    if decision != "APPROVE":
+        reason = reasons[0] if reasons else f"Captain decision is {decision}."
+    elif direction != candidate:
+        reason = f"Captain direction mismatch: captain={direction}, candidate={candidate or 'NONE'}."
+    else:
+        reason = reasons[0] if reasons else "Captain verified candidate delivery."
+
+    structure = evaluate_captain_structure(observed)
+    if structure.blocked:
+        if (
+            structure_reversal_confirmed
+            and not blocked
+            and structure.reason.startswith("Two-sided session sweep detected")
+        ):
+            reason = (
+                "Captain verified candidate delivery; two-sided base sweep "
+                "resolved by confirmed two-bar structural reversal."
+            )
+        else:
+            blocked = True
+            reason = structure.reason
+
+    correlation_id, audit_persisted, master_ai_summary = _audit_gate_decision(
+        observed,
+        signal=signal,
+        blocked=blocked,
+        reason=reason,
     )
 
     return CaptainShadowGateResult(
-        enabled=True,
-        blocked=True,
-        decision=str(assessment.decision.value),
-        direction=str(assessment.direction.value),
-        confidence=int(assessment.confidence),
-        macro_bias=str(assessment.macro_bias),
-        macro_confidence=int(assessment.macro_confidence),
-        news_locked=bool(assessment.news_locked),
-        reason=(
-            reasons[0]
-            if reasons
-            else "Captain shadow assessment completed."
-        ),
+        blocked,
+        blocked,
+        decision,
+        direction,
+        int(assessment.confidence),
+        str(assessment.macro_bias),
+        int(assessment.macro_confidence),
+        bool(assessment.news_locked),
+        reason,
+        observed,
+        correlation_id,
+        audit_persisted,
+        master_ai_summary,
     )

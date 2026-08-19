@@ -111,10 +111,12 @@ export function MasterAIConsole() {
       </section>
 
       <aside className="master-ai-safety-banner">
-        <strong>Conversation-only foundation</strong>
+        <strong>Policy-guarded shared Master AI</strong>
         <p>
-          Agent execution, messaging, signals, publishing,
-          deployment and infrastructure changes remain locked.
+          Safe reads, analysis and draft-only registered agents may execute
+          through the shared orchestrator. External messaging, signal delivery,
+          publishing, deployment, DNS, migrations and infrastructure changes
+          remain owner-approval locked; trade execution remains forbidden.
         </p>
       </aside>
 

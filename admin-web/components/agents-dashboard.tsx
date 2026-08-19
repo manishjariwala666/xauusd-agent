@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 
-import { AgentBuilderModal } from "@/components/agent-builder/agent-builder-modal";
 import type {
   AgentDashboardRecord,
   AgentsDashboardPayload,
@@ -11,7 +10,7 @@ import type {
 function humanize(value: string): string {
   return value
     .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
 function riskClass(risk: AgentDashboardRecord["default_risk"]): string {
@@ -32,7 +31,7 @@ function ActionList({
       <h3>{title}</h3>
       {items.length ? (
         <ul>
-          {items.map((item) => (
+          {items.map(item => (
             <li key={item}>{humanize(item)}</li>
           ))}
         </ul>
@@ -45,18 +44,12 @@ function ActionList({
 
 function AgentCard({
   agent,
-  onOpen,
-  onToggle,
-  onPreviewToggle,
-  previewEnabled,
   busy,
+  onToggle,
 }: {
   agent: AgentDashboardRecord;
-  onOpen: (agent: AgentDashboardRecord) => void;
-  onToggle: (agent: AgentDashboardRecord) => void;
-  onPreviewToggle: (agent: AgentDashboardRecord) => void;
-  previewEnabled: boolean;
   busy: boolean;
+  onToggle: (agent: AgentDashboardRecord) => void;
 }) {
   return (
     <article className="agent-card">
@@ -66,7 +59,6 @@ function AgentCard({
           <h2>{agent.short_name}</h2>
           <p>{agent.official_name}</p>
         </div>
-
         <div className="agent-card-badges">
           <span className={riskClass(agent.default_risk)}>
             {humanize(agent.default_risk)}
@@ -80,6 +72,9 @@ function AgentCard({
           >
             {agent.brain_configured ? "Brain ready" : "Brain missing"}
           </span>
+          <span className="agent-brain agent-brain-ready">
+            {humanize(agent.capability_mode)}
+          </span>
         </div>
       </header>
 
@@ -87,7 +82,7 @@ function AgentCard({
 
       <dl className="agent-summary">
         <div>
-          <dt>Live status</dt>
+          <dt>Status</dt>
           <dd>{humanize(agent.status)}</dd>
         </div>
         <div>
@@ -101,47 +96,35 @@ function AgentCard({
           </dd>
         </div>
         <div>
-          <dt>Queue</dt>
-          <dd>{agent.queue_size}</dd>
-        </div>
-        <div>
-          <dt>Success / failure</dt>
-          <dd>
-            {agent.success_count} / {agent.failure_count}
-          </dd>
-        </div>
-        <div>
           <dt>Last run</dt>
           <dd>{agent.last_run_at || "Never"}</dd>
         </div>
         <div>
-          <dt>Next scheduled run</dt>
-          <dd>{agent.next_scheduled_run_at || "Not scheduled"}</dd>
+          <dt>Last error</dt>
+          <dd>{agent.last_error || "None"}</dd>
         </div>
         <div>
-          <dt>Last duration</dt>
+          <dt>Success / failure</dt>
+          <dd>{agent.success_count} / {agent.failure_count}</dd>
+        </div>
+        <div>
+          <dt>Queue</dt>
+          <dd>{agent.queue_size}</dd>
+        </div>
+        <div>
+          <dt>Schedule</dt>
           <dd>
-            {agent.last_duration_ms === null
-              ? "Unknown"
-              : `${agent.last_duration_ms} ms`}
+            {agent.next_scheduled_run_at ||
+              (agent.schedule_minutes
+                ? `Every ${agent.schedule_minutes} min`
+                : "Not scheduled")}
           </dd>
         </div>
         <div>
-          <dt>Direct run</dt>
-          <dd>
-            {agent.run_action
-              ? humanize(agent.run_action)
-              : "Not registered"}
-          </dd>
+          <dt>Owner approval</dt>
+          <dd>{agent.owner_approval_required ? "Required" : "Not required"}</dd>
         </div>
       </dl>
-
-      {agent.last_error ? (
-        <section className="agent-action-group">
-          <h3>Last safe error</h3>
-          <p>{agent.last_error}</p>
-        </section>
-      ) : null}
 
       <div className="agent-action-grid">
         <ActionList
@@ -164,55 +147,34 @@ function AgentCard({
       <footer className="agent-card-footer">
         <span>
           {agent.can_toggle
-            ? "Guarded control enabled"
-            : previewEnabled
-              ? "Preview ON · execution locked"
-              : "Preview mode · execution locked"}
+            ? "Guarded runtime control"
+            : agent.owner_approval_required
+              ? "Runtime control locked · owner approval policy"
+              : "Status only · no direct toggle exposed"}
         </span>
 
-        <div className="agent-card-footer-actions">
-          {agent.can_toggle ? (
-            <button
-              type="button"
-              className={
-                agent.is_enabled
-                  ? "agent-toggle-button agent-toggle-disable"
-                  : "agent-toggle-button agent-toggle-enable"
-              }
-              disabled={
-                busy ||
-                agent.is_enabled === null ||
-                !agent.is_configured
-              }
-              onClick={() => onToggle(agent)}
-            >
-              {busy
-                ? "Updating…"
-                : agent.is_enabled
-                  ? "Turn OFF"
-                  : "Turn ON"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={
-                previewEnabled
-                  ? "agent-toggle-button agent-toggle-disable"
-                  : "agent-toggle-button agent-toggle-enable"
-              }
-              onClick={() => onPreviewToggle(agent)}
-            >
-              {previewEnabled ? "Preview OFF" : "Preview ON"}
-            </button>
-          )}
-
+        {agent.can_toggle ? (
           <button
             type="button"
-            onClick={() => onOpen(agent)}
+            className={
+              agent.is_enabled
+                ? "agent-toggle-button agent-toggle-disable"
+                : "agent-toggle-button agent-toggle-enable"
+            }
+            disabled={
+              busy ||
+              agent.is_enabled === null ||
+              !agent.is_configured
+            }
+            onClick={() => onToggle(agent)}
           >
-            View details
+            {busy
+              ? "Updating…"
+              : agent.is_enabled
+                ? "Turn OFF"
+                : "Turn ON"}
           </button>
-        </div>
+        ) : null}
       </footer>
     </article>
   );
@@ -226,161 +188,47 @@ export function AgentsDashboard({
   const [search, setSearch] = useState("");
   const [risk, setRisk] = useState("ALL");
   const [status, setStatus] = useState("ALL");
-  const [brain, setBrain] = useState("ALL");
-  const [sort, setSort] = useState("NAME_ASC");
-  const [selectedAgent, setSelectedAgent] =
-    useState<AgentDashboardRecord | null>(null);
   const [agentItems, setAgentItems] =
     useState<AgentDashboardRecord[]>(data.items);
-  const [toggleBusy, setToggleBusy] =
-    useState<string | null>(null);
-  const [controlMessage, setControlMessage] =
-    useState("");
-  const [previewEnabledAgents, setPreviewEnabledAgents] =
-    useState<Set<string>>(() => new Set());
-  const [agentBuilderOpen, setAgentBuilderOpen] =
-    useState(false);
+  const [toggleBusy, setToggleBusy] = useState<string | null>(null);
+  const [controlMessage, setControlMessage] = useState("");
 
-  const configured = agentItems.filter(
-    agent => agent.brain_configured,
+  const configured = agentItems.filter(agent => agent.brain_configured).length;
+  const enabled = agentItems.filter(agent => agent.is_enabled === true).length;
+  const errors = agentItems.filter(
+    agent => agent.status === "ERROR" || Boolean(agent.last_error),
   ).length;
-
-  const highRisk = agentItems.filter(
-    agent =>
-      agent.default_risk === "HIGH" ||
-      agent.default_risk === "CRITICAL",
-  ).length;
-
   const approvalGated = agentItems.filter(
-    agent => agent.approval_required_actions.length > 0,
+    agent => agent.owner_approval_required,
   ).length;
 
   const statuses = useMemo(
-    () =>
-      Array.from(
-        new Set(agentItems.map(agent => agent.status)),
-      ).sort(),
-    [data.items],
+    () => Array.from(new Set(agentItems.map(agent => agent.status))).sort(),
+    [agentItems],
   );
 
   const filteredAgents = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
+    const query = search.trim().toLowerCase();
+    return agentItems.filter(agent => {
+      const searchable = [
+        agent.agent_key,
+        agent.short_name,
+        agent.official_name,
+        agent.purpose,
+        ...agent.aliases,
+      ]
+        .join(" ")
+        .toLowerCase();
 
-    const riskOrder: Record<string, number> = {
-      CRITICAL: 5,
-      HIGH: 4,
-      LOW: 3,
-      READ_ONLY: 2,
-      UNKNOWN: 1,
-    };
-
-    return agentItems
-      .filter(agent => {
-        const searchable = [
-          agent.agent_key,
-          agent.short_name,
-          agent.official_name,
-          agent.purpose,
-          agent.description,
-          ...agent.aliases,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        if (
-          normalizedSearch &&
-          !searchable.includes(normalizedSearch)
-        ) {
-          return false;
-        }
-
-        if (
-          risk !== "ALL" &&
-          agent.default_risk !== risk
-        ) {
-          return false;
-        }
-
-        if (
-          status !== "ALL" &&
-          agent.status !== status
-        ) {
-          return false;
-        }
-
-        if (
-          brain === "READY" &&
-          !agent.brain_configured
-        ) {
-          return false;
-        }
-
-        if (
-          brain === "MISSING" &&
-          agent.brain_configured
-        ) {
-          return false;
-        }
-
-        return true;
-      })
-      .sort((left, right) => {
-        if (sort === "NAME_DESC") {
-          return right.short_name.localeCompare(
-            left.short_name,
-          );
-        }
-
-        if (sort === "RISK_DESC") {
-          return (
-            (riskOrder[right.default_risk] || 0) -
-            (riskOrder[left.default_risk] || 0)
-          );
-        }
-
-        if (sort === "STATUS") {
-          return left.status.localeCompare(right.status);
-        }
-
-        return left.short_name.localeCompare(
-          right.short_name,
-        );
-      });
-  }, [agentItems, brain, risk, search, sort, status]);
-
-  function clearFilters() {
-    setSearch("");
-    setRisk("ALL");
-    setStatus("ALL");
-    setBrain("ALL");
-    setSort("NAME_ASC");
-  }
-
-  function toggleAgentPreview(
-    agent: AgentDashboardRecord,
-  ) {
-    if (agent.can_toggle) return;
-
-    setPreviewEnabledAgents(current => {
-      const next = new Set(current);
-
-      if (next.has(agent.agent_key)) {
-        next.delete(agent.agent_key);
-      } else {
-        next.add(agent.agent_key);
-      }
-
-      return next;
+      return (
+        (!query || searchable.includes(query)) &&
+        (risk === "ALL" || agent.default_risk === risk) &&
+        (status === "ALL" || agent.status === status)
+      );
     });
+  }, [agentItems, risk, search, status]);
 
-    setControlMessage(
-      "Preview state changed. No agent job, message, signal, schedule or publishing action was executed.",
-    );
-  }
-
-  async function toggleBlogAgent(
-    agent: AgentDashboardRecord,
-  ) {
+  async function toggleBlogAgent(agent: AgentDashboardRecord) {
     if (
       !agent.can_toggle ||
       agent.is_enabled === null ||
@@ -392,10 +240,9 @@ export function AgentsDashboard({
     const nextEnabled = !agent.is_enabled;
     const confirmed = window.confirm(
       nextEnabled
-        ? "Turn AI Blog Agent ON in local staging?"
-        : "Turn AI Blog Agent OFF in local staging?",
+        ? "Turn AI Blog Agent ON?"
+        : "Turn AI Blog Agent OFF?",
     );
-
     if (!confirmed) return;
 
     setToggleBusy(agent.agent_key);
@@ -406,14 +253,10 @@ export function AgentsDashboard({
         "/api/admin/auth/csrf",
         { cache: "no-store" },
       );
-
       if (!csrfResponse.ok) {
         throw new Error("CSRF token could not be loaded.");
       }
-
-      const csrfData = await csrfResponse.json() as {
-        csrfToken: string;
-      };
+      const csrfData = await csrfResponse.json() as { csrfToken: string };
 
       const response = await fetch(
         `/api/admin/agents/${agent.agent_key}/enabled`,
@@ -423,53 +266,32 @@ export function AgentsDashboard({
             "Content-Type": "application/json",
             "X-CSRF-Token": csrfData.csrfToken,
           },
-          body: JSON.stringify({
-            enabled: nextEnabled,
-          }),
+          body: JSON.stringify({ enabled: nextEnabled }),
         },
       );
-
       const result = await response.json() as {
         enabled?: boolean;
         message?: string;
         detail?: string;
       };
-
       if (!response.ok || typeof result.enabled !== "boolean") {
         throw new Error(
-          result.detail ||
-          result.message ||
-          "Agent state could not be updated.",
+          result.detail || result.message || "Agent state could not be updated.",
         );
       }
 
       setAgentItems(current =>
         current.map(item =>
           item.agent_key === agent.agent_key
-            ? {
-                ...item,
-                is_enabled: result.enabled ?? item.is_enabled,
-              }
+            ? { ...item, is_enabled: result.enabled ?? item.is_enabled }
             : item,
         ),
       );
-
-      setSelectedAgent(current =>
-        current?.agent_key === agent.agent_key
-          ? {
-              ...current,
-              is_enabled: result.enabled ?? current.is_enabled,
-            }
-          : current,
-      );
-
+      setControlMessage(result.message || "AI Blog Agent state updated.");
+    } catch (caught) {
       setControlMessage(
-        result.message || "AI Blog Agent state updated.",
-      );
-    } catch (error) {
-      setControlMessage(
-        error instanceof Error
-          ? error.message
+        caught instanceof Error
+          ? caught.message
           : "Agent control service is temporarily unavailable.",
       );
     } finally {
@@ -479,85 +301,62 @@ export function AgentsDashboard({
 
   return (
     <>
-      <section className="page-heading agents-heading agent-heading-row">
-        <div>
-          <small className="eyebrow">AGENT OPERATIONS</small>
-          <h1>VenusRealm Agents</h1>
-          <p>
-            Mobile-ready overview of registered agent brains,
-            permissions and safety boundaries. Operational controls
-            remain disabled in this read-only phase.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          className="primary-button agent-create-button"
-          onClick={() => setAgentBuilderOpen(true)}
-        >
-          ＋ Create Agent
-        </button>
+      <section className="page-heading agents-heading">
+        <small className="eyebrow">AGENT OPERATIONS</small>
+        <h1>VenusRealm Agents</h1>
+        <p>
+          Verified registry, runtime state and policy boundaries. Only the
+          existing guarded AI Blog Agent toggle is exposed; locked agents do
+          not receive cosmetic or simulated controls.
+        </p>
       </section>
 
-      <section
-        className="kpi-grid agent-kpi-grid"
-        aria-label="Agent dashboard summary"
-      >
+      <section className="kpi-grid agent-kpi-grid" aria-label="Agent summary">
         <article className="kpi-card">
-          <small>Registered agents</small>
+          <small>Registered</small>
           <strong>{data.count}</strong>
-          <span>Registry total</span>
+          <span>{configured} brains configured</span>
         </article>
         <article className="kpi-card">
-          <small>Brains configured</small>
-          <strong>{configured}</strong>
-          <span>Machine-readable contracts</span>
+          <small>Enabled</small>
+          <strong>{enabled}</strong>
+          <span>Current runtime truth</span>
         </article>
         <article className="kpi-card">
-          <small>High-risk agents</small>
-          <strong>{highRisk}</strong>
-          <span>Extra safeguards</span>
+          <small>Errors</small>
+          <strong>{errors}</strong>
+          <span>Safe runtime error state</span>
         </article>
         <article className="kpi-card">
           <small>Approval gated</small>
           <strong>{approvalGated}</strong>
-          <span>Owner decision required</span>
+          <span>Owner approval required</span>
         </article>
       </section>
 
       <aside className="agents-readonly-notice" role="status">
-        <strong>Guarded control mode</strong>
+        <strong>Truthful control mode</strong>
         <p>
-          Only AI Blog Agent can be enabled or disabled in local
-          staging. All other agents and execution actions remain locked.
+          Signal, reply, announcement, SEO, publishing and other consequential
+          agents remain policy locked. No local-only preview toggle is presented
+          as a runtime control.
         </p>
-        {controlMessage ? (
-          <p className="agent-control-message">
-            {controlMessage}
-          </p>
-        ) : null}
+        {controlMessage ? <p className="agent-control-message">{controlMessage}</p> : null}
       </aside>
 
-      <section
-        className="agent-registry-toolbar"
-        aria-label="Agent registry filters"
-      >
+      <section className="agent-registry-toolbar" aria-label="Agent filters">
         <label className="agent-search-field">
-          <span>Search agents</span>
+          <span>Search</span>
           <input
             type="search"
             value={search}
-            placeholder="Search name, key or purpose"
+            placeholder="Agent name, key or purpose"
             onChange={event => setSearch(event.target.value)}
           />
         </label>
-
         <label>
           <span>Risk</span>
-          <select
-            value={risk}
-            onChange={event => setRisk(event.target.value)}
-          >
+          <select value={risk} onChange={event => setRisk(event.target.value)}>
             <option value="ALL">All risks</option>
             <option value="CRITICAL">Critical</option>
             <option value="HIGH">High</option>
@@ -566,341 +365,43 @@ export function AgentsDashboard({
             <option value="UNKNOWN">Unknown</option>
           </select>
         </label>
-
         <label>
           <span>Status</span>
-          <select
-            value={status}
-            onChange={event => setStatus(event.target.value)}
-          >
+          <select value={status} onChange={event => setStatus(event.target.value)}>
             <option value="ALL">All statuses</option>
             {statuses.map(item => (
-              <option value={item} key={item}>
-                {humanize(item)}
-              </option>
+              <option value={item} key={item}>{humanize(item)}</option>
             ))}
           </select>
         </label>
-
-        <label>
-          <span>Brain</span>
-          <select
-            value={brain}
-            onChange={event => setBrain(event.target.value)}
-          >
-            <option value="ALL">All brains</option>
-            <option value="READY">Configured</option>
-            <option value="MISSING">Missing</option>
-          </select>
-        </label>
-
-        <label>
-          <span>Sort</span>
-          <select
-            value={sort}
-            onChange={event => setSort(event.target.value)}
-          >
-            <option value="NAME_ASC">Name A–Z</option>
-            <option value="NAME_DESC">Name Z–A</option>
-            <option value="RISK_DESC">Highest risk</option>
-            <option value="STATUS">Status</option>
-          </select>
-        </label>
-
         <button
           type="button"
           className="secondary-button"
-          onClick={clearFilters}
+          onClick={() => {
+            setSearch("");
+            setRisk("ALL");
+            setStatus("ALL");
+          }}
         >
           Clear
         </button>
       </section>
 
       <div className="agent-registry-results">
-        <strong>
-          {filteredAgents.length} of {data.count} agents
-        </strong>
-        <span>Read-only registry results</span>
+        <strong>{filteredAgents.length} of {data.count} agents</strong>
+        <span>Verified backend records</span>
       </div>
 
-      {filteredAgents.length > 0 ? (
-        <section
-          className="agents-grid"
-          aria-label="Registered agents"
-        >
-          {filteredAgents.map(agent => (
-            <AgentCard
-              agent={agent}
-              key={agent.agent_key}
-              onOpen={setSelectedAgent}
-              onToggle={toggleBlogAgent}
-              onPreviewToggle={toggleAgentPreview}
-              previewEnabled={previewEnabledAgents.has(agent.agent_key)}
-              busy={toggleBusy === agent.agent_key}
-            />
-          ))}
-        </section>
-      ) : (
-        <section className="agent-empty-results">
-          <strong>No matching agents</strong>
-          <p>
-            Search ya filters change karke dobara dekhein.
-          </p>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={clearFilters}
-          >
-            Clear filters
-          </button>
-        </section>
-      )}
-
-      <AgentBuilderModal
-        open={agentBuilderOpen}
-        onClose={() => setAgentBuilderOpen(false)}
-      />
-
-      {selectedAgent ? (
-        <div
-          className="agent-detail-overlay"
-          role="presentation"
-          onMouseDown={event => {
-            if (event.target === event.currentTarget) {
-              setSelectedAgent(null);
-            }
-          }}
-        >
-          <aside
-            className="agent-detail-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="agent-detail-title"
-          >
-            <header className="agent-detail-header">
-              <div>
-                <small>{selectedAgent.agent_key}</small>
-                <h2 id="agent-detail-title">
-                  {selectedAgent.short_name}
-                </h2>
-                <p>{selectedAgent.official_name}</p>
-              </div>
-
-              <button
-                type="button"
-                aria-label="Close agent details"
-                onClick={() => setSelectedAgent(null)}
-              >
-                ×
-              </button>
-            </header>
-
-            <div className="agent-detail-badges">
-              <span className={riskClass(selectedAgent.default_risk)}>
-                {humanize(selectedAgent.default_risk)}
-              </span>
-
-              <span className="agent-brain agent-brain-ready">
-            Master AI: {humanize(selectedAgent.capability_mode)}
-          </span>
-
-          <span
-                className={
-                  selectedAgent.brain_configured
-                    ? "agent-brain agent-brain-ready"
-                    : "agent-brain agent-brain-missing"
-                }
-              >
-                {selectedAgent.brain_configured
-                  ? "Brain ready"
-                  : "Brain missing"}
-              </span>
-            </div>
-
-            <section className="agent-detail-section">
-              <h3>Purpose</h3>
-              <p>{selectedAgent.purpose}</p>
-              <p>{selectedAgent.description}</p>
-            </section>
-
-            <dl className="agent-detail-summary">
-              <div>
-                <dt>Status</dt>
-                <dd>{humanize(selectedAgent.status)}</dd>
-              </div>
-
-          <div>
-            <dt>Master AI mode</dt>
-            <dd>{humanize(selectedAgent.capability_mode)}</dd>
-          </div>
-
-          <div>
-            <dt>Capability risk</dt>
-            <dd>{humanize(selectedAgent.capability_risk)}</dd>
-          </div>
-
-          <div>
-            <dt>Owner approval</dt>
-            <dd>
-              {selectedAgent.owner_approval_required
-                ? "Required"
-                : "Not required"}
-            </dd>
-          </div>
-              <div>
-                <dt>Enabled</dt>
-                <dd>
-                  {selectedAgent.is_enabled === null
-                    ? "Not configured"
-                    : selectedAgent.is_enabled
-                      ? "Yes"
-                      : "No"}
-                </dd>
-              </div>
-              <div>
-                <dt>Queue</dt>
-                <dd>{selectedAgent.queue_size}</dd>
-              </div>
-              <div>
-                <dt>Success / failure</dt>
-                <dd>
-                  {selectedAgent.success_count}
-                  {" / "}
-                  {selectedAgent.failure_count}
-                </dd>
-              </div>
-              <div>
-                <dt>Last run</dt>
-                <dd>{selectedAgent.last_run_at || "Never"}</dd>
-              </div>
-              <div>
-                <dt>Next run</dt>
-                <dd>
-                  {selectedAgent.next_scheduled_run_at ||
-                    "Not scheduled"}
-                </dd>
-              </div>
-              <div>
-                <dt>Direct run</dt>
-                <dd>
-                  {selectedAgent.run_action
-                    ? humanize(selectedAgent.run_action)
-                    : "Not registered"}
-                </dd>
-              </div>
-              <div>
-                <dt>Last duration</dt>
-                <dd>
-                  {selectedAgent.last_duration_ms === null
-                    ? "Unknown"
-                    : `${selectedAgent.last_duration_ms} ms`}
-                </dd>
-              </div>
-            </dl>
-
-            {selectedAgent.aliases.length > 0 ? (
-              <section className="agent-detail-section">
-                <h3>Aliases</h3>
-                <div className="agent-detail-tags">
-                  {selectedAgent.aliases.map(alias => (
-                    <span key={alias}>{alias}</span>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            <ActionList
-          title="Allowed by Master AI"
-          items={selectedAgent.capability_allowed_actions}
-          emptyLabel="No Master AI actions allowed."
-        />
-
-        <ActionList
-          title="Blocked for Master AI"
-          items={selectedAgent.capability_blocked_actions}
-          emptyLabel="No Master AI actions blocked."
-        />
-
-        <ActionList
-          title="Dependencies"
-          items={selectedAgent.capability_dependencies}
-          emptyLabel="No agent dependencies."
-        />
-
-        <ActionList
-              title="Automatic actions"
-              items={selectedAgent.automatic_actions}
-              emptyLabel="No automatic actions."
-            />
-
-            <ActionList
-              title="Approval required"
-              items={selectedAgent.approval_required_actions}
-              emptyLabel="No approval-gated actions."
-            />
-
-            <ActionList
-              title="Forbidden actions"
-              items={selectedAgent.forbidden_actions}
-              emptyLabel="No forbidden actions listed."
-            />
-
-            <ActionList
-              title="Output schema"
-              items={selectedAgent.output_schema}
-              emptyLabel="No output schema configured."
-            />
-
-            {selectedAgent.last_error ? (
-              <section className="agent-detail-section agent-detail-error">
-                <h3>Last safe error</h3>
-                <p>{selectedAgent.last_error}</p>
-              </section>
-            ) : null}
-
-            <footer className="agent-detail-footer">
-              {selectedAgent.can_toggle ? (
-                <>
-                  <div>
-                    <strong>Guarded AI Blog Agent control</strong>
-                    <span>
-                      Enable or disable only this agent in local staging.
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    className={
-                      selectedAgent.is_enabled
-                        ? "agent-toggle-button agent-toggle-disable"
-                        : "agent-toggle-button agent-toggle-enable"
-                    }
-                    disabled={
-                      toggleBusy === selectedAgent.agent_key ||
-                      selectedAgent.is_enabled === null ||
-                      !selectedAgent.is_configured
-                    }
-                    onClick={() => toggleBlogAgent(selectedAgent)}
-                  >
-                    {toggleBusy === selectedAgent.agent_key
-                      ? "Updating…"
-                      : selectedAgent.is_enabled
-                        ? "Turn AI Blog Agent OFF"
-                        : "Turn AI Blog Agent ON"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <strong>Read-only safety mode</strong>
-                  <span>
-                    This agent remains locked in the current phase.
-                  </span>
-                </>
-              )}
-            </footer>
-          </aside>
-        </div>
-      ) : null}
+      <section className="agents-grid" aria-label="Registered agents">
+        {filteredAgents.map(agent => (
+          <AgentCard
+            key={agent.agent_key}
+            agent={agent}
+            busy={toggleBusy === agent.agent_key}
+            onToggle={toggleBlogAgent}
+          />
+        ))}
+      </section>
     </>
   );
 }
