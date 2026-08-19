@@ -8,11 +8,32 @@ WhatsApp.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 
 from loguru import logger
 
 from services.google_sheets import GoogleSheetsService, SheetSignal
+
+
+def _version_canonical_signal(signal: SheetSignal | None) -> SheetSignal | None:
+    """Make canonical session candidates unique per observed setup bar.
+
+    The parser intentionally keeps the stable date/session/direction identity.
+    Runtime delivery needs one more component so an earlier blocked candidate
+    cannot suppress a later confirmed reversal in the same session.
+    """
+    if signal is None:
+        return None
+    if not signal.external_key.startswith("gsheet-session:"):
+        return signal
+    if signal.observed_at is None:
+        return signal
+    bar_key = signal.observed_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return replace(
+        signal,
+        external_key=f"{signal.external_key}:{bar_key}",
+    )
 
 
 def load_authoritative_sheet_signal(
@@ -63,6 +84,6 @@ def load_authoritative_sheet_signal(
                 "Canonical Google Sheet session exists but has no fresh valid signal; "
                 "legacy structured-row fallback suppressed."
             )
-        return signal
+        return _version_canonical_signal(signal)
 
     return sheets.get_latest_signal()
