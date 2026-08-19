@@ -22,7 +22,7 @@ def _decimal(value: Any) -> Decimal | None:
     return parsed if parsed.is_finite() else None
 
 
-def _session_for_slot(label: str) -> str | None:
+def session_for_slot(label: str) -> str | None:
     text = label.strip().upper()
     if " TO " not in text:
         return None
@@ -66,7 +66,7 @@ def _closed_session_rows(
     signal_date: str,
     session_name: str,
     now: datetime,
-) -> list[tuple[Decimal, Decimal, Decimal | None, Decimal, Decimal]]:
+) -> list[tuple[Decimal, Decimal, Decimal | None, Decimal, Decimal, datetime]]:
     normalized_now = (
         now.replace(tzinfo=timezone.utc)
         if now.tzinfo is None
@@ -89,10 +89,10 @@ def _closed_session_rows(
     if start is None:
         return []
 
-    rows: list[tuple[Decimal, Decimal, Decimal | None, Decimal, Decimal]] = []
+    rows: list[tuple[Decimal, Decimal, Decimal | None, Decimal, Decimal, datetime]] = []
     for raw in values[start:end]:
         cells = [str(cell).strip() for cell in raw]
-        if len(cells) < 6 or _session_for_slot(cells[0]) != session_name:
+        if len(cells) < 6 or session_for_slot(cells[0]) != session_name:
             continue
         high = _decimal(cells[1])
         low = _decimal(cells[2])
@@ -104,8 +104,35 @@ def _closed_session_rows(
             continue
         if closed_at > normalized_now:
             continue
-        rows.append((high, low, prev_avg, avg, cmp))
+        rows.append((high, low, prev_avg, avg, cmp, closed_at))
     return rows
+
+
+def latest_two_bar_break(
+    values: list[list[Any]],
+    *,
+    signal_date: str,
+    session_name: str,
+    now: datetime,
+) -> tuple[str, datetime] | None:
+    """Return the latest closed two-high BUY or two-low SELL structure."""
+    rows = _closed_session_rows(
+        values,
+        signal_date=signal_date,
+        session_name=session_name,
+        now=now,
+    )
+    if len(rows) < 3:
+        return None
+    older, previous, latest = rows[-3], rows[-2], rows[-1]
+    high, low, *_rest, closed_at = latest
+    prev_high, prev_low, *_ = previous
+    older_high, older_low, *_ = older
+    if high > prev_high > older_high:
+        return "BUY", closed_at
+    if low < prev_low < older_low:
+        return "SELL", closed_at
+    return None
 
 
 def opposite_reversal_confirmed(
@@ -117,42 +144,17 @@ def opposite_reversal_confirmed(
     to_direction: str,
     now: datetime,
 ) -> bool:
-    """Confirm an opposite signal after two closed structural breaks.
-
-    The owner rule is intentionally price-structure first:
-    SELL -> BUY requires two consecutive higher highs.
-    BUY -> SELL requires two consecutive lower lows.
-
-    AVG/CMP are still used by the canonical Sheet parser to create a candidate,
-    but they are not an additional reversal-delay gate here. That prevents a
-    valid reversal from being held until most of a large move has already
-    happened.
-    """
     source = from_direction.strip().upper()
     target = to_direction.strip().upper()
     if source == target or {source, target} != {"BUY", "SELL"}:
         return source == target
-
-    rows = _closed_session_rows(
+    latest = latest_two_bar_break(
         values,
         signal_date=signal_date,
         session_name=session_name,
         now=now,
     )
-    if len(rows) < 3:
-        return False
-
-    older = rows[-3]
-    previous = rows[-2]
-    latest = rows[-1]
-    high, low, *_ = latest
-    prev_high, prev_low, *_ = previous
-    older_high, older_low, *_ = older
-
-    if source == "SELL" and target == "BUY":
-        return high > prev_high > older_high
-
-    return low < prev_low < older_low
+    return latest is not None and latest[0] == target
 
 
 def signal_identity(signal: dict[str, Any]) -> tuple[str, str] | None:
