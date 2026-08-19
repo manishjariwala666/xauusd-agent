@@ -65,9 +65,9 @@ def protect_sheet_signal(
     entry = signal.reference_price
     recent_stop = signal.stop_loss
     if direction == "SELL" and recent_stop <= entry:
-        raise SignalRiskGuardError("Recent structural high is invalid for SELL risk.")
+        raise SignalRiskGuardError("Recent/session high is invalid for SELL risk.")
     if direction == "BUY" and recent_stop >= entry:
-        raise SignalRiskGuardError("Recent structural low is invalid for BUY risk.")
+        raise SignalRiskGuardError("Recent/session low is invalid for BUY risk.")
 
     session_date, session_name = _signal_identity(signal)
     block = _date_block(values, session_date)
