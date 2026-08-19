@@ -39,6 +39,7 @@ jobs:
             tests/test_agent_units.py \
             tests/test_master_ai_natural_orchestration.py \
             tests/test_master_ai_permission_router.py \
+            tests/test_admin_operations_status.py \
             tests/test_captain_shadow_gate.py \
             tests/test_captain_reversal_override.py \
             tests/test_sheet_signal_risk_guard.py \
@@ -49,6 +50,18 @@ jobs:
             tests/test_whatsapp_primary_delivery.py \
             tests/test_signal_channel_delivery.py \
             tests/test_master_ai_captain_status.py
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.0"
+
+      - name: Typecheck Admin Panel
+        working-directory: admin-web
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm typecheck
 
       - name: Check latest commit whitespace
         run: git diff --check HEAD^ HEAD
