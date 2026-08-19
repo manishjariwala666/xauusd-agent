@@ -116,15 +116,21 @@ def execute_master_ai_action(
     if task is None:
         return MasterAIToolResult(False, clean_action, "NOT_IMPLEMENTED", "Action policy me allowed hai, lekin router tool pending hai.")
 
+    request_payload = dict(input_payload or {})
     payload = {
-        **dict(input_payload or {}),
+        **request_payload,
         "objective": task["objective"],
         **dict(task.get("safe_payload") or {}),
         "master_ai_action": clean_action,
         "automatic_execution": True,
         "agent_keys": [task["agent_key"]],
     }
+    # Publishing is always locked for automatic actions. Blog image generation is
+    # an internal draft operation, so preserve an explicit request while keeping
+    # the historical default False when omitted.
     payload["publish"] = False
+    if clean_action == "run_blog_agent":
+        payload["include_image"] = bool(request_payload.get("include_image", False))
     payload.pop("owner_approved_publish", None)
 
     input_error = validate_master_ai_action_input(clean_action, payload)
