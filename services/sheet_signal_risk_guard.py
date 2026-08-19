@@ -47,9 +47,9 @@ def protect_sheet_signal(
 ) -> SheetSignal:
     """Return the signal with a verified, buffered fallback stop.
 
-    Only values present in the Sheet snapshot passed to this call are used. The
-    parser already requires the candidate bar to be closed, so this guard does
-    not inspect a future row or invent a future high/low.
+    Both the recent structural fallback already attached to the signal and the
+    session extreme must be on the risk side of entry. If either structure is
+    invalid, fail closed instead of allowing one wider extreme to mask it.
     """
     if not requires_risk_guard(signal):
         return signal
@@ -59,6 +59,15 @@ def protect_sheet_signal(
         raise SignalRiskGuardError("Signal direction is invalid.")
     if signal.reference_price is None:
         raise SignalRiskGuardError("Signal entry price is unavailable.")
+    if signal.stop_loss is None:
+        raise SignalRiskGuardError("Recent structural stop is unavailable.")
+
+    entry = signal.reference_price
+    recent_stop = signal.stop_loss
+    if direction == "SELL" and recent_stop <= entry:
+        raise SignalRiskGuardError("Recent structural high is invalid for SELL risk.")
+    if direction == "BUY" and recent_stop >= entry:
+        raise SignalRiskGuardError("Recent structural low is invalid for BUY risk.")
 
     session_date, session_name = _signal_identity(signal)
     block = _date_block(values, session_date)
@@ -70,21 +79,13 @@ def protect_sheet_signal(
 
     session_high, session_low, summary_index = summary
     if direction == "SELL":
-        if session_high is None or session_high <= signal.reference_price:
+        if session_high is None or session_high <= entry:
             raise SignalRiskGuardError("Verified session high is invalid for SELL risk.")
-        structural_stop = max(
-            value
-            for value in (signal.stop_loss, session_high)
-            if value is not None
-        )
+        structural_stop = max(recent_stop, session_high)
     else:
-        if session_low is None or session_low >= signal.reference_price:
+        if session_low is None or session_low >= entry:
             raise SignalRiskGuardError("Verified session low is invalid for BUY risk.")
-        structural_stop = min(
-            value
-            for value in (signal.stop_loss, session_low)
-            if value is not None
-        )
+        structural_stop = min(recent_stop, session_low)
 
     step, multiplier = _target_risk_parameters(block, summary_index, session_name)
     buffer = Decimal("0")
@@ -97,9 +98,9 @@ def protect_sheet_signal(
         else structural_stop - buffer
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    if direction == "SELL" and guarded_stop <= signal.reference_price:
+    if direction == "SELL" and guarded_stop <= entry:
         raise SignalRiskGuardError("Guarded SELL stop is not above entry.")
-    if direction == "BUY" and guarded_stop >= signal.reference_price:
+    if direction == "BUY" and guarded_stop >= entry:
         raise SignalRiskGuardError("Guarded BUY stop is not below entry.")
 
     source = "session high" if direction == "SELL" else "session low"
