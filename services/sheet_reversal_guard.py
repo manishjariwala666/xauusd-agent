@@ -117,11 +117,16 @@ def opposite_reversal_confirmed(
     to_direction: str,
     now: datetime,
 ) -> bool:
-    """Confirm an opposite signal only after two structural breaks.
+    """Confirm an opposite signal after two closed structural breaks.
 
-    SELL -> BUY requires the latest three closed bars to form two consecutive
-    higher highs and the latest bar to confirm bullish AVG/CMP structure.
-    BUY -> SELL requires two consecutive lower lows and bearish AVG/CMP.
+    The owner rule is intentionally price-structure first:
+    SELL -> BUY requires two consecutive higher highs.
+    BUY -> SELL requires two consecutive lower lows.
+
+    AVG/CMP are still used by the canonical Sheet parser to create a candidate,
+    but they are not an additional reversal-delay gate here. That prevents a
+    valid reversal from being held until most of a large move has already
+    happened.
     """
     source = from_direction.strip().upper()
     target = to_direction.strip().upper()
@@ -140,17 +145,14 @@ def opposite_reversal_confirmed(
     older = rows[-3]
     previous = rows[-2]
     latest = rows[-1]
-    high, low, sheet_prev_avg, avg, cmp = latest
-    prev_high, prev_low, _prev_sheet_avg, prev_avg, _prev_cmp = previous
+    high, low, *_ = latest
+    prev_high, prev_low, *_ = previous
     older_high, older_low, *_ = older
-    comparison_avg = sheet_prev_avg if sheet_prev_avg is not None else prev_avg
 
     if source == "SELL" and target == "BUY":
-        bullish = avg > comparison_avg and cmp > avg
-        return bullish and high > prev_high > older_high
+        return high > prev_high > older_high
 
-    bearish = avg < comparison_avg and cmp < avg
-    return bearish and low < prev_low < older_low
+    return low < prev_low < older_low
 
 
 def signal_identity(signal: dict[str, Any]) -> tuple[str, str] | None:
