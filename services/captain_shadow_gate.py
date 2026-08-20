@@ -4,7 +4,11 @@ import os
 from dataclasses import dataclass
 from typing import Any, Callable
 from loguru import logger
-from services.captain_ai_runtime import CaptainObservedRun, run_captain_observed
+from services.captain_ai_runtime import (
+    CaptainObservedRun,
+    run_captain_observed,
+    run_captain_sheet_candidate,
+)
 from services.captain_shadow_audit import record_captain_shadow_audit
 from services.captain_structure_guard import evaluate_captain_structure
 
@@ -74,14 +78,15 @@ def _audit_gate_decision(
 def evaluate_signal_shadow_gate(
     signal: dict[str, Any],
     *,
-    runner: Callable[..., Any] = run_captain_observed,
+    runner: Callable[..., Any] | None = None,
     structure_reversal_confirmed: bool = False,
 ) -> CaptainShadowGateResult:
     """Verify one candidate; structural reversal may override only sweep ambiguity.
 
-    A verified two-bar reversal is allowed to override the specific two-sided
-    base-sweep ambiguity guard. It does not override Captain WAIT/ERROR, news
-    lock, direction mismatch, or any other Captain decision.
+    Canonical Sheet candidates are evaluated at their persisted trigger time and
+    Base entry. This prevents a later opposite-base sweep from retrospectively
+    blocking an earlier valid one-sided trigger. Explicit test/injected runners
+    keep their existing behavior.
     """
     if not shadow_verification_enabled():
         return CaptainShadowGateResult(
@@ -89,7 +94,12 @@ def evaluate_signal_shadow_gate(
             "Captain verification disabled.", None, None, None, None,
         )
     try:
-        raw = runner()
+        if runner is not None:
+            raw = runner()
+        elif str(signal.get("external_key") or "").startswith("gsheet-session:"):
+            raw = run_captain_sheet_candidate(signal)
+        else:
+            raw = run_captain_observed()
         assessment, observed = _assessment_and_observed(raw)
     except Exception:
         return CaptainShadowGateResult(
