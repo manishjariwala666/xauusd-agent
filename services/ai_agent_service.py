@@ -204,7 +204,7 @@ def set_blog_agent_enabled_guarded(
 
 def recover_stale_blog_agent_run_guarded(
     *,
-    actor_id: int,
+    actor_id: int | None,
     request_id: str,
     stale_after_minutes: int = 60,
 ) -> StaleAgentRecoveryResult:
@@ -387,6 +387,16 @@ def run_ai_agent(
     runner = RUNNERS.get(clean_key)
     if runner is None:
         return False, f"Exact agent '{clean_key}' has no production runner configured."
+
+    if clean_key == "ai_blog_agent":
+        try:
+            recover_stale_blog_agent_run_guarded(
+                actor_id=triggered_by,
+                request_id=f"worker-stale-recovery:{datetime.now(timezone.utc).isoformat()}",
+            )
+        except Exception:
+            logger.exception("AI Blog Agent stale-run recovery failed closed")
+            return False, "AI Blog Agent stale-run recovery is temporarily unavailable."
 
     start = _start_run(clean_key, triggered_by)
     if start.run_id is None:
