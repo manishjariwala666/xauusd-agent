@@ -8,7 +8,11 @@ from fastapi import APIRouter, Header, HTTPException, Response
 
 from services.admin_auth_api import _bearer_token, _request_id, _require_bff, _require_identity
 from services.admin_auth_service import AdminIdentity, local_admin_preview_enabled
-from services.ai_agent_service import list_ai_agents, set_blog_agent_enabled_guarded
+from services.ai_agent_service import (
+    list_ai_agents,
+    recover_stale_blog_agent_run_guarded,
+    set_blog_agent_enabled_guarded,
+)
 from services.agent_brain_generator import generate_brain_preview
 from services.master_ai_capability_matrix import CapabilityMode, get_agent_capability
 from services.master_ai_agent_registry import get_agent_dashboard_record, list_agent_dashboard_records, list_registered_agents
@@ -201,4 +205,42 @@ def admin_agent_enabled_update(
     return {
         **result,
         "message": "AI Blog Agent enabled state updated." if result["changed"] else "AI Blog Agent was already in the requested state.",
+    }
+
+
+@router.post("/admin/agents/{agent_key}/recover-stale")
+def admin_agent_stale_recovery(
+    agent_key: str,
+    payload: dict[str, Any] | None = None,
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None,
+    x_request_id: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Recover one clearly stale Blog Agent run through the audited admin path."""
+    identity = _identity(authorization, x_admin_bff_key)
+    if str(agent_key or "").strip().lower() != "ai_blog_agent":
+        raise HTTPException(status_code=403, detail="Only AI Blog Agent stale recovery is enabled.")
+    requested_cutoff = (payload or {}).get("stale_after_minutes", 60)
+    try:
+        stale_after_minutes = int(requested_cutoff)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="stale_after_minutes must be an integer.") from exc
+    try:
+        result = recover_stale_blog_agent_run_guarded(
+            actor_id=identity.user_id,
+            request_id=_request_id(x_request_id),
+            stale_after_minutes=stale_after_minutes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Stale agent recovery is temporarily unavailable.") from exc
+    return {
+        "agent_key": result.agent_key,
+        "recovered": result.recovered,
+        "run_id": result.run_id,
+        "previous_enabled": result.previous_enabled,
+        "status": result.status,
+        "reason": result.reason,
+        "publishing": False,
     }
