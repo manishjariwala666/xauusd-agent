@@ -344,5 +344,18 @@ def run_captain_read_only(
     *,
     now: datetime | None = None,
 ) -> CaptainAssessment:
-    """Backward-compatible Captain assessment entry point."""
-    return run_captain_observed(now=now).assessment
+    """Run Captain, preferring the authoritative canonical Sheet candidate."""
+    current_time = _normalize_now(now)
+    try:
+        from services.sheet_signal_source import load_authoritative_sheet_signal
+
+        candidate = load_authoritative_sheet_signal(
+            GoogleSheetsService(),
+            now=current_time.astimezone(timezone.utc),
+        )
+        if candidate is not None and _canonical_identity(candidate.external_key):
+            return run_captain_sheet_candidate(candidate).assessment
+    except Exception:
+        # Preserve fail-closed behavior in the ordinary observed Captain path.
+        pass
+    return run_captain_observed(now=current_time).assessment
