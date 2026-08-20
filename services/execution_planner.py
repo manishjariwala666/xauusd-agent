@@ -8,6 +8,12 @@ from typing import Any
 from services.worker_agent_adapter import ORCHESTRATION_NATIVE_AGENT_KEYS
 
 
+# A disabled blog worker may be recoverable when its only blocker is a clearly
+# stale RUNNING execution. The worker still owns guarded recovery and start
+# checks; this prevents silent substitution of another agent.
+STALE_RECOVERABLE_AGENT_KEYS = frozenset({"ai_blog_agent"})
+
+
 @dataclass(frozen=True)
 class AgentDescriptor:
     agent_key: str
@@ -168,6 +174,8 @@ class ExecutionPlanner:
             unavailable: list[str] = []
             for key in requested:
                 if key in enabled_by_key:
+                    continue
+                if key in STALE_RECOVERABLE_AGENT_KEYS and key in all_by_key:
                     continue
                 if key in all_by_key:
                     unavailable.append(key)
