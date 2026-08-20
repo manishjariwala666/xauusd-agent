@@ -50,7 +50,8 @@ _AGENT_ACTION_REQUESTS: tuple[tuple[tuple[str, ...], str, str, dict[str, Any], s
 
 
 def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
-    text = _normalize(message)
+    raw = str(message or "").strip()
+    text = _normalize(raw)
     if not text:
         return _no_action()
 
@@ -70,6 +71,15 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
         return _proposal("read_signal_status", agent_key="signal_agent", risk=IntentRisk.SAFE, reason="Read-only current XAUUSD Sheet snapshot requested.")
     if _is_content_publish(text):
         return _proposal("publish_website", reason="Publishing content requires explicit owner approval.")
+
+    blog = _blog_request(text, raw)
+    if blog is not None:
+        return _proposal(
+            "run_blog_agent",
+            agent_key="ai_blog_agent",
+            parameters=blog,
+            reason="Registered Blog Agent requested for one real draft execution only.",
+        )
 
     if _contains_any(text, ("retry", "dobara chalao", "phir se chalao")):
         retry_action, agent_key = _retry_target(text)
@@ -108,6 +118,55 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
     if _looks_actionable(text):
         return _clarification("Registered action clear nahi hai. Agent aur requested action specify karein.")
     return _no_action()
+
+
+def _blog_request(text: str, raw: str) -> dict[str, Any] | None:
+    blog_named = _contains_any(
+        text,
+        ("ai blog agent", "blog agent", "blog draft", "seo blog", "blog post", "article banao"),
+    )
+    execute_requested = _contains_any(
+        text,
+        ("execute", "run", "create", "generate", "banao", "chalao", "real ai blog agent"),
+    )
+    separate_image_agent = "image agent" in text
+    if not (blog_named and execute_requested) or separate_image_agent:
+        return None
+
+    params: dict[str, Any] = {
+        "publish": False,
+        "include_image": _contains_any(text, ("featured image", "inline image", "featured images", "inline images")),
+        "include_faq": "faq" in text,
+        "include_schema": "schema" in text,
+        "include_internal_links": _contains_any(text, ("internal link", "internal links")),
+        "include_risk_disclaimer": _contains_any(text, ("risk disclaimer", "trading risk disclaimer")),
+        "telegram_target": "blog",
+        "owner_request": raw[:12000],
+    }
+
+    topic = _line_value(raw, "topic")
+    if topic:
+        params["topic"] = topic
+    audience = _line_value(raw, "target audience")
+    if audience:
+        params["target_audience"] = audience
+    if re.search(r"\busa\b|\bu\.s\.a\b|\bunited states\b", raw, flags=re.I):
+        params["location"] = "USA"
+
+    match = re.search(r"(\d{3,4})\s*[–—-]\s*(\d{3,4})\s*words", raw, flags=re.I)
+    if match:
+        params["target_word_min"] = int(match.group(1))
+        params["target_word_max"] = int(match.group(2))
+
+    return params
+
+
+def _line_value(raw: str, label: str) -> str:
+    match = re.search(
+        rf"(?im)^\s*{re.escape(label)}\s*:\s*(.+?)\s*$",
+        raw,
+    )
+    return " ".join(match.group(1).split())[:1000] if match else ""
 
 
 def _proposal(action: str, *, agent_key: str | None = None, risk: IntentRisk | None = None, parameters: dict[str, Any] | None = None, reason: str) -> MasterAIIntentProposal:
