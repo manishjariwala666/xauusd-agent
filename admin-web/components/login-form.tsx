@@ -34,8 +34,8 @@ export function LoginForm() {
         headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
         body: JSON.stringify({ email: data.get("email"), password: data.get("password") })
       });
-      const payload = (await response.json()) as { message?: string };
-      if (response.status === 403) {
+      const payload = (await response.json()) as { code?: string; message?: string };
+      if (response.status === 403 && payload.code === "ADMIN_ACCESS_FORBIDDEN") {
         router.replace("/admin/forbidden");
         return;
       }

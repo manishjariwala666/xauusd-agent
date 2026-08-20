@@ -56,12 +56,13 @@ jobs:
         with:
           node-version: "24.14.0"
 
-      - name: Typecheck Admin Panel
+      - name: Validate Admin Panel
         working-directory: admin-web
         run: |
           corepack enable
           pnpm install --frozen-lockfile
           pnpm typecheck
+          pnpm exec vitest run tests/admin-session-resilience.test.ts
 
       - name: Check latest commit whitespace
         run: git diff --check HEAD^ HEAD

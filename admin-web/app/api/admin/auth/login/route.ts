@@ -14,6 +14,8 @@ type BackendLogin = {
   user: { user_id: number; email: string; role: string };
 };
 
+type BackendError = { detail?: string };
+
 export async function POST(request: NextRequest) {
   if (!verifyCsrfToken(
     request.cookies.get(ADMIN_CSRF_COOKIE)?.value,
@@ -46,15 +48,36 @@ export async function POST(request: NextRequest) {
       signal: AbortSignal.timeout(30000)
     });
     if (!upstream.ok) {
+      let upstreamDetail = "";
+      try {
+        const errorPayload = (await upstream.json()) as BackendError;
+        upstreamDetail = String(errorPayload.detail || "").trim();
+      } catch {
+        upstreamDetail = "";
+      }
+
+      const genuineAccessDenial =
+        upstream.status === 403 &&
+        upstreamDetail === "Administrator access is forbidden.";
+
+      if (genuineAccessDenial) {
+        return NextResponse.json(
+          {
+            code: "ADMIN_ACCESS_FORBIDDEN",
+            message: "Administrator access is forbidden."
+          },
+          { status: 403 }
+        );
+      }
+
       const status = upstream.status === 429
         ? 429
-        : upstream.status === 403
-          ? 403
-          : upstream.status >= 500
-            ? 503
-            : 401;
+        : upstream.status === 403 || upstream.status >= 500
+          ? 503
+          : 401;
       return NextResponse.json(
         {
+          code: status === 503 ? "ADMIN_AUTH_UNAVAILABLE" : undefined,
           message: status === 429
             ? "Too many attempts. Try again later."
             : status === 503
@@ -66,7 +89,10 @@ export async function POST(request: NextRequest) {
     }
     const payload = (await upstream.json()) as BackendLogin;
     if (!payload.access_token || payload.user?.role !== "ADMIN") {
-      return NextResponse.json({ message: "Administrator access is forbidden." }, { status: 403 });
+      return NextResponse.json(
+        { code: "ADMIN_ACCESS_FORBIDDEN", message: "Administrator access is forbidden." },
+        { status: 403 }
+      );
     }
     const expiresIn = Math.floor((new Date(payload.expires_at).getTime() - Date.now()) / 1000);
     const response = NextResponse.json({ user: payload.user });
@@ -79,7 +105,7 @@ export async function POST(request: NextRequest) {
       error instanceof Error ? error.message : String(error),
     );
     return NextResponse.json(
-      { message: "Admin login is temporarily unavailable." },
+      { code: "ADMIN_AUTH_UNAVAILABLE", message: "Admin login is temporarily unavailable." },
       { status: 503 },
     );
   }
