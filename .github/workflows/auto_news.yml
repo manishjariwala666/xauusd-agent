@@ -31,7 +31,6 @@ jobs:
           python-version: "3.12"
 
       - name: Preflight GitHub Actions secrets
-        id: preflight
         shell: bash
         run: |
           missing=0
@@ -40,7 +39,7 @@ jobs:
             local name="$1"
             local value="${!name:-}"
             if [ -z "$value" ]; then
-              echo "::warning title=Missing GitHub secret::$name is missing."
+              echo "::error title=Missing GitHub secret::$name is missing."
               echo "- $name missing" >> "$GITHUB_STEP_SUMMARY"
               missing=1
             fi
@@ -56,23 +55,17 @@ jobs:
           check_secret TELEGRAM_CHAT_ID
 
           if [ "$missing" -eq 1 ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "### Agent skipped safely" >> "$GITHUB_STEP_SUMMARY"
-            echo "One or more GitHub Actions secrets are missing. Job marked green to avoid repeated scheduled failures." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            echo "### Signal automation blocked" >> "$GITHUB_STEP_SUMMARY"
+            echo "Required runtime configuration is missing. The scheduled run is failing visibly instead of reporting a false success." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
 
-          echo "ready=true" >> "$GITHUB_OUTPUT"
-
       - name: Install dependencies
-        if: steps.preflight.outputs.ready == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Validate runtime configuration
-        if: steps.preflight.outputs.ready == 'true'
-        id: validate_runtime
         shell: bash
         run: |
           python - <<'PY'
@@ -101,22 +94,17 @@ jobs:
               )
 
           if issues:
-              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-                  output.write("ready=false\n")
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-                  summary.write("### Agent skipped safely\n")
+                  summary.write("### Signal automation blocked\n")
                   for issue in issues:
-                      print(f"::warning title=Invalid runtime configuration::{issue}")
+                      print(f"::error title=Invalid runtime configuration::{issue}")
                       summary.write(f"- {issue}\n")
-              sys.exit(0)
+              sys.exit(1)
 
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write("ready=true\n")
           print("Runtime configuration format valid.")
           PY
 
       - name: Prepare Google service account JSON
-        if: steps.preflight.outputs.ready == 'true' && steps.validate_runtime.outputs.ready == 'true'
         shell: bash
         run: |
           python - <<'PY'
@@ -128,31 +116,20 @@ jobs:
           try:
               data = json.loads(raw)
           except Exception:
-              print("::warning title=Invalid GOOGLE_SERVICE_ACCOUNT_JSON::Secret is not valid JSON.")
-              with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-                  f.write("### Agent skipped safely\n")
-                  f.write("GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON.\n")
-              raise SystemExit(0)
+              print("::error title=Invalid GOOGLE_SERVICE_ACCOUNT_JSON::Secret is not valid JSON.")
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+                  summary.write("### Signal automation blocked\n")
+                  summary.write("GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON.\n")
+              raise SystemExit(1)
 
           Path("service_account.json").write_text(json.dumps(data), encoding="utf-8")
           print("Google service account JSON prepared.")
           PY
 
       - name: Execute Autonomous Agent Core Pipeline
-        if: steps.preflight.outputs.ready == 'true' && steps.validate_runtime.outputs.ready == 'true'
         shell: bash
         run: |
-          set +e
           python agent_main.py
-          status=$?
-
-          if [ "$status" -ne 0 ]; then
-            echo "::warning title=Agent runtime warning::agent_main.py exited with status $status. Workflow remains green; check logs for runtime fix."
-            echo "### Agent runtime warning" >> "$GITHUB_STEP_SUMMARY"
-            echo "agent_main.py exited with status $status. The workflow is intentionally green to stop scheduled red failures." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
           echo "Agent completed successfully." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Execute Telegram Alert Agent
