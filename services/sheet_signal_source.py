@@ -77,18 +77,130 @@ def _slot_bounds(
     return started.astimezone(timezone.utc), closed.astimezone(timezone.utc), session_name
 
 
+def _date_block(
+    sheets: GoogleSheetsService,
+    values: list[list[object]],
+    *,
+    session_date: str,
+) -> list[list[object]]:
+    """Return the last canonical block for one exact date."""
+    starts: list[int] = []
+    for index, row in enumerate(values):
+        match = sheets._SESSION_HEADER.match(str(row[0] if row else "").strip())
+        if match and match.group(1) == session_date:
+            starts.append(index)
+    if not starts:
+        return []
+    start = starts[-1]
+    end = len(values)
+    for index in range(start + 1, len(values)):
+        row = values[index]
+        if sheets._SESSION_HEADER.match(str(row[0] if row else "").strip()):
+            end = index
+            break
+    return values[start:end]
+
+
+def _session_context_from_values(
+    sheets: GoogleSheetsService,
+    values: list[list[object]],
+    *,
+    session_date: str,
+    session_name: str,
+) -> tuple[
+    Decimal,
+    Decimal,
+    Decimal,
+    Decimal,
+    tuple[Decimal, ...],
+    tuple[Decimal, ...],
+] | None:
+    """Parse exact Morning/Evening bases, range and targets from the date block."""
+    block = _date_block(sheets, values, session_date=session_date)
+    if not block:
+        return None
+
+    wanted = f"{session_name.upper()} SESSION"
+    session_high = session_low = buy_base = sell_base = None
+
+    for index, row in enumerate(block):
+        cells = [str(cell or "").strip() for cell in row]
+        upper = {cell.upper() for cell in cells if cell}
+        if wanted not in upper:
+            continue
+        lower = [cell.lower() for cell in cells]
+        required = {"session high", "session low", "buy base", "sell base"}
+        if not required.issubset(set(lower)) or index + 1 >= len(block):
+            continue
+        data = block[index + 1]
+        positions = {
+            cell.lower(): position
+            for position, cell in enumerate(cells)
+            if cell
+        }
+
+        def value(name: str) -> Decimal | None:
+            position = positions.get(name)
+            if position is None or position >= len(data):
+                return None
+            return _decimal(data[position])
+
+        session_high = value("session high")
+        session_low = value("session low")
+        buy_base = value("buy base")
+        sell_base = value("sell base")
+        break
+
+    if None in {session_high, session_low, buy_base, sell_base}:
+        return None
+
+    buy_targets: list[Decimal] = []
+    sell_targets: list[Decimal] = []
+    for row in block:
+        if len(row) < 10:
+            continue
+        label = str(row[0] if row else "").strip()
+        bounds = _slot_bounds(sheets, label, session_date=session_date)
+        if bounds is None:
+            continue
+        _, _, row_session = bounds
+        explicit = str(row[13] if len(row) > 13 else "").strip().lower()
+        if explicit == "morning session":
+            target_session = "morning"
+        elif explicit == "evening session":
+            target_session = "evening"
+        else:
+            target_session = row_session
+        if target_session != session_name:
+            continue
+        buy_target = _decimal(row[8])
+        sell_target = _decimal(row[9])
+        if buy_target is not None:
+            buy_targets.append(buy_target)
+        if sell_target is not None:
+            sell_targets.append(sell_target)
+
+    return (
+        session_high,
+        session_low,
+        buy_base,
+        sell_base,
+        tuple(buy_targets[:6]),
+        tuple(sell_targets[:6]),
+    )
+
+
 def _base_cross_signal(
     sheets: GoogleSheetsService,
     values: list[list[object]],
     *,
     now: datetime,
 ) -> SheetSignal | None:
-    """Return the first closed one-sided Buy/Sell Base cross for the live session.
+    """Return the first closed one-sided Buy/Sell Base cross for the trading date.
 
-    Buy Base and Sell Base are the configured trigger/entry levels. A base cross
-    is actionable only after that bar closes on the directional side of the
-    base. This prevents intrabar wick noise while also preventing AVG or
-    previous-bar requirements from delaying a valid configured entry.
+    Morning remains eligible after the Sheet advances to Evening. This provides
+    date-wide catch-up when the scheduler missed an earlier valid closed-bar
+    trigger, while preserving per-session bases, stops, targets and idempotency.
     """
     session_date: str | None = None
     for row in values:
@@ -105,12 +217,10 @@ def _base_cross_signal(
     )
     local_now = normalized_now.astimezone(_INDIA)
     try:
-        if local_now.date() != date.fromisoformat(session_date):
+        target_date = date.fromisoformat(session_date)
+        if local_now.date() != target_date:
             return None
-        snapshot = parse_signal_snapshot(
-            values,
-            target_date=date.fromisoformat(session_date),
-        )
+        snapshot = parse_signal_snapshot(values, target_date=target_date)
     except Exception:
         logger.exception("Base-trigger Sheet snapshot parse failed.")
         return None
@@ -118,22 +228,59 @@ def _base_cross_signal(
     if snapshot is None or not snapshot.latest_slot:
         return None
     active_session = session_for_slot(snapshot.latest_slot)
-    if active_session not in {"morning", "evening"}:
-        return None
 
-    buy_base = snapshot.buy_base
-    sell_base = snapshot.sell_base
-    session_high = snapshot.day_high
-    session_low = snapshot.day_low
-    if (
-        buy_base is None
-        or sell_base is None
-        or session_high is None
-        or session_low is None
-    ):
-        return None
+    contexts: dict[
+        str,
+        tuple[
+            Decimal,
+            Decimal,
+            Decimal,
+            Decimal,
+            tuple[Decimal, ...],
+            tuple[Decimal, ...],
+        ],
+    ] = {}
+    for session_name in ("morning", "evening"):
+        context = _session_context_from_values(
+            sheets,
+            values,
+            session_date=session_date,
+            session_name=session_name,
+        )
+        if context is not None:
+            contexts[session_name] = context
 
-    triggers: list[tuple[datetime, str]] = []
+    # Backward-compatible fallback for older/minimal Sheet layouts and tests:
+    # the parser already guarantees active-session summary/target coherence.
+    if active_session in {"morning", "evening"} and active_session not in contexts:
+        if (
+            snapshot.day_high is not None
+            and snapshot.day_low is not None
+            and snapshot.buy_base is not None
+            and snapshot.sell_base is not None
+        ):
+            contexts[active_session] = (
+                snapshot.day_high,
+                snapshot.day_low,
+                snapshot.buy_base,
+                snapshot.sell_base,
+                tuple(snapshot.buy_targets),
+                tuple(snapshot.sell_targets),
+            )
+
+    triggers: list[
+        tuple[
+            datetime,
+            str,
+            str,
+            Decimal,
+            Decimal,
+            Decimal,
+            Decimal,
+            tuple[Decimal, ...],
+            tuple[Decimal, ...],
+        ]
+    ] = []
     in_current_block = False
     for row in values:
         first = str(row[0] if row else "").strip()
@@ -148,9 +295,18 @@ def _base_cross_signal(
         if bounds is None:
             continue
         _, closed_at, row_session = bounds
-        if row_session != active_session or normalized_now < closed_at:
+        context = contexts.get(row_session)
+        if context is None or normalized_now < closed_at:
             continue
 
+        (
+            session_high,
+            session_low,
+            buy_base,
+            sell_base,
+            buy_targets,
+            sell_targets,
+        ) = context
         high = _decimal(row[1])
         low = _decimal(row[2])
         live_price = _decimal(row[5])
@@ -160,15 +316,35 @@ def _base_cross_signal(
         buy_cross = low <= buy_base <= high and live_price > buy_base
         sell_cross = low <= sell_base <= high and live_price < sell_base
         if buy_cross == sell_cross:
-            # Neither side crossed, or both bases were swept in one bar. In the
-            # latter case leave direction to the existing structure/Shadow path.
             continue
-        triggers.append((closed_at, "BUY" if buy_cross else "SELL"))
+        triggers.append(
+            (
+                closed_at,
+                "BUY" if buy_cross else "SELL",
+                row_session,
+                session_high,
+                session_low,
+                buy_base,
+                sell_base,
+                buy_targets,
+                sell_targets,
+            )
+        )
 
     if not triggers:
         return None
 
-    confirmed_at, direction = min(triggers, key=lambda item: item[0])
+    (
+        confirmed_at,
+        direction,
+        trigger_session,
+        session_high,
+        session_low,
+        buy_base,
+        sell_base,
+        buy_targets,
+        sell_targets,
+    ) = min(triggers, key=lambda item: item[0])
     entry = buy_base if direction == "BUY" else sell_base
     stop_loss = session_low if direction == "BUY" else session_high
     if (direction == "BUY" and stop_loss >= entry) or (
@@ -176,9 +352,7 @@ def _base_cross_signal(
     ):
         return None
 
-    raw_targets = list(
-        snapshot.buy_targets if direction == "BUY" else snapshot.sell_targets
-    )
+    raw_targets = list(buy_targets if direction == "BUY" else sell_targets)
     selected = sheets._select_analysis_targets(
         direction=direction,
         entry_price=entry,
@@ -198,10 +372,10 @@ def _base_cross_signal(
         target_price=target,
         stop_loss=stop_loss,
         label=(
-            f"{session_date} {active_session.upper()} SESSION · "
+            f"{session_date} {trigger_session.upper()} SESSION · "
             f"{direction} Base closed-bar trigger"
         ),
-        external_key=f"gsheet-session:{session_date}:{active_session}:{direction}",
+        external_key=f"gsheet-session:{session_date}:{trigger_session}:{direction}",
         reference_price=entry,
         observed_at=confirmed_at,
         source=f"GOOGLE_SHEET:{analysis_worksheet}",

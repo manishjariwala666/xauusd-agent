@@ -21,10 +21,11 @@ def actionable_target_milestones(
 ) -> list[TargetMilestone]:
     """Return directionally valid targets without changing Sheet numbering.
 
-    Target 1 is the strategy's first required milestone. If it is invalid,
-    the sequence is unusable and must be rejected rather than silently turning
-    Target 2 into Target 1. Invalid later slots may be ignored, but their
-    original target numbers remain stable in alerts and durable progress.
+    Canonical Google-Sheet session signals are six-target strategies: Target 1
+    through Target 5 are progress milestones and Target 6 is the only target
+    completion milestone. Therefore all six numbered targets must be present,
+    unique and directionally sequential for a canonical ``gsheet-session:``
+    signal. Legacy/non-canonical signals keep the historical permissive fallback.
     """
     direction = str(signal.get("signal_type") or "").strip().upper()
     entry_value = signal.get("price")
@@ -32,6 +33,8 @@ def actionable_target_milestones(
         return []
 
     entry = Decimal(str(entry_value))
+    external_key = str(signal.get("external_key") or "").strip()
+    requires_six_targets = external_key.startswith("gsheet-session:")
     milestones: list[TargetMilestone] = []
     seen: set[Decimal] = set()
     previous = entry
@@ -44,19 +47,19 @@ def actionable_target_milestones(
     for source_slot in range(1, 7):
         value = signal.get(f"target_{source_slot}")
         if value in (None, ""):
-            if source_slot == 1 and has_numbered_targets:
+            if requires_six_targets or (source_slot == 1 and has_numbered_targets):
                 return []
             continue
 
         try:
             target = Decimal(str(value))
         except Exception:
-            if source_slot == 1:
+            if requires_six_targets or source_slot == 1:
                 return []
             continue
 
         if target in seen:
-            if source_slot == 1:
+            if requires_six_targets or source_slot == 1:
                 return []
             continue
 
@@ -66,7 +69,7 @@ def actionable_target_milestones(
             else target < entry and target < previous
         )
         if not is_valid:
-            if source_slot == 1:
+            if requires_six_targets or source_slot == 1:
                 return []
             continue
 
@@ -80,6 +83,11 @@ def actionable_target_milestones(
             )
         )
 
+    if requires_six_targets:
+        if [item.number for item in milestones] != [1, 2, 3, 4, 5, 6]:
+            return []
+        return milestones
+
     if not has_numbered_targets and not milestones:
         fallback = signal.get("target_price")
         if fallback not in (None, ""):
@@ -89,9 +97,7 @@ def actionable_target_milestones(
             ) or (
                 direction == "SELL" and target < entry
             ):
-                milestones.append(
-                    TargetMilestone(1, 0, target)
-                )
+                milestones.append(TargetMilestone(1, 0, target))
 
     return milestones
 
@@ -131,15 +137,14 @@ def format_target_progress_message(
     next_milestone: TargetMilestone | None,
     achieved_price: Decimal,
 ) -> str:
-    """Build a factual target-progress message without profit promises."""
+    """Build a factual target-progress message without implying early exit."""
     direction = str(signal["signal_type"]).strip().upper()
     symbol = str(signal.get("symbol") or "XAUUSD").strip().upper()
     entry = Decimal(str(signal["price"]))
     points = milestone_profit_points(signal, milestone)
 
     lines = [
-        f"🎯 Yahooo — Target {milestone.number} achieved "
-        f"— {symbol} {direction} ✅",
+        f"🎯 Yahooo — Target {milestone.number} achieved — {symbol} {direction} ✅",
         "",
         f"Entry: {entry:.2f}",
         f"Target {milestone.number}: {milestone.price:.2f}",
@@ -150,15 +155,12 @@ def format_target_progress_message(
     if next_milestone is not None:
         lines.extend(
             [
-                f"⏳ Target {next_milestone.number} coming: "
-                f"{next_milestone.price:.2f}",
-                "If partial exits are part of your plan, review whether to "
-                "secure part of the position and manage the remainder "
-                "carefully.",
+                f"⏳ Target {next_milestone.number} coming: {next_milestone.price:.2f}",
+                "Signal remains active toward the next configured target unless the separate stop/reversal rule closes it.",
             ]
         )
     else:
-        lines.append("🏁 All listed targets achieved.")
+        lines.append("🏁 Target 6 achieved — all configured targets completed.")
 
     lines.extend(
         [
@@ -180,10 +182,8 @@ def target_is_hit(signal: dict[str, Any], current_price: Decimal) -> bool:
         return False
 
     target = Decimal(str(target_value))
-
     if direction == "BUY":
         return current_price >= target
-
     return current_price <= target
 
 
@@ -192,15 +192,12 @@ def profit_points(signal: dict[str, Any]) -> Decimal:
     direction = str(signal.get("signal_type") or "").upper()
     entry_value = signal.get("price")
     target_value = signal.get("target_price")
-
     if direction not in {"BUY", "SELL"}:
         raise ValueError("Signal direction must be BUY or SELL.")
     if entry_value is None or target_value is None:
         raise ValueError("Signal entry and target are required.")
-
     entry = Decimal(str(entry_value))
     target = Decimal(str(target_value))
-
     return target - entry if direction == "BUY" else entry - target
 
 
@@ -211,7 +208,6 @@ def format_target_hit_message(signal: dict[str, Any]) -> str:
     entry = Decimal(str(signal["price"]))
     target = Decimal(str(signal["target_price"]))
     points = profit_points(signal)
-
     return (
         "🎯 Yahooo VenusRealm TARGET HIT ✅\n\n"
         f"{symbol} {direction}\n"
@@ -229,15 +225,11 @@ def stop_loss_is_hit(
     """Return True when the live quote has crossed the signal stop loss."""
     direction = str(signal.get("signal_type") or "").strip().upper()
     stop_value = signal.get("stop_loss")
-
     if direction not in {"BUY", "SELL"} or stop_value is None:
         return False
-
     stop_loss = Decimal(str(stop_value))
-
     if direction == "BUY":
         return current_price <= stop_loss
-
     return current_price >= stop_loss
 
 
@@ -246,20 +238,13 @@ def loss_points(signal: dict[str, Any]) -> Decimal:
     direction = str(signal.get("signal_type") or "").strip().upper()
     entry_value = signal.get("price")
     stop_value = signal.get("stop_loss")
-
     if direction not in {"BUY", "SELL"}:
         raise ValueError("Signal direction must be BUY or SELL.")
     if entry_value is None or stop_value is None:
         raise ValueError("Signal entry and stop loss are required.")
-
     entry = Decimal(str(entry_value))
     stop_loss = Decimal(str(stop_value))
-
-    distance = (
-        entry - stop_loss
-        if direction == "BUY"
-        else stop_loss - entry
-    )
+    distance = entry - stop_loss if direction == "BUY" else stop_loss - entry
     return abs(distance)
 
 
@@ -270,7 +255,6 @@ def format_stop_loss_hit_message(signal: dict[str, Any]) -> str:
     entry = Decimal(str(signal["price"]))
     stop_loss = Decimal(str(signal["stop_loss"]))
     points = loss_points(signal)
-
     return (
         f"🔴 STOP LOSS HIT — {symbol} {direction}\n\n"
         f"Entry: {entry:.2f}\n"
