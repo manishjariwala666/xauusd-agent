@@ -179,7 +179,7 @@ def set_blog_agent_enabled_guarded(
                 """
             ),
             {
-                "user_id": int(actor_id),
+                "user_id": int(actor_id) if actor_id is not None else None,
                 "request_id": str(request_id or "unknown")[:128],
                 "details": json.dumps(
                     {
@@ -316,7 +316,7 @@ def recover_stale_blog_agent_run_guarded(
                 """
             ),
             {
-                "user_id": int(actor_id),
+                "user_id": int(actor_id) if actor_id is not None else None,
                 "request_id": str(request_id or "unknown")[:128],
                 "details": json.dumps(
                     {
