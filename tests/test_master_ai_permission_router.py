@@ -128,16 +128,19 @@ def test_safe_telegram_run_forwards_injected_supabase(monkeypatch) -> None:
     assert calls[0]["supabase"] is injected_supabase
 
 
-def test_explicit_disabled_agent_never_falls_back_to_signal_agent():
+def test_explicit_disabled_blog_agent_reaches_guarded_recovery_without_fallback():
     from services.execution_planner import ExecutionPlanner, AgentDescriptor
     planner = ExecutionPlanner()
-    with pytest.raises(ValueError, match="ai_blog_agent.*unavailable or disabled"):
-        planner._select_agent_keys(
-            task_type="BLOG",
-            title="Prepare Blog Content",
-            payload={"agent_keys": ["ai_blog_agent"]},
-            enabled_agents=[AgentDescriptor(agent_key="signal_agent", display_name="Signal Agent")],
-        )
+    selected = planner._select_agent_keys(
+        task_type="BLOG",
+        title="Prepare Blog Content",
+        payload={"agent_keys": ["ai_blog_agent"]},
+        available_agents=[
+            AgentDescriptor(agent_key="signal_agent", display_name="Signal Agent"),
+            AgentDescriptor(agent_key="ai_blog_agent", display_name="AI Blog Agent", is_enabled=False),
+        ],
+    )
+    assert selected == ["ai_blog_agent"]
 
 
 def test_exact_enabled_agent_is_the_only_explicit_step():
