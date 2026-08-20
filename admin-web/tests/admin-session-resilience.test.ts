@@ -62,4 +62,15 @@ describe("Admin session resilience", () => {
     expect(form).toContain('payload.code === "ADMIN_ACCESS_FORBIDDEN"');
     expect(form).not.toContain('if (response.status === 403) {');
   });
+
+  it("uses the canonical production API when Netlify omits BACKEND_BASE_URL", () => {
+    const source = read("lib/server-config.ts");
+    expect(source).toContain(
+      'DEFAULT_PRODUCTION_BACKEND_BASE_URL = "https://api.venusrealm.net"'
+    );
+    expect(source).toContain(
+      "process.env.BACKEND_BASE_URL || DEFAULT_PRODUCTION_BACKEND_BASE_URL"
+    );
+    expect(source).toContain("ADMIN_BFF_SHARED_SECRET");
+  });
 });
