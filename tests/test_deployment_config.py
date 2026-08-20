@@ -211,6 +211,15 @@ def test_scheduled_agent_requires_runtime_validation_gate() -> None:
     assert "check_secret GOOGLE_SHEET_ID" in workflow
 
 
+def test_signal_cloud_run_job_uses_dedicated_agent_entrypoint() -> None:
+    source = (ROOT / "Dockerfile.signal-job").read_text(encoding="utf-8")
+
+    assert "FROM python:3.12-slim" in source
+    assert 'CMD ["python", "agent_main.py"]' in source
+    assert "uvicorn" not in source
+    assert "backend:app" not in source
+
+
 def test_domain_migration_crawl_lock_is_documented() -> None:
     deployment = (ROOT / "DEPLOYMENT.md").read_text(encoding="utf-8")
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
