@@ -38,6 +38,45 @@ def test_natural_blog_request_reaches_permission_router_as_draft(monkeypatch) ->
     assert calls[0]["source"] == "TELEGRAM_MASTER_AI_NATURAL"
 
 
+def test_long_seo_blog_brief_is_not_misread_as_agent_status(monkeypatch) -> None:
+    _authorize(monkeypatch)
+    calls: list[dict] = []
+    status_calls: list[bool] = []
+    prompt = """Create ONE real SEO blog DRAFT using ai_blog_agent.
+
+Topic:
+Gold Trading Strategy for XAUUSD: How to Identify Buy and Sell Setups
+
+Requirements:
+- DRAFT only. Never publish.
+- 1400-1600 words.
+- Include H2/H3 structure, practical examples, FAQ and trading risk disclaimer.
+
+Images:
+- Create/select 1 featured image.
+
+Return ONLY the verified execution result:
+- DRAFT_ID
+- STATUS
+- PREVIEW_LINK
+"""
+
+    result = handle_master_command_text(
+        text=prompt,
+        telegram_user_id=1001,
+        chat_id=55,
+        runner=lambda **kwargs: calls.append(kwargs) or Progress(),
+        status_loader=lambda: status_calls.append(True) or [],
+    )
+
+    assert result.status == "COMPLETED"
+    assert len(calls) == 1
+    assert calls[0]["input_payload"]["agent_keys"] == ["ai_blog_agent"]
+    assert calls[0]["input_payload"]["publish"] is False
+    assert calls[0]["input_payload"]["include_image"] is False
+    assert status_calls == []
+
+
 def test_natural_image_request_reaches_image_agent(monkeypatch) -> None:
     _authorize(monkeypatch)
     calls: list[dict] = []

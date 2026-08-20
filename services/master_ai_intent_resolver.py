@@ -126,7 +126,11 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
         )
 
     requested: list[tuple[str, str, dict[str, Any], str]] = []
-    if _contains_any(text, ("blog agent", "blog draft", "draft banao", "article banao", "seo blog")):
+    blog_requested = _contains_any(
+        text,
+        ("blog agent", "blog draft", "draft banao", "article banao", "seo blog"),
+    )
+    if blog_requested:
         requested.append(
             (
                 "run_blog_agent",
@@ -139,7 +143,12 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
                 "Registered Blog Agent requested for draft preparation only.",
             )
         )
-    if _contains_any(text, ("image agent", "featured image", "thumbnail banao", "image banao")):
+    explicit_image_agent = "image agent" in text
+    standalone_image_request = not blog_requested and _contains_any(
+        text,
+        ("featured image", "thumbnail banao", "image banao"),
+    )
+    if explicit_image_agent or standalone_image_request:
         requested.append(
             (
                 "run_image_agent",
@@ -240,7 +249,15 @@ def _is_registered_agent_key(agent_key: str) -> bool:
 
 
 def _is_diagnostic_request(text: str) -> bool:
-    return ("status" in text and "agent" in text) or _contains_any(
+    explicit_agent_status = bool(
+        re.search(
+            r"\b(?:(?:sab|sabhi|all|blog|image|signal)\s+)?agents?"
+            r"(?:\s+(?:ka|ki|ke))?\s+status\b",
+            text,
+        )
+        or re.search(r"\bstatus\s+(?:of\s+)?(?:the\s+)?agents?\b", text)
+    )
+    return explicit_agent_status or _contains_any(
         text,
         (
             "agents ka status", "agent status", "agent diagnostics",
