@@ -61,6 +61,19 @@ def test_recovers_only_clearly_stale_blog_run_and_preserves_audit(monkeypatch):
     assert all("DELETE" not in sql.upper() for sql, _ in session.statements)
 
 
+def test_worker_recovery_allows_nullable_audit_actor(monkeypatch):
+    session = _Session(
+        {"id": 1, "agent_key": "ai_blog_agent", "is_enabled": False, "status": "RUNNING"},
+        {"id": 5482, "started_at": datetime.now(timezone.utc) - timedelta(days=30)},
+    )
+    monkeypatch.setattr(service, "session_scope", _scope(session))
+
+    service.recover_stale_blog_agent_run_guarded(actor_id=None, request_id="req-worker")
+
+    audit_params = [params for sql, params in session.statements if "INSERT INTO public.admin_auth_audit_events" in sql][0]
+    assert audit_params["user_id"] is None
+
+
 def test_does_not_steal_active_blog_run(monkeypatch):
     session = _Session(
         {"id": 1, "agent_key": "ai_blog_agent", "is_enabled": True, "status": "RUNNING"},
