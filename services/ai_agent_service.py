@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from typing import Any
 
@@ -32,6 +32,16 @@ AI_AGENT_CONTROL_NUMBERS: tuple[tuple[int, str, str], ...] = (
 class AgentStartResult:
     run_id: int | None
     reason: str | None = None
+
+
+@dataclass(frozen=True)
+class StaleAgentRecoveryResult:
+    agent_key: str
+    recovered: bool
+    run_id: int | None
+    previous_enabled: bool | None
+    status: str
+    reason: str
 
 
 def list_ai_agents() -> list[dict[str, Any]]:
@@ -190,6 +200,141 @@ def set_blog_agent_enabled_guarded(
         "changed": changed,
         "status": str(current["status"] or "UNKNOWN"),
     }
+
+
+def recover_stale_blog_agent_run_guarded(
+    *,
+    actor_id: int,
+    request_id: str,
+    stale_after_minutes: int = 60,
+) -> StaleAgentRecoveryResult:
+    """Recover only a clearly stale Blog Agent reservation.
+
+    The agent and its newest RUNNING run are locked in one transaction. A
+    recent run is never stolen, and the old run is retained as ERROR with an
+    audit event rather than being deleted. Recovery also restores the Blog
+    Agent to the executable enabled/IDLE state needed for a subsequent draft.
+    """
+    if stale_after_minutes < 5 or stale_after_minutes > 7 * 24 * 60:
+        raise ValueError("stale_after_minutes must be between 5 and 10080.")
+
+    normalized_key = "ai_blog_agent"
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=stale_after_minutes)
+    recovery_reason = (
+        f"Recovered stale RUNNING ai_blog_agent execution; no completion "
+        f"after {stale_after_minutes} minutes."
+    )
+
+    with session_scope() as session:
+        agent = session.execute(
+            text(
+                """
+                SELECT id, agent_key, is_enabled, status
+                FROM public.ai_agents
+                WHERE agent_key = :agent_key
+                FOR UPDATE
+                """
+            ),
+            {"agent_key": normalized_key},
+        ).mappings().first()
+        if agent is None:
+            raise ValueError("AI Blog Agent is not configured.")
+
+        run = session.execute(
+            text(
+                """
+                SELECT id, started_at
+                FROM public.ai_agent_runs
+                WHERE agent_id = :agent_id AND status = 'RUNNING'
+                ORDER BY started_at DESC NULLS LAST, id DESC
+                LIMIT 1
+                FOR UPDATE
+                """
+            ),
+            {"agent_id": agent["id"]},
+        ).mappings().first()
+
+        started_at = run["started_at"] if run else None
+        if (
+            str(agent["status"] or "").upper() != "RUNNING"
+            or run is None
+            or started_at is None
+            or started_at > cutoff
+        ):
+            return StaleAgentRecoveryResult(
+                agent_key=normalized_key,
+                recovered=False,
+                run_id=int(run["id"]) if run else None,
+                previous_enabled=bool(agent["is_enabled"]),
+                status=str(agent["status"] or "UNKNOWN"),
+                reason="No clearly stale RUNNING Blog Agent execution was found.",
+            )
+
+        session.execute(
+            text(
+                """
+                UPDATE public.ai_agent_runs
+                SET status = 'ERROR',
+                    finished_at = NOW(),
+                    error_message = :reason,
+                    duration_ms = CAST(EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000 AS INTEGER),
+                    result_summary = :summary
+                WHERE id = :run_id AND status = 'RUNNING'
+                """
+            ),
+            {
+                "run_id": int(run["id"]),
+                "reason": recovery_reason,
+                "summary": "Stale execution recovered by guarded admin action.",
+            },
+        )
+        session.execute(
+            text(
+                """
+                UPDATE public.ai_agents
+                SET is_enabled = TRUE,
+                    status = 'IDLE',
+                    last_error = :reason,
+                    updated_at = NOW()
+                WHERE id = :agent_id AND status = 'RUNNING'
+                """
+            ),
+            {"agent_id": agent["id"], "reason": recovery_reason},
+        )
+        session.execute(
+            text(
+                """
+                INSERT INTO public.admin_auth_audit_events (
+                    user_id, event_type, outcome, request_id, details
+                ) VALUES (
+                    :user_id, 'AI_BLOG_AGENT_STALE_RUN_RECOVERED', 'SUCCESS',
+                    :request_id, CAST(:details AS JSONB)
+                )
+                """
+            ),
+            {
+                "user_id": int(actor_id),
+                "request_id": str(request_id or "unknown")[:128],
+                "details": json.dumps(
+                    {
+                        "agent_key": normalized_key,
+                        "run_id": int(run["id"]),
+                        "previous_enabled": bool(agent["is_enabled"]),
+                        "stale_after_minutes": stale_after_minutes,
+                        "recovery_reason": recovery_reason,
+                    }
+                ),
+            },
+        )
+
+    return StaleAgentRecoveryResult(
+        agent_key=normalized_key,
+        recovered=True,
+        run_id=int(run["id"]),
+        previous_enabled=bool(agent["is_enabled"]),
+        status="IDLE",
+        reason=recovery_reason,
+    )
 
 
 def resolve_agent_key_from_number(number: int | str) -> str:
