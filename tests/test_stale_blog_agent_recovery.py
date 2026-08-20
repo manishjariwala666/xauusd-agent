@@ -55,6 +55,7 @@ def test_recovers_only_clearly_stale_blog_run_and_preserves_audit(monkeypatch):
     assert result.run_id == 5482
     assert result.status == "IDLE"
     assert any("UPDATE public.ai_agent_runs" in sql for sql, _ in session.statements)
+    assert any("2147483647" in sql for sql, _ in session.statements)
     assert any("UPDATE public.ai_agents" in sql for sql, _ in session.statements)
     assert any("AI_BLOG_AGENT_STALE_RUN_RECOVERED" in sql for sql, _ in session.statements)
     assert all("DELETE" not in sql.upper() for sql, _ in session.statements)

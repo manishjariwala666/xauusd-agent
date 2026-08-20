@@ -277,7 +277,10 @@ def recover_stale_blog_agent_run_guarded(
                 SET status = 'ERROR',
                     finished_at = NOW(),
                     error_message = :reason,
-                    duration_ms = CAST(EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000 AS INTEGER),
+                    duration_ms = LEAST(
+                        CAST(EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000 AS NUMERIC),
+                        2147483647
+                    )::INTEGER,
                     result_summary = :summary
                 WHERE id = :run_id AND status = 'RUNNING'
                 """
