@@ -46,8 +46,8 @@ echo "Build target:     $NEW_IMAGE"
 gcloud builds submit . \
   --project "$PROJECT_ID" \
   --region "$REGION" \
-  --tag "$NEW_IMAGE" \
-  --file Dockerfile.signal-job
+  --config cloudbuild.signal-job.yaml \
+  --substitutions "_IMAGE=$NEW_IMAGE"
 
 gcloud run jobs update "$JOB_NAME" \
   --project "$PROJECT_ID" \
