@@ -72,8 +72,6 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
     if _is_content_publish(text):
         return _proposal("publish_website", reason="Publishing content requires explicit owner approval.")
 
-    # Explicit creation/execution of a registered Blog Agent must win over words
-    # such as STATUS that may appear only in the requested output contract.
     blog = _blog_request(text, raw)
     if blog is not None:
         return _proposal(
@@ -97,7 +95,12 @@ def resolve_master_ai_intent(message: str | None) -> MasterAIIntentProposal:
         return _proposal("list_registered_agents", agent_key="master_ai", reason="Read-only registered-agent directory requested.")
 
     requested: list[tuple[str, str, dict[str, Any], str]] = []
+    blog_requested = _contains_any(text, ("blog agent", "blog draft", "seo blog", "blog post", "ai blog agent", "article banao"))
     explicit_image_agent_requested = _contains_any(text, ("image agent", "thumbnail banao", "image banao"))
+    embedded_blog_image_requested = _contains_any(text, ("featured image", "inline image", "featured images", "inline images"))
+
+    if blog_requested:
+        requested.append(("run_blog_agent", "ai_blog_agent", {"publish": False, "include_image": embedded_blog_image_requested, "telegram_target": "blog"}, "Registered Blog Agent requested for draft preparation only."))
     if explicit_image_agent_requested:
         requested.append(("run_image_agent", "image_agent", {"telegram_target": "image"}, "Registered Image Agent requested for image preparation."))
     if _is_signal_run_request(text):
@@ -126,7 +129,8 @@ def _blog_request(text: str, raw: str) -> dict[str, Any] | None:
         text,
         ("execute", "run", "create", "generate", "banao", "chalao", "real ai blog agent"),
     )
-    if not (blog_named and execute_requested):
+    separate_image_agent = "image agent" in text
+    if not (blog_named and execute_requested) or separate_image_agent:
         return None
 
     params: dict[str, Any] = {
