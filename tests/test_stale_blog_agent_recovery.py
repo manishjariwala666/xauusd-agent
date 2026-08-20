@@ -76,3 +76,28 @@ def test_does_not_steal_active_blog_run(monkeypatch):
     assert result.run_id == 9
     assert not any("UPDATE public.ai_agent_runs" in sql for sql, _ in session.statements)
     assert not any("AI_BLOG_AGENT_STALE_RUN_RECOVERED" in sql for sql, _ in session.statements)
+
+
+def test_worker_preflight_recovers_blog_state_before_start(monkeypatch):
+    captured = {}
+
+    def recover(**kwargs):
+        captured.update(kwargs)
+        return service.StaleAgentRecoveryResult(
+            agent_key="ai_blog_agent",
+            recovered=True,
+            run_id=5482,
+            previous_enabled=False,
+            status="IDLE",
+            reason="recovered",
+        )
+
+    monkeypatch.setattr(service, "recover_stale_blog_agent_run_guarded", recover)
+    monkeypatch.setattr(service, "_start_run", lambda *_args, **_kwargs: service.AgentStartResult(None, "blocked by test"))
+
+    succeeded, message = service.run_ai_agent("ai_blog_agent", None, None, {})
+
+    assert succeeded is False
+    assert message == "blocked by test"
+    assert captured["actor_id"] is None
+    assert captured["request_id"].startswith("worker-stale-recovery:")
