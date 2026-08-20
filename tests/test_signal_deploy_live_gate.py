@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_signal_deploy_requires_explicit_live_delivery_approval() -> None:
+def test_signal_deploy_stages_image_before_live_activation_gate() -> None:
     source = (ROOT / "scripts" / "deploy_signal_cloud_run_job.sh").read_text(
         encoding="utf-8"
     )
@@ -16,7 +16,9 @@ def test_signal_deploy_requires_explicit_live_delivery_approval() -> None:
 
     assert 'LIVE_DELIVERY_APPROVED="${LIVE_DELIVERY_APPROVED:-NO}"' in source
     assert gate in source
-    assert "production signal deployment can cause live Telegram/WhatsApp delivery" in source
-    assert source.index(gate) < source.index(build)
+    assert "STAGED_IMAGE=$NEW_IMAGE" in source
+    assert "STAGED_ONLY=YES" in source
+    assert "Production activation skipped" in source
+    assert source.index(build) < source.index(gate)
     assert source.index(gate) < source.index(update)
     assert source.index(gate) < source.index(execute)
