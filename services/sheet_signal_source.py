@@ -38,7 +38,8 @@ def _slot_bounds(
     *,
     session_date: str,
 ) -> tuple[datetime, datetime, str] | None:
-    match = sheets._SLOT_LABEL.match(label.strip())
+    slot_pattern = getattr(sheets, "_SLOT_LABEL", GoogleSheetsService._SLOT_LABEL)
+    match = slot_pattern.match(label.strip())
     if not match:
         return None
 
@@ -189,6 +190,9 @@ def _base_cross_signal(
         return None
 
     target, targets, target_slots = selected
+    analysis_worksheet = getattr(
+        sheets, "_ANALYSIS_WORKSHEET", GoogleSheetsService._ANALYSIS_WORKSHEET
+    )
     return SheetSignal(
         direction=direction,
         target_price=target,
@@ -200,7 +204,7 @@ def _base_cross_signal(
         external_key=f"gsheet-session:{session_date}:{active_session}:{direction}",
         reference_price=entry,
         observed_at=confirmed_at,
-        source=f"GOOGLE_SHEET:{sheets._ANALYSIS_WORKSHEET}",
+        source=f"GOOGLE_SHEET:{analysis_worksheet}",
         targets=targets,
         target_slots=target_slots,
     )
@@ -277,6 +281,9 @@ def _structural_override_signal(
         return None
 
     target, targets, target_slots = selected
+    analysis_worksheet = getattr(
+        sheets, "_ANALYSIS_WORKSHEET", GoogleSheetsService._ANALYSIS_WORKSHEET
+    )
     return SheetSignal(
         direction=direction,
         target_price=target,
@@ -288,7 +295,7 @@ def _structural_override_signal(
         external_key=f"gsheet-session:{session_date}:{session_name}:{direction}",
         reference_price=entry,
         observed_at=confirmed_at,
-        source=f"GOOGLE_SHEET:{sheets._ANALYSIS_WORKSHEET}",
+        source=f"GOOGLE_SHEET:{analysis_worksheet}",
         targets=targets,
         target_slots=target_slots,
     )
