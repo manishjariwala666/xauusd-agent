@@ -98,3 +98,39 @@ def test_public_contract_does_not_select_internal_identity_or_audit_fields() -> 
     assert "updated_by" not in fields
     assert "audit" not in fields
     assert "id," not in fields.replace("public_id,", "")
+
+
+def test_public_signal_contract_never_exposes_actionable_paid_fields() -> None:
+    source = inspect.getsource(admin_signals_service.list_public_signals)
+    fields = source.split('fields = "', 1)[1].split('"', 1)[0]
+    protected = {
+        "direction", "signal_type", "timeframe", "entry_type", "entry_price",
+        "entry_price_min", "entry_price_max", "price", "stop_loss", "target_1",
+        "target_2", "target_3", "target_4", "risk_level", "confidence_label",
+        "analysis_summary", "technical_reason", "astrology_reason", "risk_note",
+    }
+    selected = {field.strip().split(" AS ")[-1].lower() for field in fields.split(",")}
+    assert protected.isdisjoint(selected)
+    assert "member_access_required" in source
+
+
+def test_public_signal_detail_is_not_an_entitlement_bypass() -> None:
+    with pytest.raises(admin_signals_service.SignalNotFoundError):
+        admin_signals_service.get_public_signal("00000000-0000-0000-0000-000000000000")
+    detail = (ROOT / "public-web/app/signals/[publicId]/page.tsx").read_text()
+    assert "getSignalDetail" not in detail
+    assert "Paid member access required" in detail
+    assert "entry_price" not in detail
+    assert "stop_loss" not in detail
+    assert "target_1" not in detail
+
+
+def test_public_gold_page_has_no_actionable_signal_rendering() -> None:
+    index = (ROOT / "public-web/app/signals/page.tsx").read_text()
+    for protected_reference in (
+        "signal.direction", "signal.entry_price", "signal.stop_loss",
+        "signal.target_1", "signal.target_2", "signal.target_3", "signal.target_4",
+    ):
+        assert protected_reference not in index
+    assert "Paid members only" in index
+    assert 'href="/pricing"' in index
