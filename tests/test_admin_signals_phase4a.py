@@ -133,4 +133,5 @@ def test_public_gold_page_has_no_actionable_signal_rendering() -> None:
     ):
         assert protected_reference not in index
     assert "Paid members only" in index
-    assert 'href="/pricing"' in index
+    assert 'href="/contact"' in index
+    assert 'href="/pricing"' not in index
