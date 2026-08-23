@@ -21,7 +21,7 @@ export default async function SignalsPage() {
       <h1>Gold signals for verified paid members</h1>
       <p>Entry, direction, stop loss, targets and analysis are protected member content. This public page only confirms recent XAUUSD signal publication activity.</p>
       <div className="hero-actions">
-        <Link className="button primary" href="/pricing">View membership</Link>
+        <Link className="button primary" href="/contact">Get paid member access</Link>
         <Link className="button secondary" href="/contact">Paid member support</Link>
       </div>
     </section>
@@ -41,7 +41,7 @@ export default async function SignalsPage() {
             <div><dt>Direction</dt><dd>Paid members only</dd></div>
             <div><dt>Entry / SL / Targets</dt><dd>Paid members only</dd></div>
           </dl>
-          <Link href="/pricing">Unlock with verified membership →</Link>
+          <Link href="/contact">Request verified member access →</Link>
         </article>)}
       </div> : <div className="empty-state"><h3>No public availability record right now</h3><p>Paid members receive protected signal access when a verified signal is published.</p></div>}
     </section>
