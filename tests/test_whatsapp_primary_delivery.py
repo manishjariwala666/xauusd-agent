@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import services.production_agents as production_agents
@@ -11,10 +12,17 @@ class FakeWhatsAppService:
         return "wamid.test.123"
 
 
+class WeekdayDateTime:
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 8, 24, 9, 0, tzinfo=tz or timezone.utc)
+
+
 def test_whatsapp_uses_shared_durable_contract(monkeypatch):
     captured = {}
     FakeWhatsAppService.calls = []
 
+    monkeypatch.setattr(production_agents, "datetime", WeekdayDateTime)
     monkeypatch.setattr(
         production_agents._legacy,
         "_verified_whatsapp_recipients",

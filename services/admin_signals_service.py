@@ -159,6 +159,11 @@ def delete_admin_signal(*, signal_id: int, actor_id: int, request_id: str, confi
 
 
 def list_public_signals(*, page: int, page_size: int, status: str = "all", symbol: str = "", direction: str = "all") -> dict[str, Any]:
+    """Return non-actionable publication metadata only.
+
+    Actionable direction, entry, stop, targets and analysis are paid-member
+    content and must never cross an unauthenticated public API boundary.
+    """
     page, page_size = max(1, int(page)), max(1, min(24, int(page_size)))
     clauses = ["publication_status='PUBLISHED'", "deleted_at IS NULL"]
     params: dict[str, Any] = {"limit": page_size, "offset": (page - 1) * page_size}
@@ -166,23 +171,16 @@ def list_public_signals(*, page: int, page_size: int, status: str = "all", symbo
     if direction != "all": clauses.append("signal_type=:direction"); params["direction"] = direction.upper()
     if symbol.strip(): clauses.append("symbol ILIKE :symbol"); params["symbol"] = f"%{symbol.strip()[:30]}%"
     where = " AND ".join(clauses)
-    fields = "public_id,symbol,market,signal_type AS direction,timeframe,entry_type,price AS entry_price,entry_price_min,entry_price_max,stop_loss,target_1,target_2,target_3,target_4,risk_level,lifecycle_status AS status,published_at,updated_at,expires_at,featured"
+    fields = "public_id,symbol,market,lifecycle_status AS status,published_at,updated_at,expires_at,featured"
     with session_scope() as session:
         total = session.execute(text(f"SELECT COUNT(*) FROM public.market_signals WHERE {where}"), params).scalar_one()
         rows = session.execute(text(f"SELECT {fields} FROM public.market_signals WHERE {where} ORDER BY featured DESC,published_at DESC,id DESC LIMIT :limit OFFSET :offset"), params).mappings().all()
-    return {"items": [dict(row) for row in rows], "page": page, "page_size": page_size, "total": int(total), "pages": max(1, (int(total)+page_size-1)//page_size)}
+    return {"items": [dict(row) for row in rows], "page": page, "page_size": page_size, "total": int(total), "pages": max(1, (int(total)+page_size-1)//page_size), "member_access_required": True}
 
 
 def get_public_signal(public_id: str) -> dict[str, Any]:
-    with session_scope() as session:
-        row = session.execute(text("""SELECT public_id,symbol,market,signal_type AS direction,timeframe,entry_type,
-            price AS entry_price,entry_price_min,entry_price_max,stop_loss,target_1,target_2,target_3,target_4,
-            risk_level,confidence_label,analysis_summary,technical_reason,astrology_reason,risk_note,
-            lifecycle_status AS status,published_at,updated_at,expires_at,closed_at,outcome,featured
-            FROM public.market_signals WHERE public_id=CAST(:public_id AS UUID)
-              AND publication_status='PUBLISHED' AND deleted_at IS NULL"""), {"public_id": public_id}).mappings().first()
-    if not row: raise SignalNotFoundError("Public signal was not found.")
-    return dict(row)
+    """Reject unauthenticated signal-detail reads."""
+    raise SignalNotFoundError("Public signal details require member access.")
 
 
 def _params(values: dict[str, Any], actor_id: int) -> dict[str, Any]:
@@ -203,16 +201,17 @@ def _validate_publishable(row: dict[str, Any]) -> None:
 def _transition_values(action: str, *, outcome: str | None, result_points: Decimal | None) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     mapping: dict[str, dict[str, Any]] = {
-        "PUBLISH": {"publication_status": "PUBLISHED", "lifecycle_status": "PUBLISHED", "published_at": now, "deleted_at": None},
+        "PUBLISH": {"publication_status": "PUBLISHED", "lifecycle_status": "PUBLISHED", "published_at": now},
         "SCHEDULE": {"publication_status": "SCHEDULED", "lifecycle_status": "SCHEDULED"},
-        "UNPUBLISH": {"publication_status": "UNPUBLISHED", "lifecycle_status": "DRAFT", "published_at": None},
-        "ACTIVATE": {"publication_status": "PUBLISHED", "lifecycle_status": "ACTIVE"},
-        "TARGET_HIT": {"publication_status": "PUBLISHED", "lifecycle_status": "TARGET_HIT", "outcome": outcome or "TARGET_HIT", "result_points": result_points},
-        "STOPPED": {"publication_status": "PUBLISHED", "lifecycle_status": "STOPPED", "outcome": outcome or "STOPPED", "result_points": result_points},
-        "CANCEL": {"publication_status": "PUBLISHED", "lifecycle_status": "CANCELLED", "outcome": outcome or "CANCELLED", "closed_at": now},
-        "EXPIRE": {"publication_status": "PUBLISHED", "lifecycle_status": "EXPIRED", "outcome": outcome or "EXPIRED", "closed_at": now},
-        "CLOSE": {"publication_status": "PUBLISHED", "lifecycle_status": "CLOSED", "outcome": outcome or "CLOSED", "result_points": result_points, "closed_at": now},
-        "TRASH": {"publication_status": "TRASHED", "lifecycle_status": "TRASHED", "deleted_at": now},
-        "RESTORE": {"publication_status": "DRAFT", "lifecycle_status": "DRAFT", "deleted_at": None, "published_at": None},
+        "UNPUBLISH": {"publication_status": "DRAFT", "lifecycle_status": "DRAFT", "published_at": None},
+        "ACTIVATE": {"publication_status": "PUBLISHED", "lifecycle_status": "ACTIVE", "activated_at": now},
+        "TARGET_HIT": {"publication_status": "PUBLISHED", "lifecycle_status": "TARGET_HIT", "closed_at": now, "outcome": outcome or "TARGET_HIT", "result_points": result_points},
+        "STOPPED": {"publication_status": "PUBLISHED", "lifecycle_status": "STOPPED", "closed_at": now, "outcome": outcome or "STOPPED", "result_points": result_points},
+        "CANCEL": {"publication_status": "PUBLISHED", "lifecycle_status": "CANCELLED", "closed_at": now, "outcome": outcome or "CANCELLED"},
+        "EXPIRE": {"publication_status": "PUBLISHED", "lifecycle_status": "EXPIRED", "closed_at": now, "outcome": outcome or "EXPIRED"},
+        "CLOSE": {"publication_status": "PUBLISHED", "lifecycle_status": "CLOSED", "closed_at": now, "outcome": outcome or "CLOSED", "result_points": result_points},
+        "TRASH": {"publication_status": "DRAFT", "lifecycle_status": "TRASHED", "deleted_at": now},
+        "RESTORE": {"publication_status": "DRAFT", "lifecycle_status": "DRAFT", "deleted_at": None},
     }
+    if action not in mapping: raise ValueError("Unsupported signal action.")
     return mapping[action]
