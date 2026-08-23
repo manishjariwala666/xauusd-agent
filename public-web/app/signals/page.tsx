@@ -12,7 +12,7 @@ const date = (value?: string | null) => value
   : "Not available";
 
 export default async function SignalsPage() {
-  const data = await getSignals({ page: "1", page_size: "12", symbol: "XAUUSD" });
+  const data = await getSignals(new URLSearchParams({ page: "1", page_size: "12", symbol: "XAUUSD" }));
   const items = data?.items || [];
 
   return <main className="signals-page">
