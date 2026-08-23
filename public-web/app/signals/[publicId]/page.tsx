@@ -18,7 +18,7 @@ export default function SignalDetailPage() {
     <section aria-labelledby="signal-levels"><h2 id="signal-levels">Protected signal levels</h2><p>Entry, stop loss and targets are hidden from unauthenticated public access.</p></section>
     <section aria-labelledby="signal-analysis"><h2 id="signal-analysis">Protected analysis</h2><div><section aria-labelledby="technical-context"><h3 id="technical-context">Technical context</h3><p>Available to verified paid members.</p></section><section aria-labelledby="astrology-context"><h3 id="astrology-context">Astrology context</h3><p>Available to verified paid members when included in the published signal.</p></section></div></section>
     <section aria-labelledby="signal-risk"><h2 id="signal-risk">Risk context</h2><p>Paid membership does not remove trading risk. Use independent price verification and appropriate loss limits.</p></section>
-    <div className="hero-actions"><Link className="button primary" href="/pricing">View membership</Link><Link className="button secondary" href="/signals">Back to Gold Signals</Link></div>
+    <div className="hero-actions"><Link className="button primary" href="/contact">Get paid member access</Link><Link className="button secondary" href="/signals">Back to Gold Signals</Link></div>
     <aside className="risk article-risk"><strong>Financial-risk disclaimer:</strong> Signals and market analysis are educational information, not financial advice. Leveraged trading can result in substantial loss. Past outcomes do not predict future results.</aside>
   </main>;
 }
