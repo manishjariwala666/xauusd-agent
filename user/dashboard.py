@@ -87,32 +87,41 @@ def render_user_dashboard(supabase: Any) -> None:
     _render_premium_access()
     if st.button("Refresh Signals", use_container_width=False):
         st.rerun()
-    render_signal_feed(supabase, "No active signal is available right now.")
+    render_signal_feed(supabase, "No published Gold Signal is available right now.")
     _render_member_content()
     _render_risk_warning()
 
 
 def render_signal_feed(supabase: Any, empty_message: str) -> None:
-    """Load recent admin signals; callers must enforce access authorization."""
+    """Load canonical published XAUUSD signals for an already-authorized member."""
     try:
         response = (
-            supabase.table("signals")
-            .select("*")
-            .order("created_at", desc=True)
+            supabase.table("market_signals")
+            .select(
+                "id,symbol,signal_type,price,entry_type,entry_price_min,"
+                "entry_price_max,stop_loss,target_1,target_2,target_3,target_4,"
+                "target_5,target_6,timeframe,risk_level,confidence_label,"
+                "analysis_summary,technical_reason,astrology_reason,risk_note,"
+                "publication_status,lifecycle_status,signal_time,created_at"
+            )
+            .eq("symbol", "XAUUSD")
+            .eq("publication_status", "PUBLISHED")
+            .order("signal_time", desc=True)
             .limit(50)
             .execute()
         )
     except Exception:
-        LOGGER.exception("Signal feed query failed.")
-        st.error("Signal feed is temporarily unavailable.")
+        LOGGER.exception("Canonical Gold Signal feed query failed.")
+        st.error("Gold Signal feed is temporarily unavailable.")
         return
 
     signals = response.data or []
     if not signals:
         st.info(empty_message)
         return
+    st.markdown("### Gold Signals")
     for signal in signals:
-        _render_signal(signal)
+        _render_market_signal(signal)
 
 
 def _render_premium_access() -> None:
@@ -296,7 +305,61 @@ def _render_risk_warning() -> None:
     )
 
 
+def _display_price(value: Any) -> str:
+    if value in (None, ""):
+        return "—"
+    return str(value)
+
+
+def _render_market_signal(row: dict[str, Any]) -> None:
+    side = str(row.get("signal_type") or "").upper()
+    if side not in {"BUY", "SELL"}:
+        return
+    css_class = "signal-buy" if side == "BUY" else "signal-sell"
+    entry = row.get("price")
+    if str(row.get("entry_type") or "").upper() == "RANGE":
+        low, high = row.get("entry_price_min"), row.get("entry_price_max")
+        if low is not None and high is not None:
+            entry = f"{low} – {high}"
+    fields = [("Entry", _display_price(entry)), ("Stop Loss", _display_price(row.get("stop_loss")))]
+    for number in range(1, 7):
+        target = row.get(f"target_{number}")
+        if target is not None:
+            fields.append((f"Target {number}", _display_price(target)))
+    values = "".join(
+        '<div class="signal-value">'
+        f'<div class="signal-label">{html.escape(label)}</div>'
+        f'<div class="signal-number">{html.escape(str(value))}</div>'
+        "</div>"
+        for label, value in fields
+    )
+    context = " · ".join(
+        part for part in (
+            str(row.get("timeframe") or "").strip(),
+            str(row.get("lifecycle_status") or "").replace("_", " ").title(),
+            str(row.get("confidence_label") or "").strip(),
+        ) if part
+    )
+    analysis = str(row.get("analysis_summary") or row.get("technical_reason") or "").strip()
+    risk_note = str(row.get("risk_note") or "").strip()
+    note_parts = [part for part in (analysis, risk_note) if part]
+    note = " · ".join(note_parts)
+    signal_time = _format_time(row.get("signal_time") or row.get("created_at"))
+    st.markdown(
+        f"""
+        <div class="signal-card {css_class}">
+            <div class="signal-title">XAUUSD {side}</div>
+            <div class="signal-grid">{values}</div>
+            <div class="signal-note">{html.escape(note)}</div>
+            <div class="signal-time">{html.escape(context)} · {html.escape(signal_time)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_signal(row: dict[str, Any]) -> None:
+    """Legacy message renderer retained for backward-compatible utilities/tests."""
     message = str(row.get("message", ""))
     payload = _parse_signal(message)
     sender = html.escape(str(row.get("sender", "Admin")))

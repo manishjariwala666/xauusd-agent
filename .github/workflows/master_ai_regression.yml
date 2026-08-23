@@ -41,6 +41,8 @@ jobs:
             tests/test_master_ai_permission_router.py \
             tests/test_admin_operations_status.py \
             tests/test_admin_signals_phase4a.py \
+            tests/test_admin_content_phase2a.py \
+            tests/test_user_dashboard_paid_gold.py \
             tests/test_captain_shadow_gate.py \
             tests/test_captain_reversal_override.py \
             tests/test_sheet_signal_risk_guard.py \
