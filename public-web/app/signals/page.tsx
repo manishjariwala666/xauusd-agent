@@ -12,7 +12,8 @@ const date = (value?: string | null) => value
   : "Not available";
 
 export default async function SignalsPage() {
-  const data = await getSignals({ page: "1", page_size: "12", symbol: "XAUUSD" });
+  const query = new URLSearchParams({ page: "1", symbol: "XAUUSD" });
+  const data = await getSignals(query);
   const items = data?.items || [];
 
   return <main className="signals-page">
@@ -32,7 +33,7 @@ export default async function SignalsPage() {
         <p>Actionable trading levels are intentionally hidden until payment verification.</p>
       </div>
       {items.length ? <div className="signal-grid">
-        {items.map((signal) => <article className="signal-card" key={signal.public_id}>
+        {items.map((signal, index) => <article className="signal-card" key={signal.public_id || `${signal.symbol || "XAUUSD"}-${index}`}>
           <div className="signal-card-head"><span>{signal.symbol || "XAUUSD"}</span><span>{signal.status || "PUBLISHED"}</span></div>
           <h3>Premium Gold Signal</h3>
           <dl>
