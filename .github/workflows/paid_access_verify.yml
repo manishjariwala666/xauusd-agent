@@ -1,0 +1,68 @@
+name: Paid Gold Access Verification
+
+on:
+  push:
+    branches:
+      - fix/paid-gold-access-implementation-2026-08-24
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Compile changed Python modules
+        run: |
+          python -m py_compile \
+            services/member_auth_service.py \
+            services/member_auth_dependency.py \
+            services/member_auth_api.py \
+            services/member_signals_api.py \
+            services/admin_auth_api.py \
+            services/admin_signals_api.py \
+            services/email_service.py
+
+      - name: Run paid access regressions
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest -q \
+            tests/test_paid_signal_gating.py \
+            tests/test_user_dashboard_paid_gold.py \
+            tests/test_admin_signals_phase4a.py
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.14.0"
+
+      - name: Verify public web
+        working-directory: public-web
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm typecheck
+          pnpm build
+
+      - name: Check branch diff
+        run: git diff --check e1814c4befba8c5dd27bc2ab19d4c6294ea0f238..HEAD
