@@ -22,6 +22,7 @@ from services.admin_auth_service import (
     validate_admin_session,
     verify_bff_secret,
 )
+from services.member_auth_api import router as member_auth_router
 
 
 LOGGER = logging.getLogger(__name__)
@@ -198,3 +199,8 @@ def admin_dashboard_summary(
             {"label": "System", "value": "Foundation ready", "state": "ready"},
         ],
     }
+
+
+# The backend already mounts this router. Include the member auth router here so
+# member endpoints are registered without changing the admin BFF contract.
+router.include_router(member_auth_router)
