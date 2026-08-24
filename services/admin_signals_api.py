@@ -22,6 +22,33 @@ from services.admin_signals_service import (
 LOGGER = logging.getLogger(__name__)
 router = APIRouter(tags=["signals"])
 
+# Public pages may advertise that a verified signal exists, but actionable
+# levels and analysis are subscription content. Keep this allowlist deliberately
+# small so adding a new database field cannot accidentally make it public.
+PUBLIC_SIGNAL_TEASER_FIELDS = {
+    "public_id",
+    "symbol",
+    "market",
+    "direction",
+    "timeframe",
+    "risk_level",
+    "status",
+    "published_at",
+    "updated_at",
+    "expires_at",
+    "featured",
+}
+
+
+def _public_signal_teaser(item: dict[str, Any]) -> dict[str, Any]:
+    teaser = {
+        key: value
+        for key, value in item.items()
+        if key in PUBLIC_SIGNAL_TEASER_FIELDS
+    }
+    teaser["premium_locked"] = True
+    return teaser
+
 
 class SignalPayload(BaseModel):
     symbol: str = Field(min_length=2, max_length=20, pattern=r"^[A-Za-z0-9/._-]+$")
@@ -123,8 +150,12 @@ def admin_signal_delete(signal_id:int,confirmed:bool=Query(False),authorization:
 
 @router.get("/public/signals/v2")
 def public_signal_list(response:Response,page:int=Query(1,ge=1),page_size:int=Query(12,ge=1,le=24),status:str="all",symbol:str="",direction:str="all")->dict[str,Any]:
-    response.headers["Cache-Control"]="public, max-age=15, s-maxage=30, stale-while-revalidate=120"; return _safe(lambda:list_public_signals(page=page,page_size=page_size,status=status,symbol=symbol,direction=direction))
+    response.headers["Cache-Control"]="public, max-age=15, s-maxage=30, stale-while-revalidate=120"
+    result = _safe(lambda:list_public_signals(page=page,page_size=page_size,status=status,symbol=symbol,direction=direction))
+    return {**result, "items": [_public_signal_teaser(item) for item in result.get("items", [])], "premium_locked": True}
 
 @router.get("/public/signals/v2/{public_id}")
 def public_signal_detail(public_id:str,response:Response)->dict[str,Any]:
-    response.headers["Cache-Control"]="public, max-age=15, s-maxage=30, stale-while-revalidate=120"; return {"item":_safe(lambda:get_public_signal(public_id))}
+    response.headers["Cache-Control"]="public, max-age=15, s-maxage=30, stale-while-revalidate=120"
+    item = _safe(lambda:get_public_signal(public_id))
+    return {"item":_public_signal_teaser(item), "premium_locked": True}
