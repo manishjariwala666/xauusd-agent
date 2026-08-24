@@ -17,6 +17,7 @@ from services.admin_signals_service import (
     duplicate_admin_signal, get_admin_signal, get_public_signal, list_admin_signals, list_public_signals,
     transition_admin_signal, update_admin_signal,
 )
+from services.member_auth_api import router as member_auth_router
 from services.member_signals_api import router as member_signals_router
 
 
@@ -131,6 +132,7 @@ def public_signal_detail(public_id:str,response:Response)->dict[str,Any]:
     response.headers["Cache-Control"]="public, max-age=15, s-maxage=30, stale-while-revalidate=120"; return {"item":_safe(lambda:get_public_signal(public_id))}
 
 
-# backend.py already mounts this router. Nested inclusion keeps the member feed
-# registered while preserving the existing admin/public signals contract.
+# backend.py already mounts this zero-prefix router. Nest member routers here so
+# their public /api/v1/member paths register without inheriting the /admin prefix.
+router.include_router(member_auth_router)
 router.include_router(member_signals_router)
