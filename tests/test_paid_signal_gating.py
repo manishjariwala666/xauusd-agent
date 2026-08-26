@@ -59,14 +59,14 @@ def test_unpaid_member_cannot_access_member_signals(payment_status: str) -> None
 
 
 def test_paid_gate_accepts_only_verified_email_and_payment() -> None:
-    member = _identity(email_verified=True, payment_status="VERIFIED")
+    member = _identity(email_verified=True, payment_status="verified")
     assert require_verified_paid_member(member) is member
 
 
 def test_backend_registers_member_routes_through_mounted_router() -> None:
     from backend import app
 
-    paths = {route.path for route in app.routes}
+    paths = set(app.openapi()["paths"])
     expected = {
         "/api/v1/member/auth/signup",
         "/api/v1/member/auth/login",

@@ -82,7 +82,10 @@ def _profile(member: MemberIdentity) -> dict[str, Any]:
         "email_verified": member.email_verified,
         "approval_status": member.approval_status,
         "payment_status": member.payment_status,
-        "paid_access": member.email_verified and member.payment_status == "VERIFIED",
+        "paid_access": (
+            member.email_verified
+            and member.payment_status.strip().upper() == "VERIFIED"
+        ),
     }
 
 

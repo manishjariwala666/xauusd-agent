@@ -49,13 +49,19 @@ class IssuedMemberSession:
 
 
 def _identity_from_row(row: Any) -> MemberIdentity:
+    payment_status = str(row["payment_status"] or "NOT_STARTED").strip().upper()
+    subscription_status = str(
+        row.get("subscription_payment_status") or ""
+    ).strip().upper()
+    if payment_status != "VERIFIED" and subscription_status == "VERIFIED":
+        payment_status = "VERIFIED"
     return MemberIdentity(
         user_id=int(row["id"]),
         email=str(row["email"]),
         role=str(row["role"]),
         email_verified=bool(row["email_verified"]),
         approval_status=str(row["approval_status"] or "PENDING"),
-        payment_status=str(row["payment_status"] or "NOT_STARTED"),
+        payment_status=payment_status,
     )
 
 
@@ -66,10 +72,18 @@ def get_member_identity(user_id: int) -> MemberIdentity:
             session.execute(
                 text(
                     """
-                    SELECT id, email, role, email_verified,
-                           approval_status, payment_status
-                    FROM public.users
-                    WHERE id = :user_id
+                    SELECT u.id, u.email, u.role, u.email_verified,
+                           u.approval_status, u.payment_status,
+                           s.payment_status AS subscription_payment_status
+                    FROM public.users u
+                    LEFT JOIN LATERAL (
+                        SELECT payment_status
+                        FROM public.subscriptions
+                        WHERE user_id = u.id
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    ) s ON TRUE
+                    WHERE u.id = :user_id
                     LIMIT 1
                     """
                 ),
@@ -100,10 +114,19 @@ def login_member(*, email: str, password: str) -> IssuedMemberSession:
             session.execute(
                 text(
                     """
-                    SELECT id, email, password_hash, role, email_verified,
-                           approval_status, payment_status
-                    FROM public.users
-                    WHERE LOWER(email) = :email
+                    SELECT u.id, u.email, u.password_hash, u.role,
+                           u.email_verified, u.approval_status,
+                           u.payment_status,
+                           s.payment_status AS subscription_payment_status
+                    FROM public.users u
+                    LEFT JOIN LATERAL (
+                        SELECT payment_status
+                        FROM public.subscriptions
+                        WHERE user_id = u.id
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    ) s ON TRUE
+                    WHERE LOWER(u.email) = :email
                     LIMIT 1
                     """
                 ),

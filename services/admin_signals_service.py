@@ -171,7 +171,7 @@ def list_public_signals(*, page: int, page_size: int, status: str = "all", symbo
     if direction != "all": clauses.append("signal_type=:direction"); params["direction"] = direction.upper()
     if symbol.strip(): clauses.append("symbol ILIKE :symbol"); params["symbol"] = f"%{symbol.strip()[:30]}%"
     where = " AND ".join(clauses)
-    fields = "public_id,symbol,market,lifecycle_status AS status,published_at,updated_at,expires_at,featured"
+    fields = "public_id,symbol,market,timeframe,lifecycle_status AS status,published_at,updated_at,expires_at,featured"
     with session_scope() as session:
         total = session.execute(text(f"SELECT COUNT(*) FROM public.market_signals WHERE {where}"), params).scalar_one()
         rows = session.execute(text(f"SELECT {fields} FROM public.market_signals WHERE {where} ORDER BY featured DESC,published_at DESC,id DESC LIMIT :limit OFFSET :offset"), params).mappings().all()

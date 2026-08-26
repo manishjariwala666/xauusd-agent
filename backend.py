@@ -37,6 +37,8 @@ from services.admin_signals_service import list_public_signals
 from services.conversation_service import record_inbound_message
 from services.content_service import list_categories, list_content
 from services.mt5_h1_api import router as mt5_h1_router
+from services.member_auth_api import router as member_auth_router
+from services.member_signals_api import router as member_signals_router
 from services.migration_service import (
     apply_pending_migrations,
     required_schema_is_ready,
@@ -171,6 +173,8 @@ app.include_router(admin_content_router)
 app.include_router(admin_media_router)
 app.include_router(admin_seo_router)
 app.include_router(admin_signals_router)
+app.include_router(member_auth_router)
+app.include_router(member_signals_router)
 app.include_router(admin_publications_router)
 app.include_router(public_publications_router)
 app.include_router(admin_leads_router)

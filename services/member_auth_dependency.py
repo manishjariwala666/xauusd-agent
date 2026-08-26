@@ -46,7 +46,7 @@ def require_verified_paid_member(
             detail="Email verification required.",
             headers={"X-Auth-Reason": "EMAIL_NOT_VERIFIED"},
         )
-    if member.payment_status != "VERIFIED":
+    if member.payment_status.strip().upper() != "VERIFIED":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Verified paid membership required.",

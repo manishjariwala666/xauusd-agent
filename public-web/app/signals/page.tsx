@@ -21,7 +21,7 @@ export default async function SignalsPage() {
       <span className="eyebrow">GOLD SIGNALS · PREMIUM</span>
       <h1>Gold signals for verified paid members</h1>
       <p>Entry, direction, stop loss, targets and analysis are protected member content. Public visitors receive publication availability only.</p>
-      <div className="hero-actions"><Link className="button primary" href="/login">Member login</Link><Link className="button secondary" href="/signup">Create account</Link></div>
+      <div className="hero-actions"><Link className="button primary" href="/login">Member login</Link><Link className="button secondary" href="/signup">Create account</Link><Link className="button secondary" href="/contact">Contact support</Link></div>
     </section>
 
     <MemberSignalPanel />

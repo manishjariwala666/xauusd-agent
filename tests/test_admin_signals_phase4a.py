@@ -104,13 +104,14 @@ def test_public_signal_contract_never_exposes_actionable_paid_fields() -> None:
     source = inspect.getsource(admin_signals_service.list_public_signals)
     fields = source.split('fields = "', 1)[1].split('"', 1)[0]
     protected = {
-        "direction", "signal_type", "timeframe", "entry_type", "entry_price",
+        "direction", "signal_type", "entry_type", "entry_price",
         "entry_price_min", "entry_price_max", "price", "stop_loss", "target_1",
         "target_2", "target_3", "target_4", "risk_level", "confidence_label",
         "analysis_summary", "technical_reason", "astrology_reason", "risk_note",
     }
     selected = {field.strip().split(" AS ")[-1].lower() for field in fields.split(",")}
     assert protected.isdisjoint(selected)
+    assert {"status", "timeframe"} <= selected
     assert "member_access_required" in source
 
 
