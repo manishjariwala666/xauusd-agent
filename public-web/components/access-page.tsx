@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { MemberAccessForm, type MemberAccessMode } from "./member-access-form";
 
 export function AccessPage({ mode }: { mode: MemberAccessMode }) {
@@ -14,7 +15,9 @@ export function AccessPage({ mode }: { mode: MemberAccessMode }) {
     <span className="eyebrow">{copy[0]}</span>
     <h1>{copy[1]}</h1>
     <p>{copy[2]}</p>
-    <MemberAccessForm mode={mode} />
+    <Suspense fallback={<p>Loading secure member form…</p>}>
+      <MemberAccessForm mode={mode} />
+    </Suspense>
     <div className="auth-actions"><Link className="button" href="/">Return home</Link></div>
   </article>;
 }
