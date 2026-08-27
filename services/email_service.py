@@ -44,7 +44,7 @@ def is_email_delivery_configured() -> bool:
             settings.smtp_username,
             settings.smtp_password,
             settings.email_from,
-            settings.app_base_url or settings.public_website_url,
+            settings.public_website_url or settings.app_base_url,
         )
     )
 
@@ -67,9 +67,15 @@ def send_password_reset_email(recipient: str, token: str) -> None:
 
 
 def _build_link(settings: Settings, action: str, token: str) -> str:
-    base_url = settings.app_base_url or settings.public_website_url
+    """Build customer auth links on the public website, with legacy fallback."""
+    public_base = str(settings.public_website_url or "").strip()
+    if public_base:
+        route = "/verify-email" if action == "verify" else "/reset-password"
+        return f"{public_base.rstrip('/')}{route}?{urlencode({'token': token})}"
+
+    base_url = str(settings.app_base_url or "").strip()
     if not base_url:
-        raise EmailDeliveryError("APP_BASE_URL is not configured.")
+        raise EmailDeliveryError("PUBLIC_WEBSITE_URL or APP_BASE_URL is not configured.")
     query = urlencode({"action": action, "token": token})
     return f"{base_url.rstrip('/')}?{query}"
 
