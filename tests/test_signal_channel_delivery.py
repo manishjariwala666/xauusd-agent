@@ -35,6 +35,7 @@ class FakeDB:
         self.next_id = 1
         self.legacy_marked = False
         self.claimed_recipients = []
+        self.signal_select_sql = []
 
     @contextmanager
     def session_scope(self):
@@ -50,6 +51,7 @@ class FakeSession:
         params = params or {}
 
         if "SELECT *" in sql and "FROM public.market_signals" in sql:
+            self.db.signal_select_sql.append(sql)
             return FakeResult(rows=[self.db.signal])
 
         if "INSERT INTO public.signal_channel_deliveries" in sql:
@@ -110,6 +112,24 @@ class FakeSession:
 
 def _hash(recipient):
     return delivery._recipient_hash(recipient)
+
+
+def test_delivery_query_matches_website_publication_contract(monkeypatch):
+    db = FakeDB()
+    monkeypatch.setattr(delivery, "session_scope", db.session_scope)
+
+    assert delivery.deliver_pending_signal_recipients(
+        channel="telegram",
+        recipients=["chat-1"],
+        send=lambda recipient, message: "ok",
+        format_message=lambda signal: "BUY",
+        verify_signal=lambda signal: (True, "verified"),
+    ) == (1, 0)
+
+    assert len(db.signal_select_sql) == 1
+    sql = db.signal_select_sql[0]
+    assert "publication_status = 'PUBLISHED'" in sql
+    assert "deleted_at IS NULL" in sql
 
 
 def test_partial_failure_retries_only_failed_recipient(monkeypatch):

@@ -27,12 +27,14 @@ def deliver_pending_signal_recipients(
     max_attempts: int = 3,
     verify_signal: SignalVerifier | None = None,
 ) -> tuple[int, int]:
-    """Deliver fresh signals exactly once per channel recipient.
+    """Deliver fresh published signals exactly once per channel recipient.
 
-    All recipient ledger rows are created before the first send. This matters
-    for compatibility columns such as ``whatsapp_sent_at``: a successful first
-    recipient must not make the whole signal look delivered while a second
-    recipient is still pending or failed.
+    Channel delivery mirrors the same publication contract used by the website:
+    only PUBLISHED, non-deleted market signals are eligible. All recipient ledger
+    rows are created before the first send. This matters for compatibility
+    columns such as ``whatsapp_sent_at``: a successful first recipient must not
+    make the whole signal look delivered while a second recipient is still
+    pending or failed.
     """
     clean_channel = str(channel or "").strip().lower()
     if clean_channel not in {"telegram", "whatsapp"}:
@@ -56,7 +58,9 @@ def deliver_pending_signal_recipients(
                         """
                         SELECT *
                         FROM public.market_signals
-                        WHERE signal_type IN ('BUY', 'SELL')
+                        WHERE publication_status = 'PUBLISHED'
+                          AND deleted_at IS NULL
+                          AND signal_type IN ('BUY', 'SELL')
                           AND signal_time >= NOW() - INTERVAL '6 hours'
                           AND signal_time <= NOW() + INTERVAL '5 minutes'
                           AND COALESCE(lifecycle_status, 'DRAFT') NOT IN (

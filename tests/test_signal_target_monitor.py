@@ -120,7 +120,8 @@ def test_buy_progress_at_4406_reports_two_achieved_and_third_coming() -> None:
     )
     assert "Target 2 achieved" in message
     assert "Target 3 coming: 4407.36" in message
-    assert "secure part of the position" in message
+    assert "Signal remains active toward the next configured target" in message
+    assert "partial exits" not in message.lower()
     assert "returns are not guaranteed" in message
 
 
