@@ -10,6 +10,10 @@ from typing import Any
 from sqlalchemy import text
 
 from core.database import session_scope
+from services.admin_signal_lifecycle_telegram import (
+    TERMINAL_TELEGRAM_ACTIONS,
+    deliver_admin_terminal_lifecycle_telegram,
+)
 
 
 class SignalNotFoundError(ValueError): pass
@@ -144,7 +148,10 @@ def transition_admin_signal(*, signal_id: int, action: str, actor_id: int, reque
         assignments = ", ".join(f"{key}=:{key}" for key in updates)
         session.execute(text(f"UPDATE public.market_signals SET {assignments}, updated_by=:actor, updated_at=NOW() WHERE id=:id"), {**updates, "actor": int(actor_id), "id": int(signal_id)})
         _audit(session, actor_id, f"SIGNAL_{action}", request_id, {"signal_id": int(signal_id), "from": current, "to": updates["lifecycle_status"]})
-    return _row(signal_id)
+    result = _row(signal_id)
+    if action in TERMINAL_TELEGRAM_ACTIONS:
+        deliver_admin_terminal_lifecycle_telegram(result, action=action)
+    return result
 
 
 def delete_admin_signal(*, signal_id: int, actor_id: int, request_id: str, confirmed: bool) -> dict[str, Any]:
