@@ -1,7 +1,7 @@
 import services.production_agents as production_agents
 
 
-def test_run_signal_agent_shadow_blocks_all_post_pipeline_delivery(
+def test_run_signal_agent_shadow_uses_per_signal_delivery_gates(
     monkeypatch,
 ):
     monkeypatch.setenv(
@@ -63,29 +63,19 @@ def test_run_signal_agent_shadow_blocks_all_post_pipeline_delivery(
     def fake_pipeline(*args, **kwargs):
         calls["pipeline"] += 1
 
-    def fail_targets(*args, **kwargs):
+    def monitor_targets(*args, **kwargs):
         calls["targets"] += 1
-        raise AssertionError(
-            "Target-hit monitor must not run in Captain shadow mode"
-        )
+        return 0
 
-    def fail_stop_loss(*args, **kwargs):
+    def monitor_stop_loss(*args, **kwargs):
         calls["stop_loss"] += 1
-        raise AssertionError(
-            "Stop-loss monitor must not run in Captain shadow mode"
-        )
+        return 0
 
-    def fail_website(*args, **kwargs):
+    def publish_website(*args, **kwargs):
         calls["website"] += 1
-        raise AssertionError(
-            "Website publishing must not run in Captain shadow mode"
-        )
 
-    def fail_whatsapp(*args, **kwargs):
+    def deliver_whatsapp(*args, **kwargs):
         calls["whatsapp"] += 1
-        raise AssertionError(
-            "WhatsApp delivery must not run in Captain shadow mode"
-        )
 
     monkeypatch.setattr(
         production_agents,
@@ -93,33 +83,32 @@ def test_run_signal_agent_shadow_blocks_all_post_pipeline_delivery(
         fake_pipeline,
     )
     monkeypatch.setattr(
-        production_agents,
+        production_agents._legacy,
         "_monitor_target_hits",
-        fail_targets,
+        monitor_targets,
     )
     monkeypatch.setattr(
-        production_agents,
+        production_agents._legacy,
         "_monitor_stop_loss_hits",
-        fail_stop_loss,
+        monitor_stop_loss,
     )
     monkeypatch.setattr(
-        production_agents,
+        production_agents._legacy,
         "_publish_pending_website_signals",
-        fail_website,
+        publish_website,
     )
     monkeypatch.setattr(
-        production_agents,
+        production_agents._legacy,
         "_deliver_pending_whatsapp_signals",
-        fail_whatsapp,
+        deliver_whatsapp,
     )
 
     result = production_agents.run_signal_agent({})
 
     assert calls["pipeline"] == 1
-    assert calls["targets"] == 0
-    assert calls["stop_loss"] == 0
-    assert calls["website"] == 0
-    assert calls["whatsapp"] == 0
+    assert calls["targets"] == 1
+    assert calls["stop_loss"] == 1
+    assert calls["website"] == 1
+    assert calls["whatsapp"] == 1
 
-    assert "Captain shadow mode" in result
-    assert "all outbound delivery blocked" in result
+    assert result == "Signal pipeline completed across configured channels."
