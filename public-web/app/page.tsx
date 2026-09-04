@@ -6,6 +6,7 @@ import { Icon, type IconName } from "@/components/icon";
 import { getContent, getResultSnapshot, getSignalSnapshot } from "@/lib/api";
 import { configuredLinks } from "@/lib/site-config";
 import "./home-premium.css";
+import "./home-visual-upgrade.css";
 
 export const revalidate = 300;
 
