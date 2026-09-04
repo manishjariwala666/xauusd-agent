@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ContentGrid } from "@/components/content-grid";
 import { FaqItem, ProcessStep, ResearchToolCard, SnapshotItem } from "@/components/homepage-sections";
@@ -44,7 +45,9 @@ export default async function HomePage() {
   const researchTools = tools.map((tool) => tool.title === "Telegram alerts" ? { ...tool, href: links.telegram || "/contact" } : tool);
 
   return <div className="home-page">
-    <section className="home-hero">
+    <section className="home-hero home-hero-visualized">
+      <Image className="home-hero-art" src="/visuals/gold-market-banner.svg" alt="Abstract XAUUSD market intelligence visualization" fill priority sizes="(max-width: 700px) 100vw, 1240px" />
+      <div className="home-hero-overlay" />
       <div className="home-hero-copy">
         <span className="eyebrow"><span />GOLD INTELLIGENCE, BUILT FOR CLARITY</span>
         <h1>Read the gold market with <em>calm conviction.</em></h1>
@@ -55,13 +58,11 @@ export default async function HomePage() {
         </div>
         <div className="home-hero-meta"><span><Icon name="brain" size={15} />AI-assisted research</span><span><Icon name="shield" size={15} />Risk-first analysis</span><span><Icon name="book" size={15} />Educational content</span></div>
       </div>
-      <div className="home-terminal" aria-label="VenusRealm XAUUSD research terminal">
-        <div className="home-terminal-head"><span>VENUSREALM / GOLD DESK</span><span className="home-live-dot">Research layer</span></div>
-        <div className="home-orbit">
-          <div className="home-orbit-core"><div><Icon name="gold" size={34} /><br/><b>XAUUSD</b></div></div>
-          <div className="home-orbit-note one"><small>Structure</small><b>Before signal</b></div>
-          <div className="home-orbit-note two"><small>Risk</small><b>Before reward</b></div>
-        </div>
+      <div className="home-market-card" aria-label="VenusRealm XAUUSD research panel">
+        <div className="home-market-card-head"><span>VENUSREALM / GOLD DESK</span><span className="home-live-dot">Research layer</span></div>
+        <div className="home-market-quote"><small>Current public state</small><strong>{signal?.signal_type || "WATCH"}</strong><span>{signal?.symbol || "XAUUSD"}</span></div>
+        <div className="home-market-stats"><div><span>Timeframe</span><b>{signal?.timeframe || "Research"}</b></div><div><span>Latest update</span><b>{formatUpdateTime(updateTime)}</b></div></div>
+        <Link className="text-link" href="/signals">Open signal desk <Icon name="arrow" size={16}/></Link>
       </div>
     </section>
 
@@ -91,7 +92,8 @@ export default async function HomePage() {
     </section>
 
     <section className="home-section home-lens" aria-labelledby="astrology-title">
-      <div><span className="eyebrow">FINANCIAL ASTROLOGY</span><h2 id="astrology-title">A wider lens on market timing.</h2><p>VenusRealm treats astrology as an educational timing framework—not a standalone trading signal. Planetary cycles are considered alongside market data, structure and risk.</p><Link className="button button-light" href="/astrology">Explore the methodology <Icon name="arrow" size={18} /></Link></div>
+      <div className="home-lens-visual" aria-hidden="true"><Image src="/visuals/gold-market-banner.svg" alt="" fill sizes="(max-width: 700px) 100vw, 55vw" /></div>
+      <div className="home-lens-copy"><span className="eyebrow">FINANCIAL ASTROLOGY</span><h2 id="astrology-title">A wider lens on market timing.</h2><p>VenusRealm treats astrology as an educational timing framework—not a standalone trading signal. Planetary cycles are considered alongside market data, structure and risk.</p><Link className="button button-light" href="/astrology">Explore the methodology <Icon name="arrow" size={18} /></Link></div>
       <div className="home-lens-card"><Icon name="moon" size={32} /><span>Planetary market timing</span><strong>{astrology.length ? `${astrology.length} published insight${astrology.length === 1 ? "" : "s"}` : "Upcoming research desk"}</strong><p>{astrology.length ? astrology[0].title : "No astrology article has been published yet. New material will appear only after editorial review."}</p></div>
     </section>
 
