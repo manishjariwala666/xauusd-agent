@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/site-header";
 import { MotionReveal } from "@/components/motion-reveal";
 import "./globals.css";
 import "./sitewide-premium.css";
+import "./homepage-architecture.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://venusrealm.net"),
