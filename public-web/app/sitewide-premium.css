@@ -21,7 +21,7 @@
   height: 2px;
   background: var(--gold);
   content: "";
-  transition: right .18s ease;
+  transition: right .16s ease;
 }
 .desktop-nav a:hover::after { right: 0; }
 .header-actions { gap: 10px; }
@@ -38,8 +38,9 @@
   font-size: .83rem;
   font-weight: 850;
   text-decoration: none;
+  transition: transform .16s ease, border-color .16s ease, color .16s ease;
 }
-.account-link:hover { border-color: #b78a2d; color: #8e6618; }
+.account-link:hover { transform: translateY(-2px); border-color: #b78a2d; color: #8e6618; }
 
 .page-heading,
 .content-page-header,
@@ -94,9 +95,7 @@
 }
 .category-filters a:hover { background: #fff; color: #956c1c; }
 
-.content-grid {
-  gap: 20px;
-}
+.content-grid { gap: 20px; }
 .content-card,
 .publication-card,
 .astrology-info-card,
@@ -106,12 +105,23 @@
   border-color: #dbe3e9 !important;
   box-shadow: 0 10px 34px rgba(10,29,49,.055);
 }
-.content-card {
-  overflow: hidden;
-  border-radius: 18px;
-  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+.content-card,
+.publication-card,
+.research-tool-card,
+.premium-signal-card,
+.astrology-info-card,
+.astrology-notice-card,
+.contact-channel,
+.member-panel {
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
-.content-card:hover {
+.content-card { overflow: hidden; border-radius: 18px; }
+.content-card:hover,
+.publication-card:hover,
+.research-tool-card:hover,
+.premium-signal-card:hover,
+.astrology-info-card:hover,
+.contact-channel:hover {
   transform: translateY(-5px);
   border-color: #c9b275 !important;
   box-shadow: 0 20px 44px rgba(10,29,49,.1);
@@ -119,18 +129,14 @@
 
 .publication-page,
 .content-page,
-.signals-page {
-  padding-bottom: 30px;
-}
+.signals-page { padding-bottom: 30px; }
 .publication-method,
 .proof-section,
 .discipline-section,
 .market-narrative,
 .wide-lens,
 .levels-section,
-.desk-strip {
-  border-radius: 26px;
-}
+.desk-strip { border-radius: 26px; }
 .publication-method {
   display: grid;
   grid-template-columns: .9fr 1.1fr;
@@ -252,6 +258,62 @@
 .footer-bottom small { color: #9fafbd; }
 .footer-bottom { border-color: rgba(255,255,255,.1); }
 
+/* Fast, deliberate reveal system: crisp instead of slow/parallax-heavy. */
+.vr-reveal {
+  opacity: 0;
+  transform: translate3d(0, 20px, 0) scale(.992);
+  filter: blur(2px);
+  will-change: transform, opacity, filter;
+}
+.vr-reveal.vr-reveal-ready {
+  opacity: 1;
+  transform: translate3d(0,0,0) scale(1);
+  filter: blur(0);
+  transition:
+    opacity 360ms cubic-bezier(.2,.75,.25,1) var(--vr-reveal-delay, 0ms),
+    transform 420ms cubic-bezier(.2,.75,.25,1) var(--vr-reveal-delay, 0ms),
+    filter 260ms ease var(--vr-reveal-delay, 0ms);
+}
+.home-hero.vr-reveal { transform: translate3d(0, 12px, 0) scale(.997); }
+.home-hero.vr-reveal.vr-reveal-ready { transform: translate3d(0,0,0) scale(1); }
+.home-hero-art { animation: vrHeroIn 520ms cubic-bezier(.2,.75,.25,1) both; }
+.home-hero-copy { animation: vrHeroCopy 460ms cubic-bezier(.2,.75,.25,1) 40ms both; }
+.terminal-panel { animation: vrHeroPanel 500ms cubic-bezier(.2,.75,.25,1) 90ms both; }
+.button,
+.text-link,
+.contact-channel,
+.research-tool-card,
+.premium-signal-card { transition-duration: 160ms !important; }
+.button:active { transform: translateY(0) scale(.985); }
+
+@keyframes vrHeroIn {
+  from { opacity: .45; transform: scale(1.025); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes vrHeroCopy {
+  from { opacity: 0; transform: translate3d(0,16px,0); }
+  to { opacity: 1; transform: translate3d(0,0,0); }
+}
+@keyframes vrHeroPanel {
+  from { opacity: 0; transform: translate3d(18px,0,0) scale(.985); }
+  to { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  .vr-reveal,
+  .vr-reveal.vr-reveal-ready {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
 @media (max-width: 1000px) {
   .publication-method,
   .contact-trust { grid-template-columns: 1fr; }
@@ -273,4 +335,6 @@
   .publication-filters { grid-template-columns: 1fr; }
   .publication-filters button { grid-column: auto; }
   .site-footer { width: calc(100% + 24px); margin-left: -12px; margin-right: -12px; padding: 34px 24px; border-radius: 22px 22px 0 0; }
+  .vr-reveal { transform: translate3d(0,12px,0); filter: none; }
+  .vr-reveal.vr-reveal-ready { transition-duration: 300ms, 340ms, 1ms; }
 }
