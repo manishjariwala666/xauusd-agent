@@ -1,0 +1,51 @@
+/* Scroll-driven content motion: one header, one footer, movement appears as content enters the viewport. */
+.vr-reveal {
+  opacity: 0;
+  filter: blur(1.5px);
+  will-change: transform, opacity, filter;
+}
+.vr-reveal-up { transform: translate3d(0, 28px, 0) scale(.994); }
+.vr-reveal-left { transform: translate3d(-32px, 12px, 0) scale(.992); }
+.vr-reveal-right { transform: translate3d(32px, 12px, 0) scale(.992); }
+.vr-reveal.vr-reveal-ready {
+  opacity: 1;
+  transform: translate3d(0,0,0) scale(1);
+  filter: blur(0);
+  transition:
+    opacity 300ms cubic-bezier(.2,.75,.25,1) var(--vr-reveal-delay,0ms),
+    transform 360ms cubic-bezier(.2,.75,.25,1) var(--vr-reveal-delay,0ms),
+    filter 220ms ease var(--vr-reveal-delay,0ms);
+}
+.home-page > section.vr-reveal-up { transform: translate3d(0,34px,0) scale(.995); }
+.home-page > section.vr-reveal-ready { transform: translate3d(0,0,0) scale(1); }
+
+/* Keep the top navigation visually singular. */
+.site-header { z-index: 60; }
+.home-jump { display: none !important; }
+
+/* The FAQ ends the page content; only the real site footer follows it. */
+.home-page .faq-section { margin-bottom: 72px; }
+.site-footer { margin-top: 0; }
+
+@media (max-width: 760px) {
+  .vr-reveal-left,
+  .vr-reveal-right,
+  .vr-reveal-up { transform: translate3d(0,18px,0) scale(.996); }
+  .vr-reveal.vr-reveal-ready {
+    transition-duration: 260ms, 320ms, 180ms;
+  }
+  .home-page .faq-section { margin-bottom: 42px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vr-reveal,
+  .vr-reveal-left,
+  .vr-reveal-right,
+  .vr-reveal-up,
+  .vr-reveal.vr-reveal-ready {
+    opacity: 1;
+    transform: none !important;
+    filter: none;
+    transition: none !important;
+  }
+}
