@@ -22,7 +22,7 @@ export async function SiteHeader() {
       <div className="header-actions">
         <ThemeSwitcher />
         <Link className="account-link" href={hasMemberSession ? "/signals" : "/login"}>
-          <Icon name={hasMemberSession ? "shield" : "user"} size={16} />
+          <Icon name="shield" size={16} />
           {hasMemberSession ? "Member Desk" : "Member Access"}
         </Link>
         {links.telegram && <a className="button button-gold button-small" href={links.telegram} rel="noreferrer" target="_blank"><Icon name="send" size={17} />Join Telegram</a>}
