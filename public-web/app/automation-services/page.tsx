@@ -4,6 +4,7 @@ import { AutomationEnquiryForm } from "@/components/automation-enquiry-form";
 import { Icon } from "@/components/icon";
 import { siteUrl } from "@/lib/api";
 import "./automation-services.css";
+import "./automation-theme-overrides.css";
 
 export const metadata: Metadata = { title: "AI Automation Services for Global Businesses", description: "Secure, human-approved AI agents, n8n workflows and business automation built around real operational needs.", alternates: { canonical: "/automation-services" }, openGraph: { title: "VenusRealm Automation Services", description: "Secure automation systems for worldwide businesses.", url: "/automation-services", type: "website" } };
 
