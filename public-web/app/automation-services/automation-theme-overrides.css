@@ -1,0 +1,158 @@
+/* Final VenusRealm automation theme pass: one continuous midnight/navy + gold visual language. */
+.automation-page {
+  --svc-bg: #07111f;
+  --svc-panel: #0d1d31;
+  --svc-panel-2: #11243b;
+  --svc-gold: #d6a63d;
+  --svc-gold-soft: #f1d58e;
+  --svc-text: #f4f0e8;
+  --svc-muted-dark: #aebbc7;
+  --svc-line-dark: rgba(241, 213, 142, .16);
+  color: var(--svc-text);
+}
+
+.automation-page .breadcrumb,
+.automation-page .breadcrumb span { color: #8797a7; }
+.automation-page .breadcrumb a { color: var(--svc-gold-soft); }
+
+/* Keep all service content inside the VenusRealm dark family instead of white SaaS panels. */
+.automation-page .svc-section,
+.automation-page .svc-workflow,
+.automation-page .svc-faq {
+  color: var(--svc-text);
+}
+.automation-page .svc-heading h2,
+.automation-page .svc-card h3,
+.automation-page .svc-step h3,
+.automation-page .svc-engagement-grid h3,
+.automation-page .svc-faq summary,
+.automation-page .svc-enquiry h2 {
+  color: var(--svc-text) !important;
+}
+.automation-page .svc-heading p,
+.automation-page .svc-card p,
+.automation-page .svc-card li,
+.automation-page .svc-step p,
+.automation-page .svc-engagement-grid p,
+.automation-page .svc-engagement-grid li,
+.automation-page .svc-faq details p,
+.automation-page .svc-enquiry p,
+.automation-page .svc-enquiry li {
+  color: var(--svc-muted-dark) !important;
+}
+
+.automation-page .svc-card,
+.automation-page .svc-deliverable-grid article,
+.automation-page .svc-engagement-grid article {
+  border-color: var(--svc-line-dark) !important;
+  background: linear-gradient(145deg, #0b1a2c, #10243a) !important;
+  box-shadow: 0 14px 34px rgba(0,0,0,.16) !important;
+}
+.automation-page .svc-card:hover,
+.automation-page .svc-deliverable-grid article:hover,
+.automation-page .svc-engagement-grid article:hover {
+  transform: translateY(-4px);
+  border-color: rgba(241,213,142,.34) !important;
+  box-shadow: 0 20px 46px rgba(0,0,0,.24) !important;
+}
+
+.automation-page .svc-card .icon-wrap,
+.automation-page .svc-deliverable-grid .icon-wrap,
+.automation-page .svc-step .step-icon {
+  border-color: rgba(241,213,142,.22) !important;
+  background: rgba(214,166,61,.10) !important;
+  color: var(--svc-gold-soft) !important;
+}
+.automation-page .svc-card li::before,
+.automation-page .svc-engagement-grid li::before,
+.automation-page .svc-engagement-grid a,
+.automation-page .svc-faq summary span {
+  color: var(--svc-gold-soft) !important;
+}
+
+.automation-page .svc-deliverables {
+  border-color: var(--svc-line-dark) !important;
+  background: linear-gradient(135deg, #0a1729, #0e2239) !important;
+}
+.automation-page .svc-deliverable-grid strong { color: var(--svc-text) !important; }
+.automation-page .svc-deliverable-grid span { color: var(--svc-muted-dark) !important; }
+
+.automation-page .svc-flow::before { background: rgba(241,213,142,.38) !important; }
+
+/* FAQ: remove the bright white block and make each row readable within the same dark theme. */
+.automation-page .svc-faq {
+  max-width: 940px;
+  padding: clamp(28px, 4vw, 48px);
+  border: 1px solid var(--svc-line-dark);
+  border-radius: 24px;
+  background: linear-gradient(145deg, #091726, #0d2136);
+  box-shadow: 0 18px 48px rgba(0,0,0,.18);
+}
+.automation-page .svc-faq .svc-heading { margin-bottom: 18px; }
+.automation-page .svc-faq details {
+  margin: 0;
+  border: 0 !important;
+  border-top: 1px solid rgba(255,255,255,.09) !important;
+  background: transparent !important;
+}
+.automation-page .svc-faq details:first-of-type { border-top: 0 !important; }
+.automation-page .svc-faq summary {
+  padding: 19px 4px;
+  font-size: .98rem;
+  letter-spacing: -.01em;
+}
+.automation-page .svc-faq summary:hover { color: var(--svc-gold-soft) !important; }
+.automation-page .svc-faq details p {
+  max-width: 760px;
+  padding: 0 34px 20px 4px;
+  line-height: 1.7;
+}
+
+/* Enquiry becomes a dark premium panel; only fields stay light enough for clear data entry. */
+.automation-page .svc-enquiry {
+  border-color: var(--svc-line-dark) !important;
+  background: linear-gradient(135deg, #0b192a, #10243b) !important;
+}
+.automation-page .automation-form {
+  border-color: rgba(241,213,142,.16) !important;
+  background: #081522 !important;
+  box-shadow: 0 18px 46px rgba(0,0,0,.20) !important;
+  color: var(--svc-text);
+}
+.automation-page .automation-form label,
+.automation-page .automation-form legend,
+.automation-page .automation-form strong { color: #e9edf2 !important; }
+.automation-page .automation-form input,
+.automation-page .automation-form select,
+.automation-page .automation-form textarea {
+  border-color: rgba(255,255,255,.16) !important;
+  background: #102238 !important;
+  color: #f5f7fa !important;
+}
+.automation-page .automation-form input::placeholder,
+.automation-page .automation-form textarea::placeholder { color: #7f91a2 !important; }
+.automation-page .automation-form input:focus,
+.automation-page .automation-form select:focus,
+.automation-page .automation-form textarea:focus {
+  border-color: var(--svc-gold) !important;
+  outline: 3px solid rgba(214,166,61,.12);
+}
+.automation-page .service-checks label {
+  border-color: rgba(255,255,255,.11) !important;
+  background: #0e2136 !important;
+  color: #dce5ec !important;
+}
+.automation-page .automation-form .button {
+  background: var(--svc-gold) !important;
+  color: #07111f !important;
+}
+
+.automation-page .svc-cta {
+  border-color: rgba(241,213,142,.22) !important;
+  background: linear-gradient(135deg, #0a1729, #122b46) !important;
+}
+
+@media (max-width: 680px) {
+  .automation-page .svc-faq { padding: 24px 18px; border-radius: 20px; }
+  .automation-page .svc-faq summary { font-size: .9rem; }
+}
