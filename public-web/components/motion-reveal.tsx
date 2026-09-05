@@ -16,6 +16,11 @@ const selector = [
   ".astrology-notice-card",
   ".contact-channel",
   ".member-panel",
+  ".deliverable-grid article",
+  ".audience-grid article",
+  ".stack-grid article",
+  ".module-list a",
+  ".editorial-faq details",
 ].join(",");
 
 export function MotionReveal() {
@@ -30,7 +35,10 @@ export function MotionReveal() {
 
     nodes.forEach((node, index) => {
       node.classList.add("vr-reveal");
-      node.style.setProperty("--vr-reveal-delay", `${Math.min(index % 4, 3) * 45}ms`);
+      const isCard = node.matches("article, .content-card, .publication-card, .research-tool-card, .premium-signal-card, .contact-channel, .member-panel, .module-list a, .editorial-faq details");
+      if (isCard) node.classList.add(index % 2 === 0 ? "vr-reveal-left" : "vr-reveal-right");
+      else node.classList.add("vr-reveal-up");
+      node.style.setProperty("--vr-reveal-delay", `${Math.min(index % 3, 2) * 35}ms`);
     });
 
     const observer = new IntersectionObserver(
@@ -42,7 +50,7 @@ export function MotionReveal() {
           observer.unobserve(target);
         });
       },
-      { rootMargin: "0px 0px -6% 0px", threshold: 0.08 },
+      { rootMargin: "0px 0px -4% 0px", threshold: 0.1 },
     );
 
     nodes.forEach((node) => observer.observe(node));
