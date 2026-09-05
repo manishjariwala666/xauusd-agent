@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { FaqItem, InsightCard, ProcessStep, ResearchToolCard, SnapshotItem } from "@/components/homepage-sections";
+import { FaqItem, InsightCard, ResearchToolCard, SnapshotItem } from "@/components/homepage-sections";
 import { ContentGrid } from "@/components/content-grid";
 import { Icon, type IconName } from "@/components/icon";
 import { getContent, getResultSnapshot, getSignalSnapshot } from "@/lib/api";
@@ -36,14 +36,6 @@ const modules = [
   ["Market research", "Editorial XAUUSD analysis, education and published desk commentary.", "/blog"],
   ["Evidence layer", "Verified public results with privacy redaction and compliance-safe reporting.", "/results"],
   ["Timing research", "Financial astrology framed strictly as supplementary educational context.", "/astrology"],
-];
-
-const stack = [
-  ["Market", "XAUUSD context", "Structure", "Timing"],
-  ["Research", "Technical", "Macro", "AI synthesis"],
-  ["Risk", "Invalidation", "Access controls", "Disclosures"],
-  ["Publishing", "Website", "Telegram", "Verified records"],
-  ["Member", "Session", "Payment review", "Protected signals"],
 ];
 
 export default async function HomePage() {
@@ -82,11 +74,7 @@ export default async function HomePage() {
 
     <section className="wide-lens" aria-labelledby="astrology-title"><div className="wide-lens-copy"><span className="eyebrow">The wider lens</span><h2 id="astrology-title">Timing is context,<br /><em>never certainty.</em></h2><p>Financial astrology is explored as an educational timing framework alongside market data, structure and risk—not as a standalone trading signal.</p><Link className="button button-light" href="/astrology">Explore the methodology <Icon name="arrow" size={18} /></Link></div><aside className="wide-lens-card"><span className="lens-orbit" aria-hidden="true"><Icon name="moon" size={34} /></span><small>Planetary market timing</small><strong>{astrology.length ? `${astrology.length} published insight${astrology.length === 1 ? "" : "s"}` : "Upcoming research desk"}</strong><p>{astrology.length ? astrology[0].title : "New material appears only after editorial review."}</p></aside></section>
 
-    <section id="workflow" className="home-section process-section" aria-labelledby="process-title"><header className="editorial-heading centered-editorial"><div><span className="eyebrow">Research protocol</span><h2 id="process-title">From market input<br />to public insight.</h2></div><p>A deliberate workflow designed to keep fact, interpretation and risk in the right order.</p></header><ol className="editorial-process"><ProcessStep number="01" icon="globe" title="Market data" text="Published inputs and price context establish the factual base." /><ProcessStep number="02" icon="brain" title="Synthesis" text="Research tools examine structure, narrative and timing frameworks." /><ProcessStep number="03" icon="shield" title="Risk review" text="Claims, levels and language pass through a risk-first lens." /><ProcessStep number="04" icon="send" title="Publication" text="Approved public intelligence reaches the site and configured channels." /></ol><div className="workflow-cadence"><span>Research cadence</span><strong>Observe</strong><i /> <strong>Synthesize</strong><i /> <strong>Review</strong><i /> <strong>Publish</strong></div></section>
-
     <section className="discipline-section" aria-labelledby="why-title"><div className="discipline-statement"><span className="eyebrow">The VenusRealm standard</span><h2 id="why-title">Built for disciplined readers.<br /><em>Not impulsive clicks.</em></h2><p>Every section prioritizes context, explicit uncertainty and educational value.</p></div><div className="discipline-list">{["Risk-first approach", "Transparent educational analysis", "Fast configured alerts", "Multi-channel updates", "Structured editorial content", "Human approval where applicable"].map((item, index) => <div key={item}><span>0{index + 1}</span><strong>{item}</strong><Icon name="check" size={17} /></div>)}</div></section>
-
-    <section id="stack" className="home-section stack-section" aria-labelledby="stack-title"><header className="editorial-heading"><div><span className="eyebrow">Research stack</span><h2 id="stack-title">The layers behind every published experience.</h2></div><p>A transparent view of the information and control layers that shape the public desk and member journey.</p></header><div className="stack-grid">{stack.map(([title, ...items]) => <article key={title}><strong>{title}</strong>{items.map((item) => <span key={item}>{item}</span>)}</article>)}</div></section>
 
     <section id="proof" className="proof-section" aria-labelledby="results-title"><div className="proof-copy"><span className="eyebrow">Evidence over assertion</span><h2 id="results-title">Proof should be documented,<br />not promised.</h2><p>Only evidence-backed, redacted, compliance-approved records are eligible. Account profit, ROI and unverified percentages are never inferred.</p><Link className="text-link" href="/results">Read methodology and records <Icon name="arrow" size={16} /></Link></div><div className="proof-card"><span className="proof-seal"><Icon name="target" size={26} /></span><small>Verified public record</small>{results.length ? <><strong>{results[0].symbol} {results[0].direction}</strong><span>{results[0].result_points} {results[0].result_unit}</span><p>{results[0].public_summary}</p></> : <><strong>Awaiting verified records</strong><p>No synthetic claims or placeholder percentages are shown.</p></>}</div></section>
 
