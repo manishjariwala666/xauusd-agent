@@ -1,7 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { MotionReveal } from "@/components/motion-reveal";
 import "./globals.css";
+import "./sitewide-premium.css";
+import "./homepage-architecture.css";
+import "./motion-polish.css";
+import "./final-visual-fixes.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://venusrealm.net"),
@@ -14,5 +19,5 @@ export const viewport: Viewport = { colorScheme: "light dark", themeColor: [{ me
 const themeInit = `(function(){try{var p=localStorage.getItem('vr-theme')||'auto';var d=p==='dark'||(p==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);var e=document.documentElement;e.dataset.theme=d?'dark':'light';e.dataset.themePreference=p;e.style.colorScheme=d?'dark':'light'}catch(e){}})()`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: themeInit }} /></head><body><div className="shell"><SiteHeader /><main>{children}</main><SiteFooter /></div></body></html>;
+  return <html lang="en" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: themeInit }} /></head><body><MotionReveal /><div className="shell"><SiteHeader /><main>{children}</main><SiteFooter /></div></body></html>;
 }
