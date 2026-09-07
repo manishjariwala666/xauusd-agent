@@ -85,6 +85,9 @@ export function ContentList({
         <thead><tr><th><input type="checkbox" disabled aria-label="Select all posts" /></th><th>Post</th><th>ID</th><th>Category</th><th>Status</th><th>Views</th><th>SEO</th><th>Slug</th><th>Author</th><th>Updated</th><th>Actions</th></tr></thead>
         <tbody>{data.items.map(item => {
           const previewUrl = publicWebsiteUrl && item.status === "published" ? `${publicWebsiteUrl}/${isPosts ? "blog" : "page"}/${encodeURIComponent(item.slug)}` : undefined;
+          const seoChecked = Boolean(item.seo_checked);
+          const seoScore = seoChecked && typeof item.seo_score === "number" ? item.seo_score : null;
+          const seoIssues = Array.isArray(item.seo_issues) ? item.seo_issues : [];
           return <tr key={item.id}>
             <td><input type="checkbox" aria-label={`Select ${item.title}`} disabled /></td>
             <td className="post-cell"><Link
@@ -105,7 +108,22 @@ export function ContentList({
               </Link><small>{item.scheduled_at && item.status === "scheduled" ? `Scheduled ${shortDate(item.scheduled_at)}` : item.content_type.replace("_", " ")}</small></div></td>
             <td className="numeric">#{item.id}</td><td>{item.category || "Uncategorized"}</td>
             <td><span className={`status-badge ${item.status}`}><i aria-hidden="true" />{item.status}</span></td>
-            <td className="numeric">{number(item.views || 0)}</td><td><span className={`seo-score ${item.seo_score >= 70 ? "good" : item.seo_score >= 40 ? "fair" : "low"}`}>{item.seo_score || 0}</span></td>
+            <td className="numeric">{number(item.views || 0)}</td><td className="seo-report-cell">
+              {seoScore === null
+                ? <><span className="seo-score unchecked" title="SEO validation has not been run">—</span>
+                    <Link className="seo-report-link" href={`/admin/${kind}/${item.id}/edit#post-workbench`}>Run SEO check</Link></>
+                : <><span className={`seo-score ${seoScore >= 80 ? "good" : seoScore >= 50 ? "fair" : "low"}`} title="Latest saved SEO validation score">{seoScore}</span>
+                    <details className="seo-mini-report">
+                      <summary>{seoIssues.length ? `View ${seoIssues.length} issue${seoIssues.length === 1 ? "" : "s"}` : "SEO report"}</summary>
+                      {seoIssues.length
+                        ? <ul>{seoIssues.slice(0, 4).map((issue, index) =>
+                            <li key={`${issue.code}-${index}`}><b>{issue.points_lost ? `−${issue.points_lost}` : "Info"}</b> {issue.message}</li>
+                          )}</ul>
+                        : <p>No saved deductions.</p>}
+                      <Link href={`/admin/${kind}/${item.id}/edit#post-workbench`}>Open full report</Link>
+                    </details></>
+              }
+            </td>
             <td><code className="slug-cell">/{item.slug}</code></td><td className="author-cell">{item.author || "System"}</td><td className="date-cell">{shortDate(item.updated_at)}</td>
             <td><ContentActions
               kind={kind}

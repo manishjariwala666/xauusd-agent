@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { verifyCsrfToken } from "@/lib/csrf";
 import { getAdminServerConfig } from "@/lib/server-config";
 import { ADMIN_CSRF_COOKIE, ADMIN_SESSION_COOKIE } from "@/lib/session";
@@ -14,7 +15,11 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     request.cookies.get(ADMIN_CSRF_COOKIE)?.value,
     request.headers.get("x-csrf-token")
   )) return NextResponse.json({ message: "Invalid request." }, { status: 403 });
-  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value || "";
+  const cookieStore = await cookies();
+  const token =
+    request.cookies.get(ADMIN_SESSION_COOKIE)?.value ||
+    cookieStore.get(ADMIN_SESSION_COOKIE)?.value ||
+    "";
   if (!token) return NextResponse.json({ message: "Authentication required." }, { status: 401 });
   try {
     const config = getAdminServerConfig();
