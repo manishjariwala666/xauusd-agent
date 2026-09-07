@@ -19,9 +19,22 @@ export async function fetchMediaList(query: URLSearchParams, token: string) {
     const config = getAdminServerConfig();
     const response = await fetch(`${config.backendBaseUrl}/admin/media?${query}`, {
       headers: { Authorization: `Bearer ${token}`, "X-Admin-BFF-Key": config.bffSecret },
-      cache: "no-store", signal: AbortSignal.timeout(5000)
+      cache: "no-store",
+      signal: AbortSignal.timeout(20000),
     });
-    if (!response.ok) return null;
+
+    if (!response.ok) {
+      console.error(
+        "Media list upstream failed:",
+        response.status,
+        await response.text(),
+      );
+      return null;
+    }
+
     return await response.json() as Paginated<MediaAsset>;
-  } catch { return null; }
+  } catch (error) {
+    console.error("Media list request failed:", error);
+    return null;
+  }
 }

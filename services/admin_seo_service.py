@@ -241,3 +241,43 @@ def get_admin_seo_summary() -> dict[str, Any]:
 def _audit(session: Any, actor_id: int, event: str, request_id: str, details: dict[str, Any]) -> None:
     session.execute(text("""INSERT INTO public.admin_auth_audit_events (user_id,event_type,outcome,request_id,details)
         VALUES (:user_id,:event,'SUCCESS',:request_id,CAST(:details AS JSONB))"""), {"user_id": int(actor_id), "event": event, "request_id": str(request_id or "unknown")[:128], "details": json.dumps(details)})
+
+
+def analyse_admin_content(content_id: int, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Analyse draft values without saving or changing content."""
+    from services.admin_content_analysis import (
+        analyse_content,
+        analyse_internal_duplicates,
+    )
+
+    with session_scope() as session:
+        content = _content_row(session, content_id)
+        current_seo = _seo_row(session, content_id) or {}
+
+    supplied = payload or {}
+    title = str(supplied.get("title", content.get("title") or ""))
+    slug = str(supplied.get("slug", content.get("slug") or ""))
+    body = str(supplied.get("body", content.get("body") or ""))
+    focus_keyword = str(supplied.get("focus_keyword", current_seo.get("focus_keyword") or ""))
+
+    quality = analyse_content(
+        title=title,
+        slug=slug,
+        body=body,
+        focus_keyword=focus_keyword,
+    )
+    duplicates = analyse_internal_duplicates(
+        content_id=content_id,
+        title=title,
+        slug=slug,
+        body=body,
+    )
+    originality_score = max(0, round(100 - float(duplicates["highest_similarity"])))
+
+    return {
+        "content_id": int(content_id),
+        "quality": quality,
+        "duplicates": duplicates,
+        "originality_score": originality_score,
+        "overall_score": round(quality["score"] * 0.7 + originality_score * 0.3),
+    }

@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import os
+import re
 from dataclasses import dataclass
 from io import BytesIO
-import os
 from pathlib import Path
-import re
 from typing import Protocol
 from uuid import uuid4
 
 from PIL import Image, ImageOps, UnidentifiedImageError
-
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_PIXELS = 40_000_000
@@ -75,17 +74,35 @@ def validate_image_upload(filename: str, claimed_mime: str, data: bytes) -> Vali
     details = ALLOWED_FORMATS.get(detected_format)
     if not details:
         raise MediaValidationError("Unsupported image type.")
-    detected_mime, valid_extensions, canonical_extension = details
+    detected_mime, valid_extensions, _canonical_extension = details
     supplied_extension = Path(raw_name).suffix.lower()
     if supplied_extension not in valid_extensions:
         raise MediaValidationError("Filename extension does not match image content.")
     if str(claimed_mime or "").lower() != detected_mime:
         raise MediaValidationError("Declared MIME type does not match image content.")
     safe_stem = _SAFE_NAME.sub("-", Path(raw_name).stem).strip("-._")[:80] or "image"
+    try:
+        with Image.open(BytesIO(data)) as decoded:
+            frame = ImageOps.exif_transpose(decoded)
+            if getattr(frame, "is_animated", False):
+                frame.seek(0)
+            frame = frame.convert("RGB")
+            frame.thumbnail((2400, 2400), Image.Resampling.LANCZOS)
+            width, height = frame.size
+            output = BytesIO()
+            frame.save(output, "WEBP", quality=84, method=6)
+            optimized_data = output.getvalue()
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise MediaValidationError("Image could not be optimised safely.") from exc
+
     return ValidatedImage(
-        data=data, original_filename=raw_name, safe_stem=safe_stem,
-        extension=canonical_extension, mime_type=detected_mime,
-        width=int(width), height=int(height),
+        data=optimized_data,
+        original_filename=raw_name,
+        safe_stem=safe_stem,
+        extension=".webp",
+        mime_type="image/webp",
+        width=int(width),
+        height=int(height),
     )
 
 
@@ -101,7 +118,7 @@ class LocalMediaStorage:
 
     def store(self, image: ValidatedImage) -> StoredMedia:
         unique = uuid4().hex
-        stored_filename = f"{image.safe_stem}-{unique}{image.extension}"
+        stored_filename = f"{image.safe_stem}-{unique}.webp"
         relative = Path("uploads") / stored_filename
         thumb_relative = Path("thumbnails") / f"{image.safe_stem}-{unique}.webp"
         original_target = self._target(relative)

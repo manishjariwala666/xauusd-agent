@@ -21,7 +21,7 @@ describe("Phase 1 security controls", () => {
   });
 
   it("uses short-lived Secure HttpOnly SameSite cookies", () => {
-    expect(sessionCookieOptions()).toMatchObject({
+    expect(sessionCookieOptions(ADMIN_SESSION_MAX_AGE_SECONDS, true)).toMatchObject({
       httpOnly: true,
       secure: true,
       sameSite: "lax",
@@ -29,7 +29,7 @@ describe("Phase 1 security controls", () => {
       maxAge: ADMIN_SESSION_MAX_AGE_SECONDS
     });
     expect(ADMIN_SESSION_MAX_AGE_SECONDS).toBeLessThanOrEqual(15 * 60);
-    expect(csrfCookieOptions()).toMatchObject({ httpOnly: true, secure: true, sameSite: "lax" });
+    expect(csrfCookieOptions(true)).toMatchObject({ httpOnly: true, secure: true, sameSite: "lax" });
   });
 
   it("rejects missing and mismatched CSRF tokens", () => {

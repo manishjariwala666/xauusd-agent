@@ -1,11 +1,13 @@
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
 import pytest
+from PIL import Image
 
 from services.admin_media_storage import (
-    MAX_UPLOAD_BYTES, LocalMediaStorage, MediaValidationError,
+    MAX_UPLOAD_BYTES,
+    LocalMediaStorage,
+    MediaValidationError,
     validate_image_upload,
 )
 
@@ -22,9 +24,16 @@ def test_decoded_image_validation_and_local_thumbnail_storage(tmp_path: Path) ->
     first = storage.store(validated)
     second = storage.store(validated)
     assert first.stored_filename != second.stored_filename
-    assert (tmp_path / first.storage_path).read_bytes() == validated.data
+    stored_bytes = (tmp_path / first.storage_path).read_bytes()
+    assert stored_bytes == validated.data
+    assert validated.mime_type == "image/webp"
+    assert validated.extension == ".webp"
+    assert first.storage_path.endswith(".webp")
+    assert first.public_url.endswith(".webp")
     assert (tmp_path / first.thumbnail_path).stat().st_size > 0
     assert first.thumbnail_url.endswith(".webp")
+    with Image.open(BytesIO(stored_bytes)) as stored_image:
+        assert stored_image.format == "WEBP"
     storage.delete(first.storage_path, first.thumbnail_path)
     assert not (tmp_path / first.storage_path).exists()
 

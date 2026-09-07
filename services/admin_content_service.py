@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from core.database import session_scope
-
 
 POST_TYPES = ("BLOG", "AI_BLOG")
 PAGE_TYPES = ("PAGE",)
@@ -105,13 +104,14 @@ def list_admin_content(
                        COALESCE({view_count}, 0) AS views,
                        {media_id} AS featured_media_id,
                        COALESCE({media_url}, ci.image_url, cs.open_graph->>'image', cs.open_graph->>'image_url') AS featured_image,
-                       LEAST(100,
-                           (CASE WHEN COALESCE(cs.meta_title, '') <> '' THEN 25 ELSE 0 END) +
-                           (CASE WHEN COALESCE(cs.meta_description, '') <> '' THEN 25 ELSE 0 END) +
-                           (CASE WHEN COALESCE(cs.focus_keyword, '') <> '' THEN 20 ELSE 0 END) +
-                           (CASE WHEN COALESCE(cs.slug, ci.slug, '') <> '' THEN 15 ELSE 0 END) +
-                           (CASE WHEN jsonb_array_length(COALESCE(cs.faq, '[]'::jsonb)) > 0 THEN 15 ELSE 0 END)
-                       ) AS seo_score
+                       cs.seo_score AS seo_score,
+                       COALESCE(cs.seo_validation_issues, '[]'::jsonb) AS seo_issues,
+                       EXISTS (
+                           SELECT 1
+                           FROM public.admin_auth_audit_events ae
+                           WHERE ae.event_type IN ('CONTENT_SEO_SCORED', 'CONTENT_SEO_UPDATED')
+                             AND ae.details->>'content_id' = ci.id::text
+                       ) AS seo_checked
                 FROM public.content_items ci
                 LEFT JOIN public.content_categories cc ON cc.id = ci.category_id
                 LEFT JOIN public.users u ON u.id = ci.created_by
@@ -174,13 +174,14 @@ def get_admin_content(*, kind: str, content_id: int) -> dict[str, Any]:
                        cs.faq, cs.schema_jsonld, cs.open_graph, cs.twitter_card,
                        {media_id} AS featured_media_id, {media_alt} AS featured_image_alt,
                        COALESCE({media_url}, ci.image_url, cs.open_graph->>'image', cs.open_graph->>'image_url') AS featured_image,
-                       LEAST(100,
-                           (CASE WHEN COALESCE(cs.meta_title, '') <> '' THEN 25 ELSE 0 END) +
-                           (CASE WHEN COALESCE(cs.meta_description, '') <> '' THEN 25 ELSE 0 END) +
-                           (CASE WHEN COALESCE(cs.focus_keyword, '') <> '' THEN 20 ELSE 0 END) +
-                           (CASE WHEN COALESCE(cs.slug, ci.slug, '') <> '' THEN 15 ELSE 0 END) +
-                           (CASE WHEN jsonb_array_length(COALESCE(cs.faq, '[]'::jsonb)) > 0 THEN 15 ELSE 0 END)
-                       ) AS seo_score
+                       cs.seo_score AS seo_score,
+                       COALESCE(cs.seo_validation_issues, '[]'::jsonb) AS seo_issues,
+                       EXISTS (
+                           SELECT 1
+                           FROM public.admin_auth_audit_events ae
+                           WHERE ae.event_type IN ('CONTENT_SEO_SCORED', 'CONTENT_SEO_UPDATED')
+                             AND ae.details->>'content_id' = ci.id::text
+                       ) AS seo_checked
                 FROM public.content_items ci
                 LEFT JOIN public.content_categories cc ON cc.id = ci.category_id
                 LEFT JOIN public.users u ON u.id = ci.created_by

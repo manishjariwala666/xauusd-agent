@@ -8,8 +8,15 @@ export async function GET(request: NextRequest) {
   try {
     const config = getAdminServerConfig();
     const upstream = await fetch(`${config.backendBaseUrl}/admin/media${request.nextUrl.search}`, {
-      headers: { Authorization: `Bearer ${token}`, "X-Admin-BFF-Key": config.bffSecret }, cache: "no-store", signal: AbortSignal.timeout(5000)
+      headers: { Authorization: `Bearer ${token}`, "X-Admin-BFF-Key": config.bffSecret }, cache: "no-store", signal: AbortSignal.timeout(20000)
     });
     return new NextResponse(await upstream.text() || null, { status: upstream.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
-  } catch { return NextResponse.json({ message: "Media service is temporarily unavailable." }, { status: 503 }); }
+  } catch (error) {
+    const message =
+      error instanceof Error && error.name === "TimeoutError"
+        ? "Media service timed out while loading."
+        : "Media service is temporarily unavailable.";
+
+    return NextResponse.json({ message }, { status: 503 });
+  }
 }

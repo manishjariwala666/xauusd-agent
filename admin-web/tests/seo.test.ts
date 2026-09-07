@@ -8,6 +8,10 @@ const source = (path: string) => readFileSync(resolve(root, path), "utf8");
 describe("Phase 3B SEO management", () => {
   it("provides editable fields, previews, structured data and Media Library selection", () => {
     const editor = source("components/seo-workbench.tsx");
+    expect(editor).toContain("Content Checker");
+    expect(editor).toContain("/analyse");
+    expect(editor).toContain("Originality");
+    expect(editor).toContain("Closest internal matches");
     for (const label of ["SEO title", "Meta description", "Focus keyword", "Secondary keywords", "Canonical URL", "Include in sitemap", "Open Graph", "X / Twitter", "Add FAQ", "Schema JSON-LD", "Save SEO", "Validate"]) expect(editor).toContain(label);
     expect(editor).toContain("/api/admin/media");
     expect(editor).toContain("include_structured=true");
@@ -25,4 +29,5 @@ describe("Phase 3B SEO management", () => {
     expect(dashboard).toContain("Run validation");
     expect(dashboard).not.toMatch(/DATABASE_URL|service.role/i);
   });
+
 });

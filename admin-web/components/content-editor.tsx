@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "rea
 import { useRouter } from "next/navigation";
 import type { Category, ContentDetail } from "@/lib/content-api";
 import { FeaturedImagePicker } from "./featured-image-picker";
+import { RichContentEditor } from "./rich-content-editor";
 import { SeoWorkbench } from "./seo-workbench";
 import type { SeoDetail } from "@/lib/seo-api";
 
@@ -20,6 +21,12 @@ export function ContentEditor({ kind, initial, seo, categories, publicWebsiteUrl
   const [body, setBody] = useState(initial?.body || "");
   const [scheduledAt, setScheduledAt] = useState(initial?.scheduled_at ? initial.scheduled_at.slice(0, 16) : "");
   const [pendingMediaId, setPendingMediaId] = useState<number | null>(initial?.featured_media_id || null);
+  const [featuredImage, setFeaturedImage] = useState({
+    id: initial?.featured_media_id || null,
+    url: initial?.featured_image || null,
+    alt: initial?.featured_image_alt || "",
+  });
+  const [liveSeoScore, setLiveSeoScore] = useState(seo?.seo_score || 0);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -35,6 +42,26 @@ export function ContentEditor({ kind, initial, seo, categories, publicWebsiteUrl
     const warn = (event: BeforeUnloadEvent) => { if (dirty) event.preventDefault(); };
     addEventListener("beforeunload", warn); return () => removeEventListener("beforeunload", warn);
   }, [dirty]);
+
+  function applyAiArticle(change: {
+    title?: string;
+    slug?: string;
+    excerpt?: string;
+    body?: string;
+  }) {
+    if (change.title !== undefined) setTitle(change.title);
+    if (change.slug !== undefined) setSlug(change.slug);
+    if (change.excerpt !== undefined) setExcerpt(change.excerpt);
+    if (change.body !== undefined) setBody(change.body);
+    setDirty(true);
+    setSavedMessage("AI suggestion applied — unsaved changes");
+  }
+
+  function applyAiImageAlt(alt: string) {
+    setFeaturedImage(value => ({ ...value, alt }));
+    setDirty(true);
+    setSavedMessage("AI image alt applied — save alt text to persist");
+  }
 
   async function csrf() { return fetch("/api/admin/auth/csrf", { cache: "no-store" }).then(r => r.json()) as Promise<{ csrfToken: string }>; }
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -79,7 +106,7 @@ export function ContentEditor({ kind, initial, seo, categories, publicWebsiteUrl
 
   return <form className="editor-form" onSubmit={submit} onChange={() => { setDirty(true); setSavedMessage("Unsaved changes"); }}>
     <header className="editor-header">
-      <div><div className="editor-kicker"><span>{kind === "posts" ? "POST" : "PAGE"} #{initial?.id || "NEW"}</span><span className={`status-badge ${displayStatus}`}><i />{displayStatus}</span><span className="header-seo">SEO <b>{seo?.seo_score || 0}</b></span></div><h1>{title || (initial ? `Untitled ${kind === "posts" ? "post" : "page"}` : `Create a new ${kind === "posts" ? "post" : "page"}`)}</h1><p>Last updated {dateTime(initial?.updated_at)}</p></div>
+      <div><div className="editor-kicker"><span>{kind === "posts" ? "POST" : "PAGE"} #{initial?.id || "NEW"}</span><span className={`status-badge ${displayStatus}`}><i />{displayStatus}</span><span className="header-seo">SEO <b>{liveSeoScore}</b></span></div><h1>{title || (initial ? `Untitled ${kind === "posts" ? "post" : "page"}` : `Create a new ${kind === "posts" ? "post" : "page"}`)}</h1><p>Last updated {dateTime(initial?.updated_at)}</p></div>
       <div className="header-actions"><button type="submit" name="intent" value="draft" className="secondary-button" disabled={busy || isTrashed}>Save Draft</button><button type="button" className="secondary-button" onClick={() => document.getElementById("post-workbench")?.scrollIntoView({ behavior: "smooth" })}>Preview</button><button type="submit" name="intent" value={isPublished ? "save" : "publish"} className="primary-button" disabled={busy || isTrashed}>{isPublished ? "Update" : "Publish"}</button></div>
     </header>
     <div className="editor-grid">
@@ -88,10 +115,36 @@ export function ContentEditor({ kind, initial, seo, categories, publicWebsiteUrl
           <label>Title<input name="title" value={title} onChange={e => setTitle(e.target.value)} required maxLength={240} placeholder="Add a clear post title" /></label>
           <div className="field-row"><label>Slug<input name="slug" value={slug} onChange={e => setSlug(e.target.value)} maxLength={160} pattern="[a-z0-9-]*" placeholder="generated-from-title" /></label><span className="field-hint">Lowercase letters, numbers and hyphens</span></div>
           <label>Excerpt<textarea name="excerpt" value={excerpt} onChange={e => setExcerpt(e.target.value)} rows={3} maxLength={2000} placeholder="A concise summary for search and post cards" /></label>
-          <label>Article body<span className="editor-help">Lightweight formatting: # H1, ## H2, ### H3, lists, &gt; quotes and Markdown links.</span><textarea name="body" value={body} onChange={e => setBody(e.target.value)} rows={22} maxLength={200000} placeholder="Start writing…" /></label>
+          <div className="article-body-field">
+  <div className="article-body-label">
+    <strong>Article body</strong>
+    <span className="editor-help">
+      Select text and use the toolbar for headings, links, colours, highlights, lists and quotes.
+    </span>
+  </div>
+  <RichContentEditor value={body} onChange={setBody} />
+  <input type="hidden" name="body" value={body} />
+</div>
           <footer className="editor-stats word-count"><span>{words.toLocaleString("en-IN")} words</span><span>{minutes} min read</span><span>{body.length.toLocaleString("en-IN")} characters</span></footer>
         </section>
-        <SeoWorkbench initial={seo || null} content={initial ? { ...initial, title, excerpt, body, slug } : null} kind={kind} categories={categories} publicUrl={publicUrl} />
+        <SeoWorkbench
+          initial={seo || null}
+          content={{
+            ...(initial || {}),
+            id: initial?.id || 0,
+            title,
+            excerpt,
+            body,
+            slug,
+          } as ContentDetail}
+          kind={kind}
+          categories={categories}
+          publicUrl={publicUrl}
+          featuredImage={featuredImage}
+          onScoreChange={setLiveSeoScore}
+          onApplyArticle={applyAiArticle}
+          onApplyImageAlt={applyAiImageAlt}
+        />
       </div>
       <aside className="editor-side">
         <section className="editor-card publish-card"><div className="card-heading"><div><h2>Publish</h2><p>Visibility and timing</p></div></div>
@@ -102,8 +155,16 @@ export function ContentEditor({ kind, initial, seo, categories, publicWebsiteUrl
           {message && <div className="form-error" role="alert">{message}</div>}
         </section>
         <section className="editor-card"><div className="card-heading"><div><h2>Organization</h2></div></div><label>Category<select name="category_id" defaultValue={initial?.category_id || ""}><option value="">Uncategorized</option>{categories.map(c => <option value={c.id} key={c.id}>{c.title}</option>)}</select></label><label>Subcategory<input name="subcategory" defaultValue={initial?.subcategory || ""} maxLength={120} /></label><label>Author<input value={initial?.author || "Current administrator"} readOnly aria-describedby="author-note" /></label><small id="author-note" className="support-note">Author reassignment is not supported by the current API.</small></section>
-        <FeaturedImagePicker contentId={initial?.id} initial={{ id: initial?.featured_media_id || null, url: initial?.featured_image || null, alt: initial?.featured_image_alt || "" }} onPendingChange={setPendingMediaId} />
-        <section className="editor-card seo-side-card"><div className="score-ring" style={{ "--score": `${seo?.seo_score || 0}%` } as CSSProperties}><strong>{seo?.seo_score || 0}</strong><small>/ 100</small></div><div><h2>SEO score</h2><p>Deterministic checks; no ranking guarantee.</p></div></section>
+        <FeaturedImagePicker
+          contentId={initial?.id}
+          initial={featuredImage}
+          onPendingChange={setPendingMediaId}
+          onSelectionChange={selection => {
+            setFeaturedImage(selection);
+            setPendingMediaId(selection.id);
+          }}
+        />
+        <section className="editor-card seo-side-card"><div className="score-ring" style={{ "--score": `${liveSeoScore}%` } as CSSProperties}><strong>{liveSeoScore}</strong><small>/ 100</small></div><div><h2>SEO score</h2><p>Deterministic checks; no ranking guarantee.</p></div></section>
         <section className="editor-card public-card"><h2>Public URL</h2><code>{publicUrl}</code>{isPublished && publicWebsiteUrl && <a href={publicUrl} target="_blank" rel="noreferrer" className="secondary-button">Open Public Post ↗</a>}</section>
         {initial && <section className="danger-actions"><button type="button" onClick={() => action("duplicate")} disabled={busy}>Duplicate post</button>{!isTrashed && <button type="button" className="danger-link" onClick={() => action("trash")} disabled={busy}>Move to Trash</button>}</section>}
       </aside>

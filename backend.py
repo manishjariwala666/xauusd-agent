@@ -22,8 +22,10 @@ from sqlalchemy import text
 
 from config import get_settings
 from core.database import session_scope
+from services.admin_agents_api import router as admin_agents_router
 from services.admin_auth_api import router as admin_auth_router
 from services.admin_content_api import router as admin_content_router
+from services.admin_content_studio_api import router as admin_content_studio_router
 from services.admin_media_api import router as admin_media_router
 from services.admin_seo_api import router as admin_seo_router
 from services.admin_signals_api import router as admin_signals_router
@@ -131,7 +133,9 @@ app.include_router(mt5_h1_router)
 
 app.add_middleware(GZipMiddleware, minimum_size=1_000)
 app.include_router(admin_auth_router)
+app.include_router(admin_agents_router)
 app.include_router(admin_content_router)
+app.include_router(admin_content_studio_router)
 app.include_router(admin_media_router)
 app.include_router(admin_seo_router)
 app.include_router(admin_signals_router)
@@ -139,10 +143,18 @@ app.include_router(admin_publications_router)
 app.include_router(public_publications_router)
 app.include_router(admin_leads_router)
 app.include_router(public_leads_router)
-_local_media_root = os.getenv("ADMIN_MEDIA_LOCAL_ROOT", "").strip()
-if _local_media_root:
-    Path(_local_media_root).mkdir(parents=True, exist_ok=True)
-    app.mount("/media-local", StaticFiles(directory=_local_media_root), name="local-admin-media")
+_local_media_root = os.getenv(
+    "ADMIN_MEDIA_LOCAL_ROOT",
+    "/tmp/xauusd-admin-media",
+).strip()
+
+Path(_local_media_root).mkdir(parents=True, exist_ok=True)
+
+app.mount(
+    "/media-local",
+    StaticFiles(directory=_local_media_root),
+    name="local-admin-media",
+)
 
 
 def _search_indexing_blocked() -> bool:

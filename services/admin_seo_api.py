@@ -3,18 +3,29 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any, Callable, Literal
+from collections.abc import Callable
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from services.admin_auth_api import _bearer_token, _request_id, _require_bff, _require_identity
+from services.admin_auth_api import (
+    _bearer_token,
+    _request_id,
+    _require_bff,
+    _require_identity,
+)
 from services.admin_auth_service import AdminIdentity
 from services.admin_seo_service import (
-    SeoNotFoundError, get_admin_seo, get_admin_seo_summary, list_admin_seo_issues,
-    save_admin_seo, score_admin_seo, validate_admin_seo,
+    SeoNotFoundError,
+    analyse_admin_content,
+    get_admin_seo,
+    get_admin_seo_summary,
+    list_admin_seo_issues,
+    save_admin_seo,
+    score_admin_seo,
+    validate_admin_seo,
 )
-
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin-seo"])
@@ -32,6 +43,13 @@ class SocialPayload(BaseModel):
 class FaqPayload(BaseModel):
     question: str = Field(max_length=300)
     answer: str = Field(max_length=4_000)
+
+
+class ContentAnalysisPayload(BaseModel):
+    title: str | None = Field(default=None, max_length=500)
+    slug: str | None = Field(default=None, max_length=500)
+    body: str | None = Field(default=None, max_length=500_000)
+    focus_keyword: str | None = Field(default=None, max_length=160)
 
 
 class SeoPayload(BaseModel):
@@ -91,6 +109,19 @@ def seo_validate(content_id: int, payload: SeoPayload,
     x_admin_bff_key: Annotated[str | None, Header()] = None) -> dict[str, Any]:
     _identity(authorization, x_admin_bff_key)
     return _safe(lambda: validate_admin_seo(content_id, payload.model_dump(exclude_none=True)))
+
+
+@router.post("/content/{content_id}/seo/analyse")
+def seo_content_analysis(content_id: int, payload: ContentAnalysisPayload,
+    response: Response,
+    authorization: Annotated[str | None, Header()] = None,
+    x_admin_bff_key: Annotated[str | None, Header()] = None) -> dict[str, Any]:
+    _identity(authorization, x_admin_bff_key)
+    response.headers["Cache-Control"] = "private, no-store"
+    return _safe(lambda: analyse_admin_content(
+        content_id,
+        payload.model_dump(exclude_none=True),
+    ))
 
 
 @router.post("/content/{content_id}/seo/score")

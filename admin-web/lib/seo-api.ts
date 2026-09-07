@@ -18,6 +18,51 @@ export type SeoDetail = {
 export type SeoIssueItem = { id: number; content_type: string; title: string; slug: string; status: string; category: string | null; updated_at: string; seo_score: number; issues: SeoIssue[] };
 export type SeoSummary = { total: number; average_score: number; low_score: number; missing_title: number; missing_description: number; noindex: number };
 
+export type ContentQualityCheck = {
+  code: string;
+  passed: boolean;
+  severity: "warning" | "error";
+  message: string;
+};
+
+export type DuplicateMatch = {
+  id: number;
+  title: string;
+  slug: string;
+  status: "draft" | "published";
+  title_similarity: number;
+  body_similarity: number;
+  similarity: number;
+  exact_slug_match: boolean;
+};
+
+export type ContentAnalysis = {
+  content_id: number;
+  quality: {
+    score: number;
+    word_count: number;
+    character_count: number;
+    reading_time_minutes: number;
+    headings: Record<"h2" | "h3" | "h4" | "h5" | "h6", number>;
+    focus_keyword_count: number;
+    focus_keyword_density: number;
+    internal_links: number;
+    external_links: number;
+    images: number;
+    images_missing_alt: number;
+    repeated_sentences: Array<{ text: string; count: number }>;
+    checks: ContentQualityCheck[];
+  };
+  duplicates: {
+    risk: "low" | "medium" | "high";
+    highest_similarity: number;
+    matches: DuplicateMatch[];
+    scope: "internal_database_only";
+  };
+  originality_score: number;
+  overall_score: number;
+};
+
 async function seoFetch<T>(path: string, token: string): Promise<T | null> {
   if (!token) return null;
   try {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { ContentList } from "./content-list";
 import { fetchContentList } from "@/lib/content-api";
@@ -20,7 +21,36 @@ export async function ContentIndexPage({ kind, searchParams }: {
     fetchContentList(kind, query, token),
     fetchCategories(new URLSearchParams({ page_size: "50", active: "active" }), token)
   ]);
-  if (!data) return <section className="state-panel error-state"><strong>Content could not be loaded.</strong><p>Try again after checking the local staging API.</p></section>;
+  if (!data) {
+    if (kind === "posts") {
+      return (
+        <section>
+          <header className="studio-header">
+            <div>
+              <span className="section-kicker">Publishing desk</span>
+              <h1>Blog Studio</h1>
+              <p>Create and manage website blog posts.</p>
+            </div>
+            <Link className="primary-button" href="/admin/posts/new">
+              Create New Post
+            </Link>
+          </header>
+
+          <section className="state-panel error-state">
+            <strong>Existing posts could not be loaded.</strong>
+            <p>You can still create a new blog post using the button above.</p>
+          </section>
+        </section>
+      );
+    }
+
+    return (
+      <section className="state-panel error-state">
+        <strong>Content could not be loaded.</strong>
+        <p>Try again after checking the local staging API.</p>
+      </section>
+    );
+  }
   const publicWebsiteUrl = (process.env.PUBLIC_WEBSITE_URL || "").trim().replace(/\/$/, "");
   return <ContentList kind={kind} data={data} categories={categories?.items || []}
     search={query.get("search") || ""} status={query.get("status") || "all"}

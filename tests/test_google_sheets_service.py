@@ -85,6 +85,7 @@ def test_required_tabs_are_exact_phase_two_tabs() -> None:
         "telegram_public_signals",
         "whatsapp_messages",
         "xauusd_signals",
+        "xauusd_h1_market_data",
         "users",
         "content_queue",
         "errors",

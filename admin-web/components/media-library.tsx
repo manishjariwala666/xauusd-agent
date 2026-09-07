@@ -11,6 +11,33 @@ const formatSize = (bytes: number) => bytes < 1024 * 1024 ? `${Math.max(1, Math.
 const formatDate = (value: string) => new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(value));
 const csrf = async () => fetch("/api/admin/auth/csrf", { cache: "no-store" }).then(r => r.json()) as Promise<{ csrfToken: string }>;
 
+function mediaPreviewUrl(value: string | null | undefined) {
+  const clean = String(value || "").trim();
+  if (!clean) return "";
+
+  if (/^(blob:|data:)/i.test(clean)) return clean;
+
+  if (/^https?:\/\//i.test(clean)) {
+    try {
+      const parsed = new URL(clean);
+
+      if (
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname === "localhost"
+      ) {
+        return `/api/admin/media-preview/${parsed.pathname
+          .replace(/^\/+/, "")}${parsed.search}`;
+      }
+
+      return clean;
+    } catch {
+      return "";
+    }
+  }
+
+  return `/api/admin/media-preview/${clean.replace(/^\/+/, "")}`;
+}
+
 export function MediaLibrary({ data, filters, selectFor }: { data: Paginated<MediaAsset>; filters: Record<string, string>; selectFor?: number }) {
   const router = useRouter();
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -21,13 +48,28 @@ export function MediaLibrary({ data, filters, selectFor }: { data: Paginated<Med
   const pageHref = (page: number) => `?${new URLSearchParams({ ...filters, page: String(page), ...(selectFor ? { selectFor: String(selectFor) } : {}) })}`;
 
   async function upload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy) return; setBusy(true); setMessage("");
+    event.preventDefault();
+    if (busy) return;
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    setBusy(true);
+    setMessage("");
+
     try {
       const token = await csrf();
-      const response = await fetch("/api/admin/media/upload", { method: "POST", headers: { "X-CSRF-Token": token.csrfToken }, body: new FormData(event.currentTarget) });
+      const response = await fetch("/api/admin/media/upload", {
+        method: "POST",
+        headers: { "X-CSRF-Token": token.csrfToken },
+        body: formData,
+      });
       const result = await response.json() as { detail?: string; message?: string };
       if (!response.ok) { setMessage(result.detail || result.message || "Upload failed."); return; }
-      setShowUpload(false); setMessage("Image uploaded safely."); router.refresh();
+      form.reset();
+      setShowUpload(false);
+      setMessage("Image uploaded safely.");
+      router.refresh();
     } catch { setMessage("Media service is temporarily unavailable."); } finally { setBusy(false); }
   }
   async function mutation(path: string, method: "POST" | "PATCH" | "DELETE", body?: object) {
@@ -55,7 +97,26 @@ export function MediaLibrary({ data, filters, selectFor }: { data: Paginated<Med
     <section className="content-panel media-panel">
       <div className="media-toolbar"><form className="filter-bar media-filters" method="get"><label className="search-field"><span aria-hidden="true">⌕</span><input name="search" defaultValue={filters.search} placeholder="Search filename, alt text or caption" aria-label="Search media" /></label><select name="source" defaultValue={filters.source} aria-label="Source"><option value="all">All sources</option><option value="manual_upload">Manual uploads</option><option value="local_import">Local imports</option><option value="ai_generated">AI generated</option></select><select name="date_filter" defaultValue={filters.date_filter} aria-label="Upload date"><option value="all">Any date</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option></select><select name="state" defaultValue={filters.state} aria-label="Media state"><option value="active">Active</option><option value="trash">Trash</option><option value="all">All</option></select>{selectFor && <input type="hidden" name="selectFor" value={selectFor} />}<button className="secondary-button">Filter</button></form><div className="view-toggle" aria-label="View style"><button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")} aria-pressed={view === "grid"}>Grid</button><button className={view === "list" ? "active" : ""} onClick={() => setView("list")} aria-pressed={view === "list"}>List</button></div></div>
       {data.items.length ? <div className={`media-collection ${view}`}>{data.items.map(item => <article className="media-item" key={item.id}>
-        <a className="media-thumb" href={item.public_url} target="_blank" rel="noreferrer" aria-label={`View ${item.original_filename}`}><img src={item.thumbnail_url || item.public_url} alt="" loading="lazy" decoding="async" /></a>
+        <a className="media-thumb" href={item.public_url} target="_blank" rel="noreferrer" aria-label={`View ${item.original_filename}`}><img
+  src={mediaPreviewUrl(item.thumbnail_url || item.public_url)}
+  alt={item.alt_text || item.original_filename}
+  loading="lazy"
+  decoding="async"
+  onError={event => {
+    const image = event.currentTarget;
+    const fallback = mediaPreviewUrl(item.public_url);
+    const fallbackAbsolute = fallback
+      ? new URL(fallback, window.location.origin).href
+      : "";
+
+    if (fallbackAbsolute && image.src !== fallbackAbsolute) {
+      image.src = fallback;
+      return;
+    }
+
+    image.style.visibility = "hidden";
+  }}
+/></a>
         <div className="media-info"><strong title={item.original_filename}>{item.original_filename}</strong><span>{item.width} × {item.height} · {formatSize(item.size_bytes)}</span><span>{item.mime_type} · {formatDate(item.created_at)}</span><span className={item.alt_text ? "alt-ok" : "alt-missing"}>{item.alt_text ? "Alt text added" : "Missing alt text"}</span><span>{item.source_type.replaceAll("_", " ").toLowerCase()} · Used {item.usage_count}×</span></div>
         <div className="media-actions"><a href={item.public_url} target="_blank" rel="noreferrer">View</a><button onClick={() => setEditing(item)}>Edit</button><button onClick={() => copyUrl(item.public_url)}>Copy URL</button>{selectFor && !item.deleted_at && <button onClick={() => mutation(`/api/admin/featured-image/${selectFor}`, "POST", { media_id: item.id })}>Set featured</button>}{item.deleted_at ? <><button onClick={() => mutation(`/api/admin/media/${item.id}/restore`, "POST")}>Restore</button><button className="danger-link" onClick={() => window.confirm("Permanently delete this trashed image? This cannot be undone.") && mutation(`/api/admin/media/${item.id}?confirmed=true`, "DELETE")}>Delete permanently</button></> : <button className="danger-link" onClick={() => window.confirm("Move this media item to trash?") && mutation(`/api/admin/media/${item.id}/trash`, "POST")}>Trash</button>}</div>
       </article>)}</div> : <section className="state-panel empty-table"><strong>No media found</strong><p>Upload an approved image or change the current filters.</p></section>}

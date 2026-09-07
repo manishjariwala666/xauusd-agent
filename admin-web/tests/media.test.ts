@@ -32,6 +32,9 @@ describe("Phase 3A Media Library", () => {
     expect(editor).toContain("FeaturedImagePicker");
     for (const label of ["Choose from library", "Upload new", "Replace", "Remove", "Save alt text"]) expect(picker).toContain(label);
     expect(picker).toContain("/api/admin/featured-image/");
+    expect(picker).toContain("URL.createObjectURL");
+    expect(picker).toContain("URL.revokeObjectURL");
+    expect(picker).toContain("Preview before WebP optimisation");
     expect(picker).not.toContain("AI image");
   });
 
