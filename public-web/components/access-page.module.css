@@ -1,0 +1,293 @@
+.page {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(420px, .95fr);
+  gap: 28px;
+  min-height: 720px;
+  margin: 34px 0 96px;
+  padding: clamp(28px, 5vw, 64px);
+  overflow: hidden;
+  border: 1px solid rgba(214, 166, 61, .18);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(31, 90, 135, .33), transparent 30%),
+    radial-gradient(circle at 86% 12%, rgba(214, 166, 61, .16), transparent 26%),
+    linear-gradient(135deg, #07111f 0%, #0b1b31 58%, #0c2239 100%);
+  box-shadow: 0 26px 80px rgba(4, 15, 29, .18);
+}
+
+.page::before {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  content: "";
+  pointer-events: none;
+}
+
+.story,
+.formShell {
+  position: relative;
+  z-index: 1;
+}
+
+.story {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-right: clamp(0px, 3vw, 40px);
+}
+
+.story h1 {
+  max-width: 680px;
+  margin: 18px 0 20px;
+  color: #fff;
+  font-size: clamp(3rem, 5.3vw, 5.8rem);
+}
+
+.story h1 em {
+  color: #f1d58e;
+  font-weight: 400;
+}
+
+.storyLead {
+  max-width: 660px;
+  margin-bottom: 30px;
+  color: #bdc8d3;
+  font-size: 1.08rem;
+}
+
+.optionGrid {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.optionCard {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 17px 18px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 16px;
+  background: rgba(255,255,255,.055);
+  backdrop-filter: blur(10px);
+}
+
+.optionCard strong {
+  display: block;
+  color: #fff;
+  font-size: .98rem;
+}
+
+.optionCard span {
+  display: block;
+  margin-top: 3px;
+  color: #9eafbf;
+  font-size: .82rem;
+}
+
+.optionIcon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(241,213,142,.18);
+  border-radius: 13px;
+  background: rgba(214,166,61,.1);
+  color: #f1d58e;
+  font-weight: 900;
+}
+
+.optionArrow {
+  color: #f1d58e;
+  font-size: 1.3rem;
+}
+
+.trustRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 26px;
+}
+
+.trustRow span {
+  padding: 7px 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 999px;
+  color: #aebdca;
+  font-size: .74rem;
+}
+
+.formShell {
+  display: flex;
+  align-items: center;
+}
+
+.formPanel {
+  width: 100%;
+  padding: clamp(28px, 4vw, 48px);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 24px;
+  background: rgba(255,255,255,.97);
+  box-shadow: 0 28px 80px rgba(0,0,0,.22);
+}
+
+.formPanel h2 {
+  margin: 12px 0 10px;
+  font-size: clamp(2.2rem, 3vw, 3.35rem);
+}
+
+.formIntro {
+  margin-bottom: 28px;
+  color: #637180;
+}
+
+.formPanel :global(.auth-form) {
+  display: grid;
+  gap: 16px;
+}
+
+.formPanel :global(.auth-form label) {
+  display: grid;
+  gap: 7px;
+  color: #17283b;
+  font-size: .86rem;
+  font-weight: 800;
+}
+
+.formPanel :global(.auth-form label span) {
+  color: #6b7784;
+  font-size: .75rem;
+  font-weight: 600;
+}
+
+.formPanel :global(.auth-form input) {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid #cbd5df;
+  border-radius: 10px;
+  background: #fff;
+  color: #102033;
+  box-shadow: inset 0 1px 1px rgba(12,32,51,.03);
+}
+
+.formPanel :global(.auth-form input:focus) {
+  border-color: #b98922;
+  outline: 3px solid rgba(214,166,61,.16);
+}
+
+.formPanel :global(.auth-form .button) {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 4px;
+  border-radius: 10px;
+  background: #07111f;
+  color: #fff;
+}
+
+.formPanel :global(.auth-form .button:hover) {
+  background: #10243d;
+}
+
+.formPanel :global(.auth-form > p:last-child) {
+  margin: 2px 0 0;
+  text-align: center;
+  color: #657383;
+  font-size: .88rem;
+}
+
+.formPanel :global(.auth-form a) {
+  color: #8a641b;
+  font-weight: 800;
+}
+
+.formPanel :global(.auth-error) {
+  padding: 11px 12px;
+  border: 1px solid rgba(185,79,79,.24);
+  border-radius: 9px;
+  background: rgba(185,79,79,.07);
+  color: #9e3434;
+}
+
+.formPanel :global(.auth-success) {
+  padding: 11px 12px;
+  border: 1px solid rgba(35,136,105,.22);
+  border-radius: 9px;
+  background: rgba(35,136,105,.07);
+  color: #1d7358;
+}
+
+.formFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #e3e8ed;
+  color: #6e7b88;
+  font-size: .78rem;
+}
+
+.formFooter a {
+  color: #102033;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+@media (max-width: 960px) {
+  .page {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .story {
+    padding-right: 0;
+  }
+
+  .story h1 {
+    max-width: 760px;
+  }
+
+  .optionGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .optionCard {
+    grid-template-columns: 42px 1fr;
+  }
+
+  .optionArrow {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .page {
+    width: calc(100% + 24px);
+    margin: 18px -12px 70px;
+    padding: 26px 18px;
+    border-radius: 22px;
+  }
+
+  .story h1 {
+    font-size: clamp(2.6rem, 13vw, 4rem);
+  }
+
+  .optionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .formPanel {
+    padding: 24px 20px;
+    border-radius: 18px;
+  }
+
+  .formFooter {
+    flex-direction: column;
+  }
+}

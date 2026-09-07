@@ -1,0 +1,340 @@
+/* VenusRealm site-wide premium UX layer */
+
+.site-header {
+  min-height: 76px;
+  padding: 12px 14px 12px 18px;
+  border-color: rgba(176, 191, 204, .5);
+  border-radius: 20px;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 14px 42px rgba(6,20,37,.09);
+}
+
+.brand { font-size: 1.1rem; }
+.brand-mark { width: 42px; height: 42px; border-radius: 12px; }
+.desktop-nav { gap: clamp(14px, 1.8vw, 28px); }
+.desktop-nav a { position: relative; color: #33475a; font-size: .86rem; }
+.desktop-nav a::after {
+  position: absolute;
+  left: 0;
+  right: 100%;
+  bottom: -8px;
+  height: 2px;
+  background: var(--gold);
+  content: "";
+  transition: right .16s ease;
+}
+.desktop-nav a:hover::after { right: 0; }
+.header-actions { gap: 10px; }
+.account-link {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid #cbd5de;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--navy-950);
+  font-size: .83rem;
+  font-weight: 850;
+  text-decoration: none;
+  transition: transform .16s ease, border-color .16s ease, color .16s ease;
+}
+.account-link:hover { transform: translateY(-2px); border-color: #b78a2d; color: #8e6618; }
+
+.page-heading,
+.content-page-header,
+.publication-hero {
+  position: relative;
+  max-width: none;
+  margin: 34px 0 42px;
+  padding: clamp(38px, 6vw, 78px);
+  overflow: hidden;
+  border: 1px solid rgba(214,166,61,.16);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 82% 14%, rgba(214,166,61,.16), transparent 24%),
+    radial-gradient(circle at 12% 82%, rgba(35,101,145,.22), transparent 30%),
+    linear-gradient(135deg, #07111f, #0c1e34 66%, #102841);
+  box-shadow: 0 24px 70px rgba(8,23,41,.13);
+}
+.page-heading h1,
+.content-page-header h1,
+.publication-hero h1 {
+  max-width: 900px;
+  margin: 14px 0 18px;
+  color: #fff;
+  font-size: clamp(3rem, 5.6vw, 5.8rem);
+}
+.page-heading p,
+.content-page-header p,
+.publication-hero p {
+  max-width: 740px;
+  margin-bottom: 0;
+  color: #bdc8d3;
+  font-size: 1.04rem;
+}
+
+.category-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 0 0 28px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #f8fafb;
+}
+.category-filters a {
+  padding: 8px 11px;
+  border-radius: 8px;
+  color: #425365;
+  font-size: .82rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+.category-filters a:hover { background: #fff; color: #956c1c; }
+
+.content-grid { gap: 20px; }
+.content-card,
+.publication-card,
+.astrology-info-card,
+.astrology-notice-card,
+.offer-card,
+.member-panel {
+  border-color: #dbe3e9 !important;
+  box-shadow: 0 10px 34px rgba(10,29,49,.055);
+}
+.content-card,
+.publication-card,
+.research-tool-card,
+.premium-signal-card,
+.astrology-info-card,
+.astrology-notice-card,
+.contact-channel,
+.member-panel {
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.content-card { overflow: hidden; border-radius: 18px; }
+.content-card:hover,
+.publication-card:hover,
+.research-tool-card:hover,
+.premium-signal-card:hover,
+.astrology-info-card:hover,
+.contact-channel:hover {
+  transform: translateY(-5px);
+  border-color: #c9b275 !important;
+  box-shadow: 0 20px 44px rgba(10,29,49,.1);
+}
+
+.publication-page,
+.content-page,
+.signals-page { padding-bottom: 30px; }
+.publication-method,
+.proof-section,
+.discipline-section,
+.market-narrative,
+.wide-lens,
+.levels-section,
+.desk-strip { border-radius: 26px; }
+.publication-method {
+  display: grid;
+  grid-template-columns: .9fr 1.1fr;
+  gap: 42px;
+  align-items: center;
+  padding: clamp(28px, 5vw, 54px);
+  border: 1px solid var(--line);
+  background: var(--cream);
+}
+.publication-method h2 { margin-bottom: 0; }
+.publication-method p { margin: 0; }
+.publication-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin: 26px 0 34px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+.publication-filters label { display: grid; gap: 6px; font-size: .78rem; font-weight: 800; color: #4c5d6d; }
+.publication-filters input,
+.publication-filters select {
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid #cbd5df;
+  border-radius: 9px;
+  background: #fff;
+}
+.publication-filters button {
+  min-height: 44px;
+  padding: 0 17px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--navy-950);
+  color: white;
+  font-weight: 850;
+}
+
+.signal-hero {
+  position: relative;
+  padding: clamp(38px, 6vw, 72px);
+  overflow: hidden;
+  border: 1px solid rgba(214,166,61,.17);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 85% 20%, rgba(214,166,61,.17), transparent 24%),
+    linear-gradient(135deg, #07111f, #0d223b);
+}
+.signal-hero h1 { max-width: 850px; margin: 14px 0 18px; color: #fff; }
+.signal-hero p { max-width: 720px; color: #bac7d2; }
+.signal-hero .button.primary { background: var(--gold); color: var(--navy-950); }
+.signal-hero .button.secondary { border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.06); color: #fff; }
+.member-panel { padding: clamp(24px,4vw,40px); border-radius: 20px; background: #fff; }
+
+.astrology-hero {
+  overflow: hidden;
+  border: 1px solid rgba(214,166,61,.15);
+  border-radius: 28px;
+  box-shadow: 0 22px 60px rgba(8,23,41,.11);
+}
+.astrology-hero-copy { padding: clamp(34px, 5vw, 64px); }
+.astrology-hero-copy h1 { font-size: clamp(2.8rem, 5vw, 5.3rem); }
+.astrology-section { margin: 42px 0; }
+.astrology-notice-card { padding: clamp(28px, 4vw, 46px); border-radius: 20px; background: #fff; }
+.astrology-info-grid { gap: 16px; }
+.astrology-info-card { border-radius: 18px; }
+
+.contact-hub {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 16px;
+  margin: 0 0 34px;
+}
+.contact-channel {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 12px 34px rgba(10,29,49,.055);
+}
+.contact-channel small { color: #9a6c16; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+.contact-channel h2 { margin: 30px 0 8px; font-size: 1.8rem; }
+.contact-channel p { flex: 1; }
+.contact-channel strong { color: #9a6c16; }
+.contact-trust {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  padding: clamp(28px,4vw,44px);
+  border-radius: 22px;
+  background: var(--cream);
+}
+.contact-trust h2 { margin: 8px 0 12px; }
+.contact-trust ul { margin: 0; padding-left: 20px; color: var(--muted); }
+
+.site-footer {
+  margin-top: 110px;
+  padding: clamp(36px,5vw,58px);
+  border: 0;
+  border-radius: 28px 28px 0 0;
+  background: #07111f;
+  color: #dbe4eb;
+}
+.footer-lead p { color: #9fb0bf; }
+.footer-brand { color: white; }
+.footer-column h2 { color: #f1d58e; font-family: inherit; font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; }
+.footer-column a { color: #c3ced8; }
+.footer-column a:hover { color: #f1d58e; }
+.footer-risk { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.045); }
+.footer-risk p,
+.footer-bottom small { color: #9fafbd; }
+.footer-bottom { border-color: rgba(255,255,255,.1); }
+
+/* Fast, deliberate reveal system: crisp instead of slow/parallax-heavy. */
+.vr-reveal {
+  opacity: 0;
+  transform: translate3d(0, 20px, 0) scale(.992);
+  filter: blur(2px);
+  will-change: transform, opacity, filter;
+}
+.vr-reveal.vr-reveal-ready {
+  opacity: 1;
+  transform: translate3d(0,0,0) scale(1);
+  filter: blur(0);
+  transition:
+    opacity 360ms cubic-bezier(.2,.75,.25,1) var(--vr-reveal-delay, 0ms),
+    transform 420ms cubic-bezier(.2,.75,.25,1) var(--vr-reveal-delay, 0ms),
+    filter 260ms ease var(--vr-reveal-delay, 0ms);
+}
+.home-hero.vr-reveal { transform: translate3d(0, 12px, 0) scale(.997); }
+.home-hero.vr-reveal.vr-reveal-ready { transform: translate3d(0,0,0) scale(1); }
+.home-hero-art { animation: vrHeroIn 520ms cubic-bezier(.2,.75,.25,1) both; }
+.home-hero-copy { animation: vrHeroCopy 460ms cubic-bezier(.2,.75,.25,1) 40ms both; }
+.terminal-panel { animation: vrHeroPanel 500ms cubic-bezier(.2,.75,.25,1) 90ms both; }
+.button,
+.text-link,
+.contact-channel,
+.research-tool-card,
+.premium-signal-card { transition-duration: 160ms !important; }
+.button:active { transform: translateY(0) scale(.985); }
+
+@keyframes vrHeroIn {
+  from { opacity: .45; transform: scale(1.025); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes vrHeroCopy {
+  from { opacity: 0; transform: translate3d(0,16px,0); }
+  to { opacity: 1; transform: translate3d(0,0,0); }
+}
+@keyframes vrHeroPanel {
+  from { opacity: 0; transform: translate3d(18px,0,0) scale(.985); }
+  to { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  .vr-reveal,
+  .vr-reveal.vr-reveal-ready {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@media (max-width: 1000px) {
+  .publication-method,
+  .contact-trust { grid-template-columns: 1fr; }
+  .contact-hub { grid-template-columns: 1fr 1fr; }
+  .publication-filters { grid-template-columns: 1fr 1fr; }
+  .publication-filters button { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .site-header { min-height: 64px; border-radius: 16px; }
+  .page-heading,
+  .content-page-header,
+  .publication-hero,
+  .signal-hero { padding: 30px 22px; border-radius: 21px; }
+  .page-heading h1,
+  .content-page-header h1,
+  .publication-hero h1 { font-size: clamp(2.6rem, 12vw, 4rem); }
+  .contact-hub,
+  .publication-filters { grid-template-columns: 1fr; }
+  .publication-filters button { grid-column: auto; }
+  .site-footer { width: calc(100% + 24px); margin-left: -12px; margin-right: -12px; padding: 34px 24px; border-radius: 22px 22px 0 0; }
+  .vr-reveal { transform: translate3d(0,12px,0); filter: none; }
+  .vr-reveal.vr-reveal-ready { transition-duration: 300ms, 340ms, 1ms; }
+}
