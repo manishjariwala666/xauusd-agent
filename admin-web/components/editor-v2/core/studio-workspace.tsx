@@ -656,10 +656,26 @@ export function StudioWorkspace() {
           <button
             type="button"
             className="primary-button"
-            disabled
-            title="Publishing is locked in this workspace."
+            onClick={publishDraft}
+            disabled={
+              publishing ||
+              saving ||
+              document.status === "published" ||
+              !isSavedDatabaseDraft
+            }
+            title={
+              document.status === "published"
+                ? "This post is already published."
+                : !isSavedDatabaseDraft
+                  ? "Save the draft before publishing."
+                  : "Publish this post now."
+            }
           >
-            {document.status === "published" ? "Published" : "Publish"}
+            {publishing
+              ? "Publishing…"
+              : document.status === "published"
+                ? "Published"
+                : "Publish"}
           </button>
         </div>
       </header>
