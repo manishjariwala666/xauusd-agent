@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Category, ContentSummary, Paginated } from "@/lib/content-api";
 import { ContentActions } from "./content-actions";
 
@@ -30,6 +34,12 @@ export function ContentList({
   basePath?: string;
   readOnly?: boolean;
 }) {
+  const router = useRouter();
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState("");
+
   const isPosts = kind === "posts";
   const routeBase = basePath || `/admin/${kind}`;
   const isStudioV2 = routeBase.startsWith("/studio-v2");
@@ -38,6 +48,110 @@ export function ContentList({
   const query = new URLSearchParams({ search, status, sort });
   if (category) query.set("category", category);
   const pageHref = (page: number) => `?${new URLSearchParams({ ...Object.fromEntries(query), page: String(page) })}`;
+
+  const selectableItems = useMemo(
+    () => isPosts && !readOnly ? data.items.filter(item => item.status !== "trash") : [],
+    [data.items, isPosts, readOnly],
+  );
+  const selectableIds = useMemo(() => selectableItems.map(item => item.id), [selectableItems]);
+  const allVisibleSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
+  const someVisibleSelected = selectableIds.some(id => selectedIds.has(id));
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setBulkMessage("");
+  }, [data.page, search, status, category, sort]);
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+    }
+  }, [someVisibleSelected, allVisibleSelected]);
+
+  function toggleOne(id: number, checked: boolean) {
+    setBulkMessage("");
+    setSelectedIds(current => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAll(checked: boolean) {
+    setBulkMessage("");
+    setSelectedIds(current => {
+      const next = new Set(current);
+      for (const id of selectableIds) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  async function deleteSelected() {
+    if (bulkBusy || selectedIds.size === 0 || !isPosts || readOnly) return;
+
+    const selectedItems = data.items.filter(item => selectedIds.has(item.id));
+    const publishedCount = selectedItems.filter(item => item.status === "published").length;
+    const draftCount = selectedItems.filter(item => item.status === "draft").length;
+    const scheduledCount = selectedItems.filter(item => item.status === "scheduled").length;
+    const statusSummary = [
+      publishedCount ? `${publishedCount} published` : "",
+      draftCount ? `${draftCount} draft` : "",
+      scheduledCount ? `${scheduledCount} scheduled` : "",
+    ].filter(Boolean).join(", ");
+    const warning = publishedCount
+      ? "\n\nWarning: published posts are included and will disappear from the public site."
+      : "";
+    const confirmed = window.confirm(
+      `Delete ${selectedItems.length} selected post${selectedItems.length === 1 ? "" : "s"}?\n\n` +
+      `This safely moves them to Trash${statusSummary ? ` (${statusSummary})` : ""}.` +
+      warning,
+    );
+    if (!confirmed) return;
+
+    setBulkBusy(true);
+    setBulkMessage("");
+    const deleted = new Set<number>();
+    try {
+      const csrfResponse = await fetch("/api/admin/auth/csrf", { cache: "no-store" });
+      if (!csrfResponse.ok) throw new Error("csrf");
+      const csrf = await csrfResponse.json() as { csrfToken?: string };
+      if (!csrf.csrfToken) throw new Error("csrf");
+
+      for (const item of selectedItems) {
+        const response = await fetch(`/api/admin/content/posts/${item.id}/trash`, {
+          method: "POST",
+          headers: { "X-CSRF-Token": csrf.csrfToken },
+        });
+        if (response.ok) deleted.add(item.id);
+      }
+
+      if (deleted.size === selectedItems.length) {
+        setBulkMessage(`${deleted.size} post${deleted.size === 1 ? "" : "s"} moved to Trash.`);
+      } else if (deleted.size > 0) {
+        setBulkMessage(`${deleted.size} of ${selectedItems.length} posts moved to Trash. Retry the remaining selection.`);
+      } else {
+        setBulkMessage("Selected posts could not be deleted. Nothing was changed.");
+      }
+
+      if (deleted.size > 0) {
+        setSelectedIds(current => {
+          const next = new Set(current);
+          deleted.forEach(id => next.delete(id));
+          return next;
+        });
+        router.refresh();
+      }
+    } catch {
+      setBulkMessage("Content service is temporarily unavailable. Nothing was deleted.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   return <>
     <section className="page-heading studio-heading">
       <div><span className="eyebrow">CONTENT WORKSPACE</span><h1>{label}</h1><p>{isPosts ? "Create, optimize and publish your market coverage from one focused workspace." : "Manage the site’s evergreen public pages."}</p></div>
@@ -72,7 +186,15 @@ export function ContentList({
       </article>)}
     </section>}
     <section className="content-panel">
-      <div className="content-panel-head"><div><h2>{isPosts ? "All posts" : "All pages"}</h2><p>{number(data.total)} result{data.total === 1 ? "" : "s"} in the current view</p></div></div>
+      <div className="content-panel-head">
+        <div><h2>{isPosts ? "All posts" : "All pages"}</h2><p>{number(data.total)} result{data.total === 1 ? "" : "s"} in the current view</p></div>
+        {isPosts && !readOnly && selectedIds.size > 0 && <div className="studio-heading-actions" role="status" aria-live="polite">
+          <strong>{selectedIds.size} selected</strong>
+          <button className="secondary-button" type="button" disabled={bulkBusy} onClick={() => setSelectedIds(new Set())}>Clear selection</button>
+          <button className="primary-button" type="button" disabled={bulkBusy} onClick={deleteSelected}>{bulkBusy ? "Deleting…" : "Delete selected"}</button>
+        </div>}
+      </div>
+      {bulkMessage && <p className="action-error" role="status">{bulkMessage}</p>}
       <form className="filter-bar studio-filters" method="get">
         <label className="search-field"><span className="sr-only">Search</span><span aria-hidden="true">⌕</span><input name="search" defaultValue={search} placeholder={`Search ${isPosts ? "title, slug or keyword" : "pages"}`} /></label>
         <label><span className="sr-only">Status</span><select name="status" defaultValue={status}><option value="all">All statuses</option><option value="published">Published</option><option value="draft">Drafts</option>{isPosts && <><option value="scheduled">Scheduled</option><option value="trash">Trashed</option></>}</select></label>
@@ -82,11 +204,12 @@ export function ContentList({
         {(search || status !== "all" || category || sort !== "updated_desc") && <Link className="clear-filter" href={routeBase}>Clear</Link>}
       </form>
       {data.items.length ? <div className="table-wrap"><table className="cms-table studio-table">
-        <thead><tr><th><input type="checkbox" disabled aria-label="Select all posts" /></th><th>Post</th><th>ID</th><th>Category</th><th>Status</th><th>Views</th><th>SEO</th><th>Slug</th><th>Author</th><th>Updated</th><th>Actions</th></tr></thead>
+        <thead><tr><th><input ref={selectAllRef} type="checkbox" disabled={!isPosts || readOnly || selectableIds.length === 0} checked={allVisibleSelected} onChange={event => toggleAll(event.target.checked)} aria-label="Select all visible posts" /></th><th>Post</th><th>ID</th><th>Category</th><th>Status</th><th>Views</th><th>SEO</th><th>Slug</th><th>Author</th><th>Updated</th><th>Actions</th></tr></thead>
         <tbody>{data.items.map(item => {
           const previewUrl = publicWebsiteUrl && item.status === "published" ? `${publicWebsiteUrl}/${isPosts ? "blog" : "page"}/${encodeURIComponent(item.slug)}` : undefined;
+          const selectable = isPosts && !readOnly && item.status !== "trash";
           return <tr key={item.id}>
-            <td><input type="checkbox" aria-label={`Select ${item.title}`} disabled /></td>
+            <td><input type="checkbox" aria-label={`Select ${item.title}`} disabled={!selectable || bulkBusy} checked={selectedIds.has(item.id)} onChange={event => toggleOne(item.id, event.target.checked)} /></td>
             <td className="post-cell"><Link
               className="post-thumbnail"
               href={
