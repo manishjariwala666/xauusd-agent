@@ -26,13 +26,15 @@ describe("Phase 2A local CMS", () => {
     expect(proxy).not.toContain("NEXT_PUBLIC");
   });
 
-  it("uses lightweight editor features without rich-text dependencies", () => {
+  it("keeps the legacy editor lightweight while rich editing is explicit", () => {
     const editor = source("components/content-editor.tsx");
-    const pkg = source("package.json");
+    const richEditor = source("components/rich-content-editor.tsx");
     expect(editor).toContain("beforeunload");
     expect(editor).toContain("word-count");
     expect(editor).toContain("<textarea");
-    expect(pkg).not.toMatch(/tinymce|ckeditor|quill|tiptap/);
+    expect(editor).not.toMatch(/tinymce|ckeditor|quill|tiptap/);
+    expect(richEditor).toContain("useEditor");
+    expect(richEditor).toContain("StarterKit");
   });
 
   it("keeps public preview URLs server-configured", () => {

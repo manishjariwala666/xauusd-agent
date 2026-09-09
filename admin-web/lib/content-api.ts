@@ -7,7 +7,9 @@ export type ContentSummary = {
   status: "draft" | "published" | "scheduled" | "trash"; category: string | null;
   author: string | null; published_at: string | null;
   scheduled_at: string | null; updated_at: string;
-  views: number; seo_score: number; featured_image: string | null;
+  views: number; seo_score: number | null; seo_checked: boolean;
+  seo_issues: Array<{ code: string; severity: string; message: string; points_lost: number }>;
+  featured_image: string | null;
   featured_media_id: number | null;
 };
 export type ContentDetail = ContentSummary & {

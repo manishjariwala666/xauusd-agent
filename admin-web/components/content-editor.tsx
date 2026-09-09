@@ -146,7 +146,7 @@ export function ContentEditor({ kind, initial, seo, categories, publicWebsiteUrl
           </div>
           <footer className="editor-stats word-count"><span>{words.toLocaleString("en-IN")} words</span><span>{minutes} min read</span><span>{body.length.toLocaleString("en-IN")} characters</span></footer>
         </section>
-        <SeoWorkbench initial={seo || null} content={initial ? { ...initial, title, excerpt, body, slug } : null} kind={kind} categories={categories} publicUrl={publicUrl} />
+        <SeoWorkbench initial={seo || null} content={initial ? { ...initial, title, excerpt, body, slug } : null} kind={kind} categories={categories} publicUrl={publicUrl} featuredImage={{ id: initial?.featured_media_id || null, url: initial?.featured_image || null, alt: initial?.featured_image_alt || "" }} />
       </div>
       <aside className="editor-side">
         <section className="editor-card publish-card"><div className="card-heading"><div><h2>Publish</h2><p>Visibility and timing</p></div></div>

@@ -28,6 +28,7 @@ from services.admin_master_ai_api import router as admin_master_ai_router
 from services.captain_shadow_api import router as captain_shadow_router
 from services.admin_agent_approvals_api import router as admin_agent_approvals_router
 from services.admin_content_api import router as admin_content_router
+from services.admin_content_studio_api import router as admin_content_studio_router
 from services.admin_media_api import router as admin_media_router
 from services.admin_seo_api import router as admin_seo_router
 from services.admin_signals_api import router as admin_signals_router
@@ -170,6 +171,7 @@ app.include_router(admin_master_ai_router)
 app.include_router(captain_shadow_router)
 app.include_router(admin_agent_approvals_router)
 app.include_router(admin_content_router)
+app.include_router(admin_content_studio_router)
 app.include_router(admin_media_router)
 app.include_router(admin_seo_router)
 app.include_router(admin_signals_router)

@@ -64,3 +64,5 @@ pico.save
 public-web/node_modules/
 public-web/.next/
 public-web/*.tsbuildinfo
+.vercel
+.env*
