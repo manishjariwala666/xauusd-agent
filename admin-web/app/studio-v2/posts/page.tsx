@@ -12,7 +12,6 @@ export default function StudioV2PostsPage({
       kind="posts"
       searchParams={searchParams}
       basePath="/studio-v2/posts"
-      readOnly
     />
   );
 }
