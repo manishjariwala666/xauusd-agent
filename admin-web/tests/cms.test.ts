@@ -38,6 +38,12 @@ describe("Phase 2A local CMS", () => {
     expect(list).toContain("indeterminate");
   });
 
+  it("keeps Studio V2 posts writable for bulk actions", () => {
+    const studioPosts = source("app/studio-v2/posts/page.tsx");
+    expect(studioPosts).toContain('kind="posts"');
+    expect(studioPosts).not.toContain("readOnly");
+  });
+
   it("uses lightweight editor features without rich-text dependencies", () => {
     const editor = source("components/content-editor.tsx");
     const pkg = source("package.json");
