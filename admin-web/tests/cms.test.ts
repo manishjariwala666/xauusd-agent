@@ -26,6 +26,18 @@ describe("Phase 2A local CMS", () => {
     expect(proxy).not.toContain("NEXT_PUBLIC");
   });
 
+  it("supports guarded bulk post selection and trashing", () => {
+    const list = source("components/content-list.tsx");
+    expect(list).toContain("Select all visible posts");
+    expect(list).toContain("Delete selected");
+    expect(list).toContain("window.confirm");
+    expect(list).toContain("Warning: published posts are included");
+    expect(list).toContain("/api/admin/auth/csrf");
+    expect(list).toContain("/trash");
+    expect(list).toContain("X-CSRF-Token");
+    expect(list).toContain("indeterminate");
+  });
+
   it("uses lightweight editor features without rich-text dependencies", () => {
     const editor = source("components/content-editor.tsx");
     const pkg = source("package.json");
