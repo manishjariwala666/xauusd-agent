@@ -133,6 +133,7 @@ def test_public_gold_page_has_no_actionable_signal_rendering() -> None:
         "signal.target_1", "signal.target_2", "signal.target_3", "signal.target_4",
     ):
         assert protected_reference not in index
-    assert "Paid members only" in index
+    assert "Gold signals for verified paid members" in index
+    assert "Available only after verified paid-member access." in index
     assert 'href="/contact"' in index
     assert 'href="/pricing"' not in index
