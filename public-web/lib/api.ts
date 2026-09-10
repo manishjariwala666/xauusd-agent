@@ -15,7 +15,11 @@ const LOCAL_MEDIA_HOSTS = new Set([
   "[::1]"
 ]);
 
-/** Return only media URLs that are safe to render on the public website. */
+function isSupportedRemoteMediaHost(hostname: string): boolean {
+  return hostname.endsWith(".supabase.co") || hostname.endsWith(".supabase.in");
+}
+
+/** Return only media URLs that are safe and supported by Next Image in production. */
 export function publicMediaUrl(value?: string): string | undefined {
   const candidate = value?.trim();
   if (!candidate) return undefined;
@@ -26,11 +30,12 @@ export function publicMediaUrl(value?: string): string | undefined {
     const url = new URL(candidate);
     const hostname = url.hostname.toLowerCase();
     if (
-      !["http:", "https:"].includes(url.protocol) ||
+      url.protocol !== "https:" ||
       LOCAL_MEDIA_HOSTS.has(hostname) ||
       hostname.startsWith("127.") ||
       hostname.endsWith(".localhost") ||
-      hostname.endsWith(".local")
+      hostname.endsWith(".local") ||
+      !isSupportedRemoteMediaHost(hostname)
     ) {
       return undefined;
     }
