@@ -26,6 +26,15 @@ describe("Phase 2A local CMS", () => {
     expect(proxy).not.toContain("NEXT_PUBLIC");
   });
 
+  it("persists Studio V2 featured-image selection after a post save", () => {
+    const proxy = source("app/api/admin/content/[...path]/route.ts");
+    expect(proxy).toContain("venusrealm-cms-v2");
+    expect(proxy).toContain("featuredMediaId");
+    expect(proxy).toContain("/featured-image");
+    expect(proxy).toContain("media_id");
+    expect(proxy).toContain('method: selection.mediaId ? "POST" : "DELETE"');
+  });
+
   it("supports guarded bulk post selection and trashing", () => {
     const list = source("components/content-list.tsx");
     expect(list).toContain("Select all visible posts");
