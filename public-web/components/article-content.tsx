@@ -1,7 +1,15 @@
 import type { ReactNode } from "react";
 
 export type TocItem = { id: string; label: string; level: 2 | 3 };
-type Block = { type: "heading" | "paragraph" | "quote" | "ul" | "ol"; text?: string; level?: 1 | 2 | 3; items?: string[]; id?: string };
+type TableRow = { header: boolean; cells: string[] };
+type Block = {
+  type: "heading" | "paragraph" | "quote" | "ul" | "ol" | "table";
+  text?: string;
+  level?: 1 | 2 | 3;
+  items?: string[];
+  id?: string;
+  rows?: TableRow[];
+};
 
 function slugify(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 
@@ -15,46 +23,96 @@ function decodeHtml(value: string): string {
     .replace(/&gt;/gi, ">");
 }
 
-function normalizeArticleBody(body: string): string {
-  if (!/<[a-z][\s\S]*>/i.test(body)) {
-    return body;
-  }
-
+function cellText(value: string): string {
   return decodeHtml(
-    body
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
-      .replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, "**$2**")
-      .replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, "$2")
-      .replace(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi, "# $1\n\n")
-      .replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, "## $1\n\n")
-      .replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, "### $1\n\n")
-      .replace(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi, "> $1\n\n")
-      .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, "- $1\n")
-      .replace(/<br\s*\/?\s*>/gi, "\n")
-      .replace(/<\/p\s*>/gi, "\n\n")
-      .replace(/<p\b[^>]*>/gi, "")
-      .replace(/<\/?(?:ul|ol)\b[^>]*>/gi, "\n")
-      .replace(/<[^>]+>/g, "")
-      .replace(/[ \t]+\n/g, "\n")
-      .replace(/\n{3,}/g, "\n\n")
+    value
+      .replace(/<br\s*\/?\s*>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
       .trim(),
   );
 }
 
+function parseHtmlTable(value: string): TableRow[] {
+  return Array.from(value.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi))
+    .map((rowMatch) => {
+      const cells = Array.from(rowMatch[1].matchAll(/<(th|td)\b[^>]*>([\s\S]*?)<\/\1>/gi));
+      return {
+        header: cells.some((cell) => cell[1].toLowerCase() === "th"),
+        cells: cells.map((cell) => cellText(cell[2])),
+      };
+    })
+    .filter((row) => row.cells.length > 0);
+}
+
+function normalizeArticleBody(body: string): { text: string; tables: TableRow[][] } {
+  if (!/<[a-z][\s\S]*>/i.test(body)) {
+    return { text: body, tables: [] };
+  }
+
+  const tables: TableRow[][] = [];
+  const withTableMarkers = body.replace(/<table\b[^>]*>[\s\S]*?<\/table>/gi, (table) => {
+    const rows = parseHtmlTable(table);
+    if (!rows.length) return "";
+    const index = tables.push(rows) - 1;
+    return `\n\n@@VR_TABLE_${index}@@\n\n`;
+  });
+
+  return {
+    tables,
+    text: decodeHtml(
+      withTableMarkers
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, "**$2**")
+        .replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, "$2")
+        .replace(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi, "# $1\n\n")
+        .replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, "## $1\n\n")
+        .replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, "### $1\n\n")
+        .replace(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi, "> $1\n\n")
+        .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, "- $1\n")
+        .replace(/<br\s*\/?\s*>/gi, "\n")
+        .replace(/<\/p\s*>/gi, "\n\n")
+        .replace(/<p\b[^>]*>/gi, "")
+        .replace(/<\/?(?:ul|ol)\b[^>]*>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim(),
+    ),
+  };
+}
+
 export function parseArticle(body: string): { blocks: Block[]; toc: TocItem[] } {
-  const lines = normalizeArticleBody(body).split("\n");
+  const normalized = normalizeArticleBody(body);
+  const lines = normalized.text.split("\n");
   const blocks: Block[] = [];
   const toc: TocItem[] = [];
   for (let index = 0; index < lines.length;) {
     const line = lines[index].trim();
     if (!line) { index += 1; continue; }
+    const table = /^@@VR_TABLE_(\d+)@@$/.exec(line);
+    if (table) {
+      const rows = normalized.tables[Number(table[1])] || [];
+      if (rows.length) blocks.push({ type: "table", rows });
+      index += 1;
+      continue;
+    }
     const heading = /^(#{1,3})\s+(.+)$/.exec(line);
     if (heading) { const level = heading[1].length as 1 | 2 | 3; const text = heading[2].trim(); const id = slugify(text); blocks.push({ type: "heading", level, text, id }); if (level > 1) toc.push({ id, label: text, level: level as 2 | 3 }); index += 1; continue; }
     if (/^[*+-]\s+/.test(line)) { const items: string[] = []; while (index < lines.length && /^[*+-]\s+/.test(lines[index].trim())) { items.push(lines[index].trim().replace(/^[*+-]\s+/, "")); index += 1; } blocks.push({ type: "ul", items }); continue; }
     if (/^\d+[.)]\s+/.test(line)) { const items: string[] = []; while (index < lines.length && /^\d+[.)]\s+/.test(lines[index].trim())) { items.push(lines[index].trim().replace(/^\d+[.)]\s+/, "")); index += 1; } blocks.push({ type: "ol", items }); continue; }
     if (line.startsWith(">")) { blocks.push({ type: "quote", text: line.replace(/^>\s?/, "") }); index += 1; continue; }
-    const paragraph = [line]; index += 1; while (index < lines.length && lines[index].trim() && !/^(#{1,3})\s+|^[*+-]\s+|^\d+[.)]\s+|^>/.test(lines[index].trim())) { paragraph.push(lines[index].trim()); index += 1; } blocks.push({ type: "paragraph", text: paragraph.join(" ") });
+    const paragraph = [line]; index += 1;
+    while (
+      index < lines.length &&
+      lines[index].trim() &&
+      !/^(?:@@VR_TABLE_\d+@@$|#{1,3}\s+|[*+-]\s+|\d+[.)]\s+|>)/.test(lines[index].trim())
+    ) {
+      paragraph.push(lines[index].trim());
+      index += 1;
+    }
+    blocks.push({ type: "paragraph", text: paragraph.join(" ") });
   }
   return { blocks, toc };
 }
@@ -70,6 +128,7 @@ export function ArticleContent({ body }: { body: string }) {
     if (block.type === "quote") return <blockquote key={index}>{inline(block.text)}</blockquote>;
     if (block.type === "ul") return <ul key={index}>{block.items?.map((item, itemIndex) => <li key={itemIndex}>{inline(item)}</li>)}</ul>;
     if (block.type === "ol") return <ol key={index}>{block.items?.map((item, itemIndex) => <li key={itemIndex}>{inline(item)}</li>)}</ol>;
+    if (block.type === "table") return <div key={index} style={{ overflowX: "auto", margin: "1.75rem 0" }}><table style={{ width: "100%", minWidth: 560, borderCollapse: "collapse" }}><tbody>{block.rows?.map((row, rowIndex) => <tr key={rowIndex}>{row.cells.map((cell, cellIndex) => row.header ? <th key={cellIndex} scope="col" style={{ padding: "0.75rem", border: "1px solid #dce3e8", textAlign: "left", background: "#f8f5ed" }}>{cell}</th> : <td key={cellIndex} style={{ padding: "0.75rem", border: "1px solid #dce3e8", verticalAlign: "top" }}>{cell}</td>)}</tr>)}</tbody></table></div>;
     return <p key={index}>{inline(block.text)}</p>;
   })}</div>;
 }
