@@ -60,12 +60,13 @@ function isPublishedPublicDetail(item: ContentItem): boolean {
 async function fetchJson<T>(
   path: string,
   fallback: T,
-  revalidate = 60
+  revalidate = 60,
+  timeoutMs = 2000
 ): Promise<T> {
   const attempts = revalidate > 0 ? 2 : 1;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${API_BASE}${path}`, {
         signal: controller.signal,
@@ -110,7 +111,8 @@ async function fetchContentDetail(slug: string): Promise<ContentItem | null> {
   const response = await fetchJson<{ item: ContentItem | null }>(
     `/public/content/${encodeURIComponent(slug)}`,
     { item: null },
-    300
+    300,
+    8000
   );
   if (!response.item || !isPublishedPublicDetail(response.item)) return null;
   return normalizeContentItem(response.item);
