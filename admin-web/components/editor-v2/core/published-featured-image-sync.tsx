@@ -43,11 +43,7 @@ export function PublishedFeaturedImageSync() {
       }
 
       const contentId = Number(document.id || 0);
-      if (
-        !Number.isInteger(contentId) ||
-        contentId <= 0 ||
-        document.status !== "published"
-      ) {
+      if (!Number.isInteger(contentId) || contentId <= 0) {
         return;
       }
 
