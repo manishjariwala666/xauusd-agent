@@ -85,15 +85,16 @@ export function PublishedPostActions() {
     : "";
 
   async function updatePublishedPost() {
-    if (!document.id || !dirty || updating) return;
+    const current = document;
+    if (!current?.id || !dirty || updating) return;
 
-    if (!document.title.trim()) {
+    if (!current.title.trim()) {
       setMessage("Article title is required.");
       return;
     }
 
     setUpdating(true);
-    setMessage(`Updating published post #${document.id}…`);
+    setMessage(`Updating published post #${current.id}…`);
 
     try {
       const csrfResponse = await fetch("/api/admin/auth/csrf", {
@@ -114,7 +115,7 @@ export function PublishedPostActions() {
       }
 
       const response = await fetch(
-        `/api/admin/content/posts/${document.id}`,
+        `/api/admin/content/posts/${current.id}`,
         {
           method: "PATCH",
           credentials: "same-origin",
@@ -124,15 +125,15 @@ export function PublishedPostActions() {
             "X-CSRF-Token": csrfData.csrfToken,
           },
           body: JSON.stringify({
-            title: document.title.trim(),
-            slug: document.slug.trim(),
-            excerpt: document.excerpt.trim(),
-            body: cmsDocumentToHtml(document),
-            category_id: document.categoryId,
+            title: current.title.trim(),
+            slug: current.slug.trim(),
+            excerpt: current.excerpt.trim(),
+            body: cmsDocumentToHtml(current),
+            category_id: current.categoryId,
             subcategory: "",
             status: "published",
             scheduled_at: null,
-            published_at: document.publishedAt,
+            published_at: current.publishedAt,
           }),
         },
       );
