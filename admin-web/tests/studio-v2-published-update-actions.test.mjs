@@ -14,13 +14,19 @@ const pageSource = readFileSync(
 test("published Studio V2 posts can be updated without reverting to draft", () => {
   assert.match(actionsSource, /method:\s*"PATCH"/);
   assert.match(actionsSource, /status:\s*"published"/);
-  assert.match(actionsSource, /published_at:\s*document\.publishedAt/);
-  assert.match(actionsSource, /Update Published Post/);
+  assert.match(actionsSource, /published_at:\s*current\.publishedAt/);
+  assert.match(actionsSource, /Update & Publish/);
 });
 
 test("published Studio V2 posts expose a direct public view link", () => {
   assert.match(actionsSource, /https:\/\/venusrealm\.net\/blog\//);
   assert.match(actionsSource, /View Post ↗/);
+});
+
+test("published actions reuse the Studio heading instead of adding a second action bar", () => {
+  assert.match(actionsSource, /createPortal/);
+  assert.match(actionsSource, /studio-v2-page-heading \.studio-v2-heading-actions/);
+  assert.match(actionsSource, /button\.style\.display = "none"/);
 });
 
 test("Studio V2 renders published update actions", () => {
