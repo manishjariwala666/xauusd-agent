@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import {
   cmsApiDetailToDocument,
@@ -43,7 +44,8 @@ export function PublishedPostActions() {
   const [document, setDocument] = useState<CmsDocument | null>(null);
   const [baseline, setBaseline] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
-  const [message, setMessage] = useState("");
+  const [publishedJustNow, setPublishedJustNow] = useState(false);
+  const [actionHost, setActionHost] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,7 +80,44 @@ export function PublishedPostActions() {
     return editableSignature(document) !== baseline;
   }, [document, isPublished, baseline]);
 
-  if (!document || !isPublished) return null;
+  useEffect(() => {
+    if (!isPublished) {
+      setActionHost(null);
+      return;
+    }
+
+    const host = window.document.querySelector<HTMLElement>(
+      ".studio-v2-page-heading .studio-v2-heading-actions",
+    );
+
+    if (!host) return;
+
+    const originalButtons = Array.from(
+      host.querySelectorAll<HTMLButtonElement>("button"),
+    ).filter(button => {
+      if (button.dataset.publishedAction === "true") return false;
+      const label = button.textContent?.trim() || "";
+      return label === "Save Draft" || label === "Published";
+    });
+
+    const previousDisplays = originalButtons.map(button => button.style.display);
+    originalButtons.forEach(button => {
+      button.style.display = "none";
+    });
+    setActionHost(host);
+
+    return () => {
+      originalButtons.forEach((button, index) => {
+        button.style.display = previousDisplays[index] || "";
+      });
+    };
+  }, [isPublished]);
+
+  useEffect(() => {
+    if (dirty) setPublishedJustNow(false);
+  }, [dirty]);
+
+  if (!document || !isPublished || !actionHost) return null;
 
   const publicUrl = document.slug.trim()
     ? `https://venusrealm.net/blog/${encodeURIComponent(document.slug.trim())}`
@@ -89,12 +128,11 @@ export function PublishedPostActions() {
     if (!current?.id || !dirty || updating) return;
 
     if (!current.title.trim()) {
-      setMessage("Article title is required.");
+      window.alert("Article title is required.");
       return;
     }
 
     setUpdating(true);
-    setMessage(`Updating published post #${current.id}…`);
 
     try {
       const csrfResponse = await fetch("/api/admin/auth/csrf", {
@@ -171,9 +209,9 @@ export function PublishedPostActions() {
 
       setDocument(saved);
       setBaseline(editableSignature(saved));
-      setMessage(`Post #${saved.id} updated and remains published.`);
+      setPublishedJustNow(true);
     } catch (error) {
-      setMessage(
+      window.alert(
         error instanceof Error
           ? error.message
           : "Published post could not be updated.",
@@ -183,53 +221,41 @@ export function PublishedPostActions() {
     }
   }
 
-  return (
-    <section
-      className="studio-v2-document-status"
-      aria-label="Published post actions"
-      style={{ margin: "20px auto 0", maxWidth: 1240 }}
-    >
-      <div>
-        <strong>Published post</strong>
-        <span>
-          {message
-            ? ` ${message}`
-            : dirty
-              ? " Unsaved live changes"
-              : " Live version is up to date"}
-        </span>
-      </div>
-
-      <div className="studio-v2-heading-actions">
-        {publicUrl ? (
-          <a
-            className="secondary-button"
-            href={publicUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View Post ↗
-          </a>
-        ) : null}
-
-        <button
-          type="button"
-          className="primary-button"
-          onClick={() => void updatePublishedPost()}
-          disabled={!dirty || updating}
-          title={
-            dirty
-              ? "Save changes to the live published post."
-              : "No unpublished changes."
-          }
+  return createPortal(
+    <>
+      {publicUrl ? (
+        <a
+          className="secondary-button"
+          href={publicUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-published-action="true"
         >
-          {updating
-            ? "Updating…"
-            : dirty
-              ? "Update Published Post"
+          View Post ↗
+        </a>
+      ) : null}
+
+      <button
+        type="button"
+        className="primary-button"
+        data-published-action="true"
+        onClick={() => void updatePublishedPost()}
+        disabled={!dirty || updating}
+        title={
+          dirty
+            ? "Publish the latest edits to the live post."
+            : "The live post is up to date."
+        }
+      >
+        {updating
+          ? "Publishing…"
+          : dirty
+            ? "Update & Publish"
+            : publishedJustNow
+              ? "Published ✓"
               : "Published"}
-        </button>
-      </div>
-    </section>
+      </button>
+    </>,
+    actionHost,
   );
 }
