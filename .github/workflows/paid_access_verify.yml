@@ -3,7 +3,16 @@ name: Paid Gold Access Verification
 on:
   push:
     branches:
-      - fix/paid-gold-access-implementation-2026-08-24
+      - main
+      - 'fix/paid-gold-*'
+  pull_request:
+    paths:
+      - 'services/member_*'
+      - 'public-web/**'
+      - 'user/dashboard.py'
+      - 'tests/test_*paid*'
+      - 'tests/test_member_*'
+      - '.github/workflows/paid_access_verify.yml'
   workflow_dispatch:
 
 permissions:
@@ -46,6 +55,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           pytest -q \
+            tests/test_member_payment_completion.py \
             tests/test_paid_signal_gating.py \
             tests/test_user_dashboard_paid_gold.py \
             tests/test_admin_signals_phase4a.py
@@ -65,4 +75,4 @@ jobs:
           pnpm build
 
       - name: Check branch diff
-        run: git diff --check e1814c4befba8c5dd27bc2ab19d4c6294ea0f238..HEAD
+        run: git show --format= --check HEAD

@@ -12,18 +12,22 @@ export function MemberSignalDetail({ publicId }: { publicId: string }) {
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    setSignal(null);
+    setState("loading");
     void (async () => {
-      const response = await fetch(`/api/member/signals/${encodeURIComponent(publicId)}`, { cache: "no-store" });
+      const response = await fetch(`/api/member/signals/${encodeURIComponent(publicId)}`, { cache: "no-store", signal: controller.signal });
       if (!active) return;
       if (response.status === 401) return setState("auth");
       if (response.status === 403) return setState("payment");
       if (response.status === 404) return setState("missing");
       if (!response.ok) return setState("error");
       const data = await response.json() as { item?: Signal };
+      if (!active) return;
       setSignal(data.item || null);
       setState(data.item ? "ready" : "missing");
-    })();
-    return () => { active = false; };
+    })().catch(() => { if (active) setState("error"); });
+    return () => { active = false; controller.abort(); };
   }, [publicId]);
 
   if (state === "loading") return <section><p>Checking protected member access…</p></section>;
