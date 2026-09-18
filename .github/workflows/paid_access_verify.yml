@@ -48,6 +48,7 @@ jobs:
             services/member_signals_api.py \
             services/admin_auth_api.py \
             services/admin_signals_api.py \
+            services/admin_content_service.py \
             services/email_service.py
 
       - name: Run paid access regressions
@@ -58,7 +59,8 @@ jobs:
             tests/test_member_payment_completion.py \
             tests/test_paid_signal_gating.py \
             tests/test_user_dashboard_paid_gold.py \
-            tests/test_admin_signals_phase4a.py
+            tests/test_admin_signals_phase4a.py \
+            tests/test_admin_content_phase2a.py
 
       - name: Set up Node
         uses: actions/setup-node@v4
