@@ -40,7 +40,7 @@ export default async function SignalsPage({
     <section className="signals-page">
       <header className="page-heading">
         <span className="eyebrow">PREMIUM GOLD SIGNAL DESK</span>
-        <h1>XAUUSD signals, protected for verified members.</h1>
+        <h1>Gold signals for verified paid members</h1>
         <p>
           Public pages show only non-actionable publication metadata. Direction,
           entry, stop loss, targets and member analysis are returned only after
@@ -98,7 +98,7 @@ export default async function SignalsPage({
                 <dl>
                   <div><dt>Market</dt><dd>{signal.market || "GOLD"}</dd></div>
                   <div><dt>Timeframe</dt><dd>{signal.timeframe || "—"}</dd></div>
-                  <div><dt>Risk label</dt><dd>{signal.risk_level || "—"}</dd></div>
+                  <div><dt>Member access</dt><dd>Required</dd></div>
                   <div><dt>Trading levels</dt><dd>Locked</dd></div>
                 </dl>
                 {signal.public_id ? (
