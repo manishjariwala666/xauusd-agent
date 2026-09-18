@@ -180,7 +180,7 @@ def list_public_signals(*, page: int, page_size: int, status: str = "all", symbo
         clauses.append("symbol ILIKE :symbol")
         params["symbol"] = f"%{symbol.strip()[:30]}%"
     where = " AND ".join(clauses)
-    fields = "public_id,symbol,market,timeframe,risk_level,lifecycle_status AS status,published_at,updated_at,expires_at,featured"
+    fields = "public_id,symbol,market,timeframe,lifecycle_status AS status,published_at,updated_at,expires_at,featured"
     with session_scope() as session:
         total = session.execute(
             text(f"SELECT COUNT(*) FROM public.market_signals WHERE {where}"),
@@ -207,20 +207,13 @@ def list_public_signals(*, page: int, page_size: int, status: str = "all", symbo
 
 
 def get_public_signal(public_id: str) -> dict[str, Any]:
-    """Return one public teaser record without protected trading levels."""
-    fields = "public_id,symbol,market,timeframe,risk_level,lifecycle_status AS status,published_at,updated_at,expires_at,featured"
-    with session_scope() as session:
-        row = session.execute(
-            text(
-                f"SELECT {fields} FROM public.market_signals "
-                "WHERE public_id=CAST(:public_id AS UUID) "
-                "AND publication_status='PUBLISHED' AND deleted_at IS NULL"
-            ),
-            {"public_id": public_id},
-        ).mappings().first()
-    if not row:
-        raise SignalNotFoundError("Public signal was not found.")
-    return {**dict(row), "member_access_required": True}
+    """Do not expose record-level signal data through the public API."""
+    del public_id
+    raise SignalNotFoundError(
+        "Public signal detail requires verified member access."
+    )
+
+
 def _params(values: dict[str, Any], actor_id: int) -> dict[str, Any]:
     publication = str(values.get("publication_status") or "DRAFT").upper()
     lifecycle = "SCHEDULED" if publication == "SCHEDULED" else "DRAFT"
