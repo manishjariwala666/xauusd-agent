@@ -155,6 +155,7 @@ def payment_status(
     return {
         "payment": payment,
         "instructions": {
+            "wallet_address": settings.usdt_wallet_address,
             "network": settings.usdt_network,
             "amount_usdt": settings.subscription_price_usdt,
         },
@@ -167,15 +168,22 @@ def submit_member_payment(
     member: Annotated[MemberIdentity, Depends(require_authenticated_member)],
 ) -> dict[str, Any]:
     current = get_user_payment(member.user_id)
+    if member.payment_status.strip().upper() == "VERIFIED":
+        raise HTTPException(409, "Your paid membership is already verified.")
     if str(current.get("payment_status") or "") in {PAYMENT_PENDING, PAYMENT_UNDER_REVIEW}:
         raise HTTPException(409, "An existing payment submission is already being reviewed.")
     settings = get_settings()
-    submit_payment(
-        user_id=member.user_id,
-        transaction_id=payload.transaction_id,
-        amount_usdt=settings.subscription_price_usdt,
-        network=settings.usdt_network,
-    )
+    if not all((settings.usdt_wallet_address, settings.usdt_network, settings.subscription_price_usdt)):
+        raise HTTPException(503, "Payment instructions are temporarily unavailable.")
+    try:
+        submit_payment(
+            user_id=member.user_id,
+            transaction_id=payload.transaction_id,
+            amount_usdt=settings.subscription_price_usdt,
+            network=settings.usdt_network,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     return {"message": "Payment submitted for manual review.", "payment_status": PAYMENT_PENDING}
 
 

@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import type { Signal, SignalPage } from "@/lib/types";
 
 type MeResponse = { user?: { email?: string; email_verified?: boolean; payment_status?: string; paid_access?: boolean }; detail?: string };
-type PaymentResponse = { payment?: { payment_status?: string; transaction_id?: string | null; review_note?: string | null }; instructions?: { network?: string; amount_usdt?: string }; detail?: string };
+type PaymentResponse = { payment?: { payment_status?: string; transaction_id?: string | null; review_note?: string | null }; instructions?: { wallet_address?: string; network?: string; amount_usdt?: string }; detail?: string };
 type AccessResponse = { telegram_invite_url?: string | null; whatsapp_invite_url?: string | null };
 
 const price = (value?: number | string | null) => value == null || value === "" ? "—" : String(value);
@@ -16,12 +16,17 @@ export function MemberSignalPanel() {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [access, setAccess] = useState<AccessResponse>({});
   const [busy, setBusy] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState("");
 
   async function load() {
     setBusy(true);
     setLoadError("");
+    setSignals([]);
+    setAccess({});
+    setPayment(null);
+    setMe(null);
     try {
       const meResponse = await fetch("/api/member/auth/me", { cache: "no-store", credentials: "same-origin" });
       if (!meResponse.ok) {
@@ -59,6 +64,9 @@ export function MemberSignalPanel() {
 
   async function submitPayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    setMessage("");
     const form = new FormData(event.currentTarget);
     const transaction_id = String(form.get("transaction_id") || "").trim();
     try {
@@ -73,6 +81,8 @@ export function MemberSignalPanel() {
       if (response.ok) await load();
     } catch {
       setMessage("Payment submission could not reach the member service. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -87,11 +97,15 @@ export function MemberSignalPanel() {
   if (!me.user.paid_access) {
     const status = payment?.payment?.payment_status || me.user.payment_status || "NOT_STARTED";
     const pending = status === "PENDING" || status === "UNDER_REVIEW";
+    const configured = Boolean(payment?.instructions?.wallet_address && payment.instructions.network && payment.instructions.amount_usdt);
     return <section className="member-panel"><div className="section-heading"><div><span className="eyebrow">MEMBER PAYMENT</span><h2>Payment status: {status}</h2></div><button className="button secondary" type="button" onClick={logout}>Logout</button></div>
       <p>Premium signals unlock only after email verification and manual payment approval.</p>
       {loadError && <p className="auth-error" role="alert">{loadError}</p>}
       {payment?.instructions && <p><strong>Amount:</strong> {payment.instructions.amount_usdt || "—"} USDT · <strong>Network:</strong> {payment.instructions.network || "—"}</p>}
-      {!pending && <form className="auth-form" onSubmit={submitPayment}><label>USDT transaction ID (TXID)<input name="transaction_id" minLength={8} maxLength={200} required /></label><button className="button button-dark" type="submit">Submit payment for review</button></form>}
+      {payment?.instructions?.wallet_address && <p><strong>Payment wallet:</strong> <code style={{ overflowWrap: "anywhere" }}>{payment.instructions.wallet_address}</code></p>}
+      {!pending && !configured && <p>Payment instructions are temporarily unavailable. Please contact support before sending payment.</p>}
+      <button className="button secondary" type="button" onClick={() => void load()}>Refresh payment status</button>
+      {!pending && configured && <form className="auth-form" onSubmit={submitPayment}><label>USDT transaction ID (TXID)<input name="transaction_id" minLength={8} maxLength={200} required /></label><button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Submitting…" : "Submit payment for review"}</button></form>}
       {pending && <p>Your submitted transaction is waiting for administrator review.</p>}
       {payment?.payment?.review_note && <p>{payment.payment.review_note}</p>}
       {message && <p role="status">{message}</p>}
@@ -99,8 +113,9 @@ export function MemberSignalPanel() {
   }
 
   return <section className="member-panel"><div className="section-heading"><div><span className="eyebrow">VERIFIED MEMBER</span><h2>Protected Gold Signals</h2></div><button className="button secondary" type="button" onClick={logout}>Logout</button></div>
+    <button className="button secondary" type="button" onClick={() => void load()}>Refresh signals</button>
     {loadError && <p className="auth-error" role="alert">{loadError}</p>}
     {(access.telegram_invite_url || access.whatsapp_invite_url) && <div className="hero-actions">{access.telegram_invite_url && <a className="button primary" href={access.telegram_invite_url}>Private Telegram</a>}{access.whatsapp_invite_url && <a className="button secondary" href={access.whatsapp_invite_url}>Private WhatsApp</a>}</div>}
-    {signals.length ? <div className="signal-grid">{signals.map((signal) => <article className="signal-card" key={signal.public_id}><div className="signal-card-head"><span>{signal.symbol || "XAUUSD"}</span><span>{signal.direction || signal.signal_type}</span></div><dl><div><dt>Entry</dt><dd>{price(signal.entry_price)}</dd></div><div><dt>Stop loss</dt><dd>{price(signal.stop_loss)}</dd></div><div><dt>Target 1</dt><dd>{price(signal.target_1)}</dd></div><div><dt>Target 2</dt><dd>{price(signal.target_2)}</dd></div><div><dt>Target 3</dt><dd>{price(signal.target_3)}</dd></div><div><dt>Target 4</dt><dd>{price(signal.target_4)}</dd></div></dl>{signal.analysis_summary && <p>{signal.analysis_summary}</p>}{signal.public_id && <Link href={`/signals/${encodeURIComponent(signal.public_id)}`}>Open member detail →</Link>}</article>)}</div> : <div className="empty-state"><h3>No published Gold Signal right now</h3><p>The protected feed shows only canonical published, non-deleted records.</p></div>}
+    {signals.length ? <div className="signal-grid">{signals.map((signal) => <article className="signal-card" key={signal.public_id}><div className="signal-card-head"><span>{signal.symbol || "XAUUSD"}</span><span>{signal.direction || signal.signal_type}</span></div><dl><div><dt>Entry</dt><dd>{price(signal.entry_price)}</dd></div><div><dt>Stop loss</dt><dd>{price(signal.stop_loss)}</dd></div><div><dt>Target 1</dt><dd>{price(signal.target_1)}</dd></div><div><dt>Target 2</dt><dd>{price(signal.target_2)}</dd></div><div><dt>Target 3</dt><dd>{price(signal.target_3)}</dd></div><div><dt>Target 4</dt><dd>{price(signal.target_4)}</dd></div></dl>{signal.analysis_summary && <p>{signal.analysis_summary}</p>}{signal.public_id && <Link href={`/signals/${encodeURIComponent(signal.public_id)}`}>Open member detail →</Link>}</article>)}</div> : !loadError ? <div className="empty-state"><h3>No published Gold Signal right now</h3><p>The protected feed shows only canonical published, non-deleted records.</p></div> : null}
   </section>;
 }

@@ -138,3 +138,38 @@ def test_public_access_page_no_longer_routes_members_to_admin() -> None:
     assert "MemberAccessForm" in source
     assert "Open secure admin login" not in source
     assert "configuredLinks().admin" not in source
+
+
+@pytest.mark.parametrize('path', ['/api/v1/member/signals', '/api/v1/member/signals/gold-test'])
+def test_verified_paid_member_receives_published_signal(monkeypatch, path):
+    from contextlib import contextmanager
+    from decimal import Decimal
+    from unittest.mock import Mock
+    from services import member_signals_api
+
+    row = {'public_id': 'gold-test', 'symbol': 'XAUUSD', 'direction': 'BUY',
+           'entry_price': Decimal('2500.50'), 'stop_loss': Decimal('2490'),
+           'target_1': Decimal('2510')}
+    result = Mock()
+    result.scalar_one.return_value = 1
+    result.mappings.return_value.all.return_value = [row]
+    result.mappings.return_value.first.return_value = row
+    session = Mock()
+    session.execute.return_value = result
+
+    @contextmanager
+    def scope():
+        yield session
+
+    monkeypatch.setattr(member_signals_api, 'session_scope', scope)
+    response = _member_app(_identity(email_verified=True, payment_status='VERIFIED')).get(path)
+    assert response.status_code == 200
+    assert response.headers['cache-control'] == 'private, no-store'
+    data = response.json()
+    item = data['items'][0] if 'items' in data else data['item']
+    assert item['entry_price'] == 2500.5
+    assert item['stop_loss'] == 2490
+    for call in session.execute.call_args_list:
+        query = str(call.args[0])
+        assert "publication_status = 'PUBLISHED'" in query
+        assert 'deleted_at IS NULL' in query
