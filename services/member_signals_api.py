@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/v1/member/signals", tags=["member-signals"])
 _MEMBER_FIELDS = """
     public_id, symbol, market, signal_type AS direction, timeframe,
     entry_type, price AS entry_price, entry_price_min, entry_price_max,
-    stop_loss, target_1, target_2, target_3, target_4,
+    stop_loss, target_1, target_2, target_3, target_4, target_5, target_6,
     risk_level, confidence_label, analysis_summary,
     lifecycle_status AS status, published_at, updated_at, expires_at, featured
 """
