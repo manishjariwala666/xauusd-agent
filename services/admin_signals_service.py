@@ -173,9 +173,9 @@ def list_public_signals(*, page: int, page_size: int, status: str = "all", symbo
     if status != "all":
         clauses.append("lifecycle_status=:status")
         params["status"] = status.upper()
-    if direction != "all":
-        clauses.append("signal_type=:direction")
-        params["direction"] = direction.upper()
+    # Direction is intentionally not filterable on the public teaser endpoint:
+    # even filtered counts would disclose member-only trading direction.
+    del direction
     if symbol.strip():
         clauses.append("symbol ILIKE :symbol")
         params["symbol"] = f"%{symbol.strip()[:30]}%"
