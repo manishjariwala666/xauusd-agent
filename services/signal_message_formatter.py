@@ -94,6 +94,7 @@ def format_signal_message(signal: dict[str, Any], *, test: bool = False) -> str:
         f"{icon} {test_label}XAUUSD {direction}",
         "",
         f"Entry: {_price(signal.get('price'))}",
+        f"📍 {direction} BASE: {_price(signal.get('price'))}",
         f"Time: {_time(signal.get('signal_time') or signal.get('updated_at'))}",
         "",
         (

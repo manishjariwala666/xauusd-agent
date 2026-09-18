@@ -32,6 +32,7 @@ def test_shared_signal_message_contains_six_targets() -> None:
         assert f"🎯 Target {index}:" in message
 
     assert "🟢 XAUUSD BUY" in message
+    assert "📍 BUY BASE: 4080" in message
     assert "🛑 Stop Loss: 4071" in message
     assert "— VenusRealm" in message
 
@@ -39,6 +40,7 @@ def test_shared_signal_message_contains_six_targets() -> None:
 def test_sell_signal_uses_sell_icon() -> None:
     message = format_signal_message(_signal("SELL"))
     assert "🔴 XAUUSD SELL" in message
+    assert "📍 SELL BASE: 4080" in message
 
 
 def test_sell_signal_preserves_actionable_sheet_target_numbers() -> None:
