@@ -1,36 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { MemberSignalDetail } from "@/components/member-signal-detail";
-import { getSignalDetail, siteUrl } from "@/lib/api";
+import { siteUrl } from "@/lib/api";
 
-const date = (value?: string | null) =>
-  value
-    ? new Intl.DateTimeFormat("en", { dateStyle: "long", timeStyle: "short" }).format(new Date(value))
-    : "Not available";
+export const dynamic = "force-dynamic";
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ publicId: string }>;
-}): Promise<Metadata> {
-  const { publicId } = await params;
-  const signal = await getSignalDetail(publicId);
-  if (!signal) return { title: "Signal not found" };
-  const title = `${signal.symbol || "Gold"} protected signal`;
-  const description = "Published Gold Signal metadata. Actionable levels require verified paid-member access.";
-  return {
-    title,
-    description,
-    alternates: { canonical: siteUrl(`/signals/${publicId}`) },
-    openGraph: {
-      title,
-      description,
-      url: siteUrl(`/signals/${publicId}`),
-      type: "article",
-    },
-  };
-}
+export const metadata: Metadata = {
+  title: "Protected Gold Signal",
+  description: "Actionable XAUUSD Gold Signal details require verified paid-member access.",
+  alternates: { canonical: siteUrl("/signals") },
+  robots: { index: false, follow: false },
+};
 
 export default async function SignalDetailPage({
   params,
@@ -38,29 +18,23 @@ export default async function SignalDetailPage({
   params: Promise<{ publicId: string }>;
 }) {
   const { publicId } = await params;
-  const signal = await getSignalDetail(publicId);
-  if (!signal) notFound();
 
   return (
     <article className="signal-detail">
       <nav className="breadcrumb" aria-label="Breadcrumb">
         <Link href="/">Home</Link><span>/</span>
         <Link href="/signals">Signals</Link><span>/</span>
-        <span>{signal.symbol || "Gold signal"}</span>
+        <span>Protected detail</span>
       </nav>
 
       <header className="signal-detail-header">
-        <span className="eyebrow">PROTECTED SIGNAL · {signal.status || "PUBLISHED"}</span>
-        <h1>{signal.symbol || "XAUUSD"} member signal</h1>
+        <span className="eyebrow">VERIFIED MEMBER ACCESS</span>
+        <h1>Protected Gold Signal</h1>
         <p>
-          Direction, entry, stop loss, targets and member analysis are protected.
-          Sign in with a verified paid membership to load the actionable record.
+          Direction, entry, stop loss, targets and member analysis are never
+          loaded from the public signal API. Verified paid members can load the
+          published record below through the secure member session.
         </p>
-        <div className="article-meta">
-          <span>Published {date(signal.published_at)}</span>
-          <span>Updated {date(signal.updated_at)}</span>
-          <span>Risk label: {signal.risk_level || "Not labelled"}</span>
-        </div>
       </header>
 
       <MemberSignalDetail publicId={publicId} />
