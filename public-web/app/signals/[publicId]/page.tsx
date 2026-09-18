@@ -1,23 +1,84 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { MemberSignalDetail } from "@/components/member-signal-detail";
+import { getSignalDetail, siteUrl } from "@/lib/api";
 
-export const metadata: Metadata = {
-  title: "Premium Gold Signal | Member Access Required",
-  description: "Actionable Gold Signal levels are protected VenusRealm paid-member content.",
-  robots: { index: false, follow: false },
-};
+const date = (value?: string | null) =>
+  value
+    ? new Intl.DateTimeFormat("en", { dateStyle: "long", timeStyle: "short" }).format(new Date(value))
+    : "Not available";
 
-export default async function SignalDetailPage({ params }: { params: Promise<{ publicId: string }> }) {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ publicId: string }>;
+}): Promise<Metadata> {
   const { publicId } = await params;
-  return <main className="signal-detail">
-    <nav className="breadcrumb" aria-label="Breadcrumb"><Link href="/">Home</Link><span>/</span><Link href="/signals">Signals</Link><span>/</span><span>Premium</span></nav>
-    <header className="signal-detail-header"><span className="eyebrow">GOLD SIGNAL · PREMIUM</span><h1>Protected Gold Signal</h1><p>Actionable levels are fetched only after server-side member and payment verification.</p></header>
-    <MemberSignalDetail publicId={publicId} />
-    <section aria-labelledby="signal-levels"><h2 id="signal-levels">Paid member access required</h2><p>Direction, entry, stop loss and targets remain hidden until member access is verified.</p></section>
-    <section aria-labelledby="signal-analysis"><h2 id="signal-analysis">Protected analysis</h2><div><section aria-labelledby="technical-context"><h3 id="technical-context">Technical context</h3><p>Available to verified paid members.</p></section><section aria-labelledby="astrology-context"><h3 id="astrology-context">Astrology context</h3><p>Available to verified paid members when included in the published signal.</p></section></div></section>
-    <section aria-labelledby="signal-risk"><h2 id="signal-risk">Risk context</h2><p>Paid membership does not remove trading risk. Use independent price verification and appropriate loss limits.</p></section>
-    <div className="hero-actions"><Link className="button secondary" href="/signals">Back to Gold Signals</Link></div>
-    <aside className="risk article-risk"><strong>Financial-risk disclaimer:</strong> Signals and market analysis are educational information, not financial advice. Leveraged trading can result in substantial loss. Past outcomes do not predict future results.</aside>
-  </main>;
+  const signal = await getSignalDetail(publicId);
+  if (!signal) return { title: "Signal not found" };
+  const title = `${signal.symbol || "Gold"} protected signal`;
+  const description = "Published Gold Signal metadata. Actionable levels require verified paid-member access.";
+  return {
+    title,
+    description,
+    alternates: { canonical: siteUrl(`/signals/${publicId}`) },
+    openGraph: {
+      title,
+      description,
+      url: siteUrl(`/signals/${publicId}`),
+      type: "article",
+    },
+  };
+}
+
+export default async function SignalDetailPage({
+  params,
+}: {
+  params: Promise<{ publicId: string }>;
+}) {
+  const { publicId } = await params;
+  const signal = await getSignalDetail(publicId);
+  if (!signal) notFound();
+
+  return (
+    <article className="signal-detail">
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <Link href="/">Home</Link><span>/</span>
+        <Link href="/signals">Signals</Link><span>/</span>
+        <span>{signal.symbol || "Gold signal"}</span>
+      </nav>
+
+      <header className="signal-detail-header">
+        <span className="eyebrow">PROTECTED SIGNAL · {signal.status || "PUBLISHED"}</span>
+        <h1>{signal.symbol || "XAUUSD"} member signal</h1>
+        <p>
+          Direction, entry, stop loss, targets and member analysis are protected.
+          Sign in with a verified paid membership to load the actionable record.
+        </p>
+        <div className="article-meta">
+          <span>Published {date(signal.published_at)}</span>
+          <span>Updated {date(signal.updated_at)}</span>
+          <span>Risk label: {signal.risk_level || "Not labelled"}</span>
+        </div>
+      </header>
+
+      <MemberSignalDetail publicId={publicId} />
+
+      <section className="signal-risk-note" aria-labelledby="signal-risk">
+        <h2 id="signal-risk">Risk context</h2>
+        <p>
+          No trade is guaranteed. Confirm market prices independently and use a
+          loss limit appropriate to your circumstances.
+        </p>
+      </section>
+
+      <aside className="risk article-risk">
+        <strong>Global financial-risk disclaimer:</strong> Signals and market
+        analysis are educational information, not financial advice. Leveraged
+        trading can result in substantial loss. Past outcomes do not predict
+        future results.
+      </aside>
+    </article>
+  );
 }
