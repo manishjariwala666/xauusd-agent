@@ -30,6 +30,7 @@ export default async function SignalDetailPage({
       <header className="signal-detail-header">
         <span className="eyebrow">VERIFIED MEMBER ACCESS</span>
         <h1>Protected Gold Signal</h1>
+        <p><strong>Paid member access required</strong></p>
         <p>
           Direction, entry, stop loss, targets and member analysis are never
           loaded from the public signal API. Verified paid members can load the
