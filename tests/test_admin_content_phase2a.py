@@ -140,4 +140,3 @@ def test_content_publish_explicit_enable_still_works(monkeypatch) -> None:
     )
 
     assert result["status"] == "published"
-
