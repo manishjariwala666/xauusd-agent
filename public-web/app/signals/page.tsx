@@ -44,7 +44,7 @@ export default async function SignalsPage({
         <p>
           Public pages show only non-actionable publication metadata. Direction,
           entry, stop loss, targets and member analysis are returned only after
-          authenticated paid-member verification.
+          authenticated paid-member verification. Available only after verified paid-member access.
         </p>
       </header>
 
