@@ -46,6 +46,7 @@ export default async function SignalsPage({
           entry, stop loss, targets and member analysis are returned only after
           authenticated paid-member verification. Available only after verified paid-member access.
         </p>
+        <p><Link className="text-link" href="/contact">Need help with member access? Contact VenusRealm →</Link></p>
       </header>
 
       <MemberSignalPanel />
