@@ -80,15 +80,29 @@ def test_bff_requires_csrf_and_has_a_narrow_allowlist() -> None:
     assert "ADMIN_SESSION_COOKIE" in route
 
 
-def test_public_signal_pages_have_one_h1_and_ordered_headings() -> None:
+def test_public_signal_pages_keep_actionable_values_inside_member_components() -> None:
     index = (ROOT / "public-web/app/signals/page.tsx").read_text()
     detail = (ROOT / "public-web/app/signals/[publicId]/page.tsx").read_text()
     assert index.count("<h1") == 1
     assert detail.count("<h1") == 1
-    assert detail.index("<h1") < detail.index("<h2") < detail.index("<h3")
-    heading_ids = ["signal-levels", "signal-analysis", "technical-context", "astrology-context", "signal-risk"]
-    assert len(heading_ids) == len(set(heading_ids))
-    assert all(f'id="{heading_id}"' in detail for heading_id in heading_ids)
+    assert "MemberSignalPanel" in index
+    assert "MemberSignalDetail" in detail
+    for protected in (
+        "signal.direction",
+        "signal.entry_price",
+        "signal.stop_loss",
+        "signal.target_1",
+        "signal.target_2",
+        "signal.target_3",
+        "signal.target_4",
+        "signal.target_5",
+        "signal.target_6",
+        "signal.analysis_summary",
+        "signal.technical_reason",
+        "signal.astrology_reason",
+    ):
+        assert protected not in index
+        assert protected not in detail
 
 
 def test_public_contract_does_not_select_internal_identity_or_audit_fields() -> None:

@@ -26,6 +26,14 @@ _SORTS = {
 }
 
 
+def _content_publish_enabled() -> bool:
+    """Keep manual CMS publishing live unless an explicit emergency lock disables it."""
+    value = os.getenv("CONTENT_PUBLISH_ENABLED")
+    if value is None or not value.strip():
+        return True
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class ContentNotFoundError(ValueError):
     """Requested CMS record does not exist for the expected content type."""
 
@@ -220,11 +228,7 @@ def save_admin_content(
     normalized_status = str(status or "draft").lower()
     if normalized_status not in {"draft", "published"}:
         raise ValueError("Unsupported content status.")
-    if (
-        normalized_status == "published"
-        and os.getenv("CONTENT_PUBLISH_ENABLED", "").strip().lower()
-        not in {"1", "true", "yes", "on"}
-    ):
+    if normalized_status == "published" and not _content_publish_enabled():
         raise ValueError("Content publishing is currently locked.")
     now = datetime.now(timezone.utc)
     if scheduled_at and scheduled_at > now:
@@ -423,11 +427,7 @@ def transition_content(
 ) -> dict[str, Any]:
     if action not in {"publish", "unpublish", "trash"}:
         raise ValueError("Unsupported content action.")
-    if (
-        action == "publish"
-        and os.getenv("CONTENT_PUBLISH_ENABLED", "").strip().lower()
-        not in {"1", "true", "yes", "on"}
-    ):
+    if action == "publish" and not _content_publish_enabled():
         raise ValueError("Content publishing is currently locked.")
     if action == "trash" and kind != "posts":
         raise ValueError("Pages cannot be trashed in Phase 2A.")

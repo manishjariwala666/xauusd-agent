@@ -48,6 +48,8 @@ export type Signal = {
   target_2?: number | string | null;
   target_3?: number | string | null;
   target_4?: number | string | null;
+  target_5?: number | string | null;
+  target_6?: number | string | null;
   stop_loss?: number | string | null;
   signal_time?: string;
   published_at?: string | null;

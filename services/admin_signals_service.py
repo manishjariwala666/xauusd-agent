@@ -166,28 +166,52 @@ def delete_admin_signal(*, signal_id: int, actor_id: int, request_id: str, confi
 
 
 def list_public_signals(*, page: int, page_size: int, status: str = "all", symbol: str = "", direction: str = "all") -> dict[str, Any]:
-    """Return non-actionable publication metadata only.
-
-    Actionable direction, entry, stop, targets and analysis are paid-member
-    content and must never cross an unauthenticated public API boundary.
-    """
+    """Return public teaser metadata only; actionable signal data is member-only."""
     page, page_size = max(1, int(page)), max(1, min(24, int(page_size)))
     clauses = ["publication_status='PUBLISHED'", "deleted_at IS NULL"]
     params: dict[str, Any] = {"limit": page_size, "offset": (page - 1) * page_size}
-    if status != "all": clauses.append("lifecycle_status=:status"); params["status"] = status.upper()
-    if direction != "all": clauses.append("signal_type=:direction"); params["direction"] = direction.upper()
-    if symbol.strip(): clauses.append("symbol ILIKE :symbol"); params["symbol"] = f"%{symbol.strip()[:30]}%"
+    if status != "all":
+        clauses.append("lifecycle_status=:status")
+        params["status"] = status.upper()
+    # Direction is intentionally not filterable on the public teaser endpoint:
+    # even filtered counts would disclose member-only trading direction.
+    del direction
+    if symbol.strip():
+        clauses.append("symbol ILIKE :symbol")
+        params["symbol"] = f"%{symbol.strip()[:30]}%"
     where = " AND ".join(clauses)
     fields = "public_id,symbol,market,timeframe,lifecycle_status AS status,published_at,updated_at,expires_at,featured"
     with session_scope() as session:
-        total = session.execute(text(f"SELECT COUNT(*) FROM public.market_signals WHERE {where}"), params).scalar_one()
-        rows = session.execute(text(f"SELECT {fields} FROM public.market_signals WHERE {where} ORDER BY featured DESC,published_at DESC,id DESC LIMIT :limit OFFSET :offset"), params).mappings().all()
-    return {"items": [dict(row) for row in rows], "page": page, "page_size": page_size, "total": int(total), "pages": max(1, (int(total)+page_size-1)//page_size), "member_access_required": True}
+        total = session.execute(
+            text(f"SELECT COUNT(*) FROM public.market_signals WHERE {where}"),
+            params,
+        ).scalar_one()
+        rows = session.execute(
+            text(
+                f"SELECT {fields} FROM public.market_signals WHERE {where} "
+                "ORDER BY featured DESC,published_at DESC,id DESC "
+                "LIMIT :limit OFFSET :offset"
+            ),
+            params,
+        ).mappings().all()
+    return {
+        "items": [
+            {**dict(row), "member_access_required": True}
+            for row in rows
+        ],
+        "page": page,
+        "page_size": page_size,
+        "total": int(total),
+        "pages": max(1, (int(total) + page_size - 1) // page_size),
+    }
 
 
 def get_public_signal(public_id: str) -> dict[str, Any]:
-    """Reject unauthenticated signal-detail reads."""
-    raise SignalNotFoundError("Public signal details require member access.")
+    """Do not expose record-level signal data through the public API."""
+    del public_id
+    raise SignalNotFoundError(
+        "Public signal detail requires verified member access."
+    )
 
 
 def _params(values: dict[str, Any], actor_id: int) -> dict[str, Any]:

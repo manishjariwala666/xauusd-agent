@@ -58,42 +58,7 @@ def test_phase2b_extends_existing_contract_without_new_seo_writes() -> None:
     assert '"publish": "is_public = TRUE, is_published = TRUE' in service
 
 
-def test_content_publish_transition_is_locked_by_default(monkeypatch) -> None:
-    monkeypatch.delenv("CONTENT_PUBLISH_ENABLED", raising=False)
-
-    with pytest.raises(ValueError, match="Content publishing is currently locked"):
-        admin_content_service.transition_content(
-            kind="posts",
-            content_id=1,
-            actor_id=1,
-            action="publish",
-            request_id="content-publish-lock-test",
-        )
-
-
-def test_content_save_as_published_is_locked_by_default(monkeypatch) -> None:
-    monkeypatch.delenv("CONTENT_PUBLISH_ENABLED", raising=False)
-
-    with pytest.raises(ValueError, match="Content publishing is currently locked"):
-        admin_content_service.save_admin_content(
-            kind="posts",
-            actor_id=1,
-            title="Locked publish test",
-            slug="locked-publish-test",
-            excerpt="",
-            body="Test body",
-            category_id=None,
-            subcategory="",
-            status="published",
-            scheduled_at=None,
-            published_at=None,
-            request_id="content-save-publish-lock-test",
-        )
-
-
-def test_content_publish_lock_can_be_explicitly_enabled(monkeypatch) -> None:
-    monkeypatch.setenv("CONTENT_PUBLISH_ENABLED", "true")
-
+def _mock_publish_session(monkeypatch) -> None:
     class ScalarResult:
         def scalar_one_or_none(self):
             return 1
@@ -116,6 +81,55 @@ def test_content_publish_lock_can_be_explicitly_enabled(monkeypatch) -> None:
         "get_admin_content",
         lambda **kwargs: {"id": kwargs["content_id"], "status": "published"},
     )
+
+
+def test_content_publish_transition_is_enabled_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("CONTENT_PUBLISH_ENABLED", raising=False)
+    _mock_publish_session(monkeypatch)
+
+    result = admin_content_service.transition_content(
+        kind="posts",
+        content_id=1,
+        actor_id=1,
+        action="publish",
+        request_id="content-publish-default-test",
+    )
+
+    assert result["status"] == "published"
+
+
+def test_content_publish_can_be_emergency_locked(monkeypatch) -> None:
+    monkeypatch.setenv("CONTENT_PUBLISH_ENABLED", "false")
+
+    with pytest.raises(ValueError, match="Content publishing is currently locked"):
+        admin_content_service.transition_content(
+            kind="posts",
+            content_id=1,
+            actor_id=1,
+            action="publish",
+            request_id="content-publish-lock-test",
+        )
+
+    with pytest.raises(ValueError, match="Content publishing is currently locked"):
+        admin_content_service.save_admin_content(
+            kind="posts",
+            actor_id=1,
+            title="Locked publish test",
+            slug="locked-publish-test",
+            excerpt="",
+            body="Test body",
+            category_id=None,
+            subcategory="",
+            status="published",
+            scheduled_at=None,
+            published_at=None,
+            request_id="content-save-publish-lock-test",
+        )
+
+
+def test_content_publish_explicit_enable_still_works(monkeypatch) -> None:
+    monkeypatch.setenv("CONTENT_PUBLISH_ENABLED", "true")
+    _mock_publish_session(monkeypatch)
 
     result = admin_content_service.transition_content(
         kind="posts",
