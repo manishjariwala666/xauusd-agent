@@ -88,9 +88,8 @@ def test_member_signal_query_uses_only_canonical_published_source() -> None:
     assert "FROM public.market_signals" in source
     assert "publication_status = 'PUBLISHED'" in source
     assert "deleted_at IS NULL" in source
-    assert "target_1" in source and "target_4" in source
-    assert "target_5" not in source
-    assert "target_6" not in source
+    for target in ("target_1", "target_2", "target_3", "target_4", "target_5", "target_6"):
+        assert target in source
     assert "FROM public.signals" not in source
 
 
