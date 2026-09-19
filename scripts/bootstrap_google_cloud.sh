@@ -60,7 +60,7 @@ MEMBER="principalSet://iam.googleapis.com/$POOL_NAME/attribute.repository/$REPO"
 
 gcloud iam service-accounts add-iam-policy-binding "$DEPLOYER_SA" --project "$PROJECT_ID" --role roles/iam.workloadIdentityUser --member "$MEMBER" >/dev/null
 
-for role in roles/run.admin roles/artifactregistry.admin roles/cloudscheduler.admin roles/secretmanager.admin roles/serviceusage.serviceUsageAdmin; do
+for role in roles/run.admin roles/artifactregistry.admin roles/cloudscheduler.admin roles/secretmanager.admin roles/serviceusage.serviceUsageAdmin roles/logging.viewer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:$DEPLOYER_SA" --role "$role" --condition=None >/dev/null
 done
 
