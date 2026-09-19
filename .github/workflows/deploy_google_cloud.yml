@@ -227,10 +227,25 @@ jobs:
           fi
 
       - name: Execute worker smoke cycle
+        id: worker-smoke
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           gcloud run jobs execute "$GCP_WORKER_JOB" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --wait
+
+      - name: Print failed worker execution diagnostics
+        if: ${{ steps.worker-smoke.outcome == 'failure' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          execution=$(gcloud run jobs executions list --job "$GCP_WORKER_JOB" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --limit 1 --sort-by="~metadata.creationTimestamp" --format="value(metadata.name)")
+          echo "Latest execution: $execution"
+          gcloud run jobs executions describe "$execution" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" || true
+          echo
+          echo "==== Cloud Run worker logs ===="
+          gcloud logging read "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"$GCP_WORKER_JOB\" AND labels.\"run.googleapis.com/execution_name\"=\"$execution\"" --project "$GCP_PROJECT_ID" --limit 200 --order=asc --format="value(timestamp,severity,textPayload,jsonPayload.message)" || true
+          exit 1
 
       - name: Verify API health
         shell: bash
