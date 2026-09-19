@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ID="\${1:-}"
-REGION="\${2:-asia-south1}"
-REPO="\${3:-manishjariwala666/xauusd-agent}"
+PROJECT_ID="${1:-}"
+REGION="${2:-asia-south1}"
+REPO="${3:-manishjariwala666/xauusd-agent}"
 
 if [ -z "$PROJECT_ID" ]; then
   echo "Usage: bash scripts/bootstrap_google_cloud.sh <GCP_PROJECT_ID> [REGION] [OWNER/REPO]" >&2
