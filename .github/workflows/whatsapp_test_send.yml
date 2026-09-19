@@ -72,3 +72,5 @@ jobs:
           print("WHATSAPP_TEST_SENT=YES")
           print("MESSAGE_ID=" + str(message_id))
           PY
+
+# retrigger: secrets configured
