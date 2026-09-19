@@ -219,11 +219,15 @@ jobs:
             gcloud run jobs create "$GCP_WORKER_JOB" "${common[@]}"
           fi
 
+      - name: Allow scheduler identity to execute worker job
+        run: |
+          gcloud run jobs add-iam-policy-binding "$GCP_WORKER_JOB"             --region "$GCP_REGION"             --project "$GCP_PROJECT_ID"             --member "serviceAccount:$GCP_RUNTIME_SERVICE_ACCOUNT"             --role "roles/run.invoker"
+
       - name: Configure one-minute Cloud Scheduler trigger
         shell: bash
         run: |
           set -euo pipefail
-          uri="https://run.googleapis.com/apis/run.googleapis.com/v1/namespaces/$GCP_PROJECT_ID/jobs/$GCP_WORKER_JOB:run"
+          uri="https://run.googleapis.com/v2/projects/$GCP_PROJECT_ID/locations/$GCP_REGION/jobs/$GCP_WORKER_JOB:run"
           common=(
             --location "$GCP_REGION"
             --project "$GCP_PROJECT_ID"
