@@ -1,4 +1,4 @@
-name: One-time WhatsApp delivery test
+name: WhatsApp production runtime smoke test
 
 on:
   push:
@@ -7,70 +7,77 @@ on:
   workflow_dispatch:
 
 jobs:
-  send-test:
+  smoke-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
       GREEN_API_INSTANCE_ID: ${{ secrets.GREEN_API_INSTANCE_ID }}
       GREEN_API_TOKEN: ${{ secrets.GREEN_API_TOKEN }}
       GREEN_API_CHAT_ID: ${{ secrets.GREEN_API_CHAT_ID }}
     steps:
-      - name: Send clearly labeled WhatsApp test
+      - name: Checkout production main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Verify production WhatsApp runtime without sending
         shell: bash
         run: |
           python - <<'PY'
-          import json
           import os
-          import urllib.request
+          from sqlalchemy import text
 
-          instance_id = os.environ.get("GREEN_API_INSTANCE_ID", "").strip()
-          token = os.environ.get("GREEN_API_TOKEN", "").strip()
-          recipient = os.environ.get("GREEN_API_CHAT_ID", "").strip().replace(" ", "")
+          required = [
+              "DATABASE_URL",
+              "SUPABASE_URL",
+              "SUPABASE_KEY",
+              "GOOGLE_SHEET_ID",
+              "GOOGLE_SERVICE_ACCOUNT_JSON",
+              "GREEN_API_INSTANCE_ID",
+              "GREEN_API_TOKEN",
+              "GREEN_API_CHAT_ID",
+          ]
+          missing = [name for name in required if not os.getenv(name, "").strip()]
+          if missing:
+              raise SystemExit("Missing runtime secrets: " + ",".join(missing))
 
-          if not instance_id or not token or not recipient:
-              raise SystemExit("GREEN API test configuration is incomplete.")
+          from core.database import session_scope
+          from services.google_sheets import GoogleSheetsService
+          from services.session_signal_broadcast import load_due_session_setups
+          from services.whatsapp_service import WhatsAppService
 
-          if recipient.endswith("@g.us"):
-              chat_id = recipient
-          else:
-              if recipient.endswith("@c.us"):
-                  recipient = recipient[:-5]
-              if recipient.startswith("+"):
-                  recipient = recipient[1:]
-              if not recipient.isdigit():
-                  raise SystemExit("GREEN_API_CHAT_ID has invalid individual-chat format.")
-              chat_id = recipient + "@c.us"
+          with session_scope() as session:
+              site_settings = session.execute(
+                  text("SELECT to_regclass('public.site_settings')")
+              ).scalar_one()
+          if not site_settings:
+              raise SystemExit("public.site_settings is unavailable")
 
-          message = (
-              "🧪 TEST ONLY — VenusRealm WhatsApp delivery check\n\n"
-              "XAUUSD BUY TEST\n"
-              "Entry: 4266\n"
-              "Test Target: 4390\n"
-              "Difference: +124 points\n\n"
-              "This is a delivery-system test only, not a live trading signal.\n"
-              "Monday automation verification."
-          )
+          sheets = GoogleSheetsService()
+          values = sheets._analysis_values()
+          if not values:
+              raise SystemExit("Google Sheet analysis returned no rows")
 
-          url = (
-              "https://api.green-api.com/waInstance"
-              + instance_id
-              + "/sendMessage/"
-              + token
-          )
-          body = json.dumps({"chatId": chat_id, "message": message}).encode("utf-8")
-          req = urllib.request.Request(
-              url,
-              data=body,
-              headers={"Content-Type": "application/json"},
-              method="POST",
-          )
-          with urllib.request.urlopen(req, timeout=30) as response:
-              payload = json.loads(response.read().decode("utf-8"))
-          message_id = payload.get("idMessage")
-          if not message_id:
-              raise SystemExit("GREEN API returned no message id.")
-          print("WHATSAPP_TEST_SENT=YES")
-          print("MESSAGE_ID=" + str(message_id))
+          setups = load_due_session_setups(sheets)
+          WhatsAppService()
+
+          print("PRODUCTION_MAIN_RUNTIME=PASS")
+          print("GOOGLE_SHEET_ROWS=" + str(len(values)))
+          print("CURRENT_DUE_SESSION_SETUPS=" + str(len(setups)))
+          print("WHATSAPP_PROVIDER_CONFIG=PASS")
+          print("DELIVERY_LEDGER_TABLE=PASS")
+          print("NO_MESSAGE_SENT=YES")
           PY
-
-# retrigger: secrets configured
