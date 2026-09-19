@@ -52,6 +52,7 @@ jobs:
             tests/test_telegram_primary_delivery.py \
             tests/test_whatsapp_primary_delivery.py \
             tests/test_whatsapp_session_fallback.py \
+            tests/test_cloud_run_worker.py \
             tests/test_session_signal_broadcast.py \
             tests/test_signal_message_formatter.py \
             tests/test_signal_target_t6_progression.py \

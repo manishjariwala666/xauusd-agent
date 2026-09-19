@@ -1,0 +1,17 @@
+.git
+.github
+.env
+.env.*
+gha-creds-*.json
+google_creds.json
+service_account.json
+__pycache__
+*.pyc
+.pytest_cache
+node_modules
+public-web/node_modules
+public-web/.next
+admin-panel/node_modules
+admin-panel/.next
+coverage
+htmlcov
