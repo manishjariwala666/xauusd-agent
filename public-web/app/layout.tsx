@@ -13,7 +13,20 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://venusrealm.net"),
   title: { default: "VenusRealm | Gold Market Intelligence", template: "%s | VenusRealm" },
   description: "Risk-first XAUUSD signals, gold market analysis, financial astrology and AI-assisted trading education.",
-  applicationName: "VenusRealm"
+  applicationName: "VenusRealm",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "VenusRealm | Gold Market Intelligence",
+    description: "Risk-first XAUUSD research with protected Gold Signal access for verified paid members.",
+    url: "/",
+    siteName: "VenusRealm",
+    type: "website"
+  },
+  twitter: {
+    card: "summary",
+    title: "VenusRealm | Gold Market Intelligence",
+    description: "Risk-first XAUUSD research with protected Gold Signal access for verified paid members."
+  }
 };
 export const viewport: Viewport = { colorScheme: "light dark", themeColor: [{ media: "(prefers-color-scheme: light)", color: "#ffffff" }, { media: "(prefers-color-scheme: dark)", color: "#0a1729" }] };
 
