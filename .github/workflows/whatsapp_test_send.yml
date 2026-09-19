@@ -1,0 +1,74 @@
+name: One-time WhatsApp delivery test
+
+on:
+  push:
+    branches:
+      - ops/whatsapp-test-send-2026-09-19
+  workflow_dispatch:
+
+jobs:
+  send-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GREEN_API_INSTANCE_ID: ${{ secrets.GREEN_API_INSTANCE_ID }}
+      GREEN_API_TOKEN: ${{ secrets.GREEN_API_TOKEN }}
+      GREEN_API_CHAT_ID: ${{ secrets.GREEN_API_CHAT_ID }}
+    steps:
+      - name: Send clearly labeled WhatsApp test
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          instance_id = os.environ.get("GREEN_API_INSTANCE_ID", "").strip()
+          token = os.environ.get("GREEN_API_TOKEN", "").strip()
+          recipient = os.environ.get("GREEN_API_CHAT_ID", "").strip().replace(" ", "")
+
+          if not instance_id or not token or not recipient:
+              raise SystemExit("GREEN API test configuration is incomplete.")
+
+          if recipient.endswith("@g.us"):
+              chat_id = recipient
+          else:
+              if recipient.endswith("@c.us"):
+                  recipient = recipient[:-5]
+              if recipient.startswith("+"):
+                  recipient = recipient[1:]
+              if not recipient.isdigit():
+                  raise SystemExit("GREEN_API_CHAT_ID has invalid individual-chat format.")
+              chat_id = recipient + "@c.us"
+
+          message = (
+              "🧪 TEST ONLY — VenusRealm WhatsApp delivery check\n\n"
+              "XAUUSD BUY TEST\n"
+              "Entry: 4266\n"
+              "Test Target: 4390\n"
+              "Difference: +124 points\n\n"
+              "This is a delivery-system test only, not a live trading signal.\n"
+              "Monday automation verification."
+          )
+
+          url = (
+              "https://api.green-api.com/waInstance"
+              + instance_id
+              + "/sendMessage/"
+              + token
+          )
+          body = json.dumps({"chatId": chat_id, "message": message}).encode("utf-8")
+          req = urllib.request.Request(
+              url,
+              data=body,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=30) as response:
+              payload = json.loads(response.read().decode("utf-8"))
+          message_id = payload.get("idMessage")
+          if not message_id:
+              raise SystemExit("GREEN API returned no message id.")
+          print("WHATSAPP_TEST_SENT=YES")
+          print("MESSAGE_ID=" + str(message_id))
+          PY
