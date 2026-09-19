@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -23,11 +25,31 @@ def _recipient() -> str:
     return value
 
 
-def _dedupe_key(signal_date: str, session_name: str, direction: str) -> str:
-    return f"wa_session_setup:{signal_date}:{session_name}:{direction}:github"
+def _dedupe_key(
+    signal_date: str,
+    session_name: str,
+    direction: str,
+    recipient: str,
+) -> str:
+    recipient_hash = hashlib.sha256(recipient.encode("utf-8")).hexdigest()[:16]
+    return (
+        "wa_session_setup:"
+        f"{signal_date}:{session_name}:{direction}:{recipient_hash}"
+    )
 
 
-def _is_sent(client: Any, key: str) -> bool:
+def _claim(client: Any, key: str) -> str | None:
+    claim_token = f"CLAIMED:{uuid.uuid4()}"
+    client.table("site_settings").upsert(
+        {
+            "setting_key": key,
+            "setting_value": claim_token,
+            "is_sensitive": True,
+        },
+        on_conflict="setting_key",
+        ignore_duplicates=True,
+    ).execute()
+
     response = (
         client.table("site_settings")
         .select("setting_value")
@@ -36,7 +58,12 @@ def _is_sent(client: Any, key: str) -> bool:
         .execute()
     )
     rows = response.data or []
-    return bool(rows and str(rows[0].get("setting_value") or "").startswith("SENT:"))
+    if not rows:
+        return None
+    value = str(rows[0].get("setting_value") or "")
+    if value.startswith("SENT:"):
+        return None
+    return claim_token if value == claim_token else None
 
 
 def _mark(client: Any, key: str, value: str) -> None:
@@ -74,8 +101,10 @@ def run() -> tuple[int, int]:
             setup.signal_date,
             setup.session_name,
             setup.direction,
+            recipient,
         )
-        if _is_sent(client, key):
+        claim_token = _claim(client, key)
+        if claim_token is None:
             continue
         try:
             message_id = service.send_text(
