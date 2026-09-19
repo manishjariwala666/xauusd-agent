@@ -35,9 +35,9 @@ env:
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.GCP_PROJECT_ID != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
 
     steps:
       - name: Checkout
