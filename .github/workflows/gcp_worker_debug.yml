@@ -47,10 +47,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gcloud run jobs executions describe venusrealm-worker-259wv             --region "$GCP_REGION"             --project "$GCP_PROJECT_ID"
+          gcloud run jobs executions describe venusrealm-worker-5f6tj             --region "$GCP_REGION"             --project "$GCP_PROJECT_ID"
 
       - name: Print failed execution logs
         shell: bash
         run: |
           set -euo pipefail
-          gcloud logging read             "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"$GCP_WORKER_JOB\" AND labels.\"run.googleapis.com/execution_name\"=\"venusrealm-worker-259wv\""             --project "$GCP_PROJECT_ID"             --limit 300             --order=asc             --format="value(timestamp,severity,textPayload,jsonPayload.message)"
+          gcloud logging read             "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"$GCP_WORKER_JOB\" AND labels.\"run.googleapis.com/execution_name\"=\"venusrealm-worker-5f6tj\""             --project "$GCP_PROJECT_ID"             --limit 300             --order=asc             --format="value(timestamp,severity,textPayload,jsonPayload.message)"
