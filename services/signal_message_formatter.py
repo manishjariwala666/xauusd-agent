@@ -8,9 +8,11 @@ from typing import Any
 
 
 WEEKEND_MESSAGE = (
-    "🎉 Enjoy Your Weekend\n\n"
-    "Markets are closed on Saturday and Sunday.\n\n"
-    "Enjoy your weekend with profits, family and happy travelling.\n\n"
+    "🏖️✨ SATURDAY & SUNDAY OFF ✨🏖️\n\n"
+    "XAUUSD signal automation is paused for the weekend.\n"
+    "🗓️ Monday Ready — signal monitoring starts from 03:30 AM IST.\n\n"
+    "💚 Rest well, review calmly and prepare for the new week.\n"
+    "🎉 Enjoy Your Weekend from VenusRealm 🎉\n\n"
     "— VenusRealm"
 )
 
