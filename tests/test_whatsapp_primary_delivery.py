@@ -60,6 +60,43 @@ def test_whatsapp_uses_shared_durable_contract(monkeypatch):
     assert FakeWhatsAppService.calls == [("15550000001", "SELL 11")]
 
 
+def test_signal_agent_rebinds_durable_whatsapp_delivery(monkeypatch):
+    called = {"legacy": 0, "durable": 0}
+
+    monkeypatch.setattr(production_agents, "_sync_legacy_runtime", lambda: None)
+
+    def durable():
+        called["durable"] += 1
+
+    def legacy_run(payload):
+        called["legacy"] += 1
+        assert (
+            production_agents._legacy._deliver_pending_whatsapp_signals
+            is durable
+        )
+        production_agents._legacy._deliver_pending_whatsapp_signals()
+        return "ok"
+
+    monkeypatch.setattr(
+        production_agents,
+        "_durable_pending_whatsapp_signals",
+        durable,
+    )
+    monkeypatch.setattr(
+        production_agents._legacy,
+        "_deliver_pending_whatsapp_signals",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        production_agents._legacy,
+        "run_signal_agent",
+        legacy_run,
+    )
+
+    assert production_agents.run_signal_agent({}) == "ok"
+    assert called == {"legacy": 1, "durable": 1}
+
+
 def test_whatsapp_no_verified_recipients_never_enters_delivery(monkeypatch):
     called = False
 
