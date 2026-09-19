@@ -25,17 +25,17 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GCP_PROJECT_ID: \${{ vars.GCP_PROJECT_ID }}
-  GCP_REGION: \${{ vars.GCP_REGION }}
-  GCP_ARTIFACT_REPOSITORY: \${{ vars.GCP_ARTIFACT_REPOSITORY || 'venusrealm' }}
-  GCP_API_SERVICE: \${{ vars.GCP_API_SERVICE || 'venusrealm-api' }}
-  GCP_WORKER_JOB: \${{ vars.GCP_WORKER_JOB || 'venusrealm-worker' }}
-  GCP_SCHEDULER_JOB: \${{ vars.GCP_SCHEDULER_JOB || 'venusrealm-worker-every-minute' }}
-  GCP_RUNTIME_SERVICE_ACCOUNT: \${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION }}
+  GCP_ARTIFACT_REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY || 'venusrealm' }}
+  GCP_API_SERVICE: ${{ vars.GCP_API_SERVICE || 'venusrealm-api' }}
+  GCP_WORKER_JOB: ${{ vars.GCP_WORKER_JOB || 'venusrealm-worker' }}
+  GCP_SCHEDULER_JOB: ${{ vars.GCP_SCHEDULER_JOB || 'venusrealm-worker-every-minute' }}
+  GCP_RUNTIME_SERVICE_ACCOUNT: ${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
 
 jobs:
   deploy:
-    if: \${{ github.event_name == 'workflow_dispatch' || vars.GCP_PROJECT_ID != '' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.GCP_PROJECT_ID != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -46,13 +46,13 @@ jobs:
       - name: Validate Google Cloud deployment configuration
         shell: bash
         env:
-          WIF_PROVIDER: \${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          DEPLOYER_SERVICE_ACCOUNT: \${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOYER_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
         run: |
           set -euo pipefail
           missing=0
           for name in GCP_PROJECT_ID GCP_REGION GCP_RUNTIME_SERVICE_ACCOUNT; do
-            if [ -z "\${!name:-}" ]; then
+            if [ -z "${!name:-}" ]; then
               echo "::error title=Missing Google Cloud variable::$name is not configured."
               missing=1
             fi
@@ -70,14 +70,14 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
-          project_id: \${{ env.GCP_PROJECT_ID }}
-          workload_identity_provider: \${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: \${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v3
         with:
-          project_id: \${{ env.GCP_PROJECT_ID }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
 
       - name: Enable required Google Cloud APIs
         shell: bash
@@ -88,20 +88,20 @@ jobs:
       - name: Sync existing GitHub runtime secrets into Secret Manager
         shell: bash
         env:
-          SUPABASE_URL_VALUE: \${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY_VALUE: \${{ secrets.SUPABASE_KEY }}
-          JWT_SECRET_VALUE: \${{ secrets.JWT_SECRET }}
-          GOOGLE_SERVICE_ACCOUNT_JSON_VALUE: \${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          GOOGLE_SHEET_ID_VALUE: \${{ secrets.GOOGLE_SHEET_ID }}
-          GREEN_API_INSTANCE_ID_VALUE: \${{ secrets.GREEN_API_INSTANCE_ID }}
-          GREEN_API_TOKEN_VALUE: \${{ secrets.GREEN_API_TOKEN }}
-          GREEN_API_CHAT_ID_VALUE: \${{ secrets.GREEN_API_CHAT_ID }}
-          TELEGRAM_BOT_TOKEN_VALUE: \${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID_VALUE: \${{ secrets.TELEGRAM_CHAT_ID }}
-          MASTER_AI_TELEGRAM_BOT_TOKEN_VALUE: \${{ secrets.MASTER_AI_TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_WEBHOOK_SECRET_VALUE: \${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
-          GEMINI_API_KEY_VALUE: \${{ secrets.GEMINI_API_KEY }}
-          OPENAI_API_KEY_VALUE: \${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL_VALUE: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY_VALUE: ${{ secrets.SUPABASE_KEY }}
+          JWT_SECRET_VALUE: ${{ secrets.JWT_SECRET }}
+          GOOGLE_SERVICE_ACCOUNT_JSON_VALUE: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID_VALUE: ${{ secrets.GOOGLE_SHEET_ID }}
+          GREEN_API_INSTANCE_ID_VALUE: ${{ secrets.GREEN_API_INSTANCE_ID }}
+          GREEN_API_TOKEN_VALUE: ${{ secrets.GREEN_API_TOKEN }}
+          GREEN_API_CHAT_ID_VALUE: ${{ secrets.GREEN_API_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN_VALUE: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID_VALUE: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MASTER_AI_TELEGRAM_BOT_TOKEN_VALUE: ${{ secrets.MASTER_AI_TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET_VALUE: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          GEMINI_API_KEY_VALUE: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY_VALUE: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
           sync_secret() {
@@ -159,7 +159,7 @@ jobs:
           optional=(GOOGLE_WORKSHEET_NAME APP_BASE_URL PUBLIC_WEBSITE_URL TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID MASTER_AI_TELEGRAM_BOT_TOKEN TELEGRAM_ADMIN_USER_ID TELEGRAM_ADMIN_USER_IDS TELEGRAM_WEBHOOK_SECRET GEMINI_API_KEY OPENAI_API_KEY AI_PROVIDER GOLDAPI_KEY SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD EMAIL_FROM SMTP_USE_TLS USDT_WALLET_ADDRESS USDT_NETWORK SUBSCRIPTION_PRICE_USDT SUPPORT_EMAIL SUPPORT_WHATSAPP_URL TELEGRAM_INVITE_URL ADMIN_BFF_SHARED_SECRET WHATSAPP_ACCESS_TOKEN WHATSAPP_PHONE_NUMBER_ID WHATSAPP_BUSINESS_ACCOUNT_ID WHATSAPP_VERIFY_TOKEN META_APP_SECRET)
           bindings=()
           missing=0
-          for name in "\${required[@]}"; do
+          for name in "${required[@]}"; do
             if gcloud secrets describe "$name" --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
               bindings+=("$name=$name:latest")
             else
@@ -168,19 +168,19 @@ jobs:
             fi
           done
           test "$missing" -eq 0
-          for name in "\${optional[@]}"; do
+          for name in "${optional[@]}"; do
             if gcloud secrets describe "$name" --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
               bindings+=("$name=$name:latest")
             fi
           done
-          joined=$(IFS=,; echo "\${bindings[*]}")
+          joined=$(IFS=,; echo "${bindings[*]}")
           echo "bindings=$joined" >> "$GITHUB_OUTPUT"
 
       - name: Deploy Cloud Run API
         shell: bash
         run: |
           set -euo pipefail
-          gcloud run deploy "$GCP_API_SERVICE" --image "\${{ steps.image.outputs.image }}" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --service-account "$GCP_RUNTIME_SERVICE_ACCOUNT" --platform managed --allow-unauthenticated --port 8080 --cpu 1 --memory 1Gi --min-instances 0 --max-instances 4 --set-secrets "\${{ steps.runtime-secrets.outputs.bindings }}" --set-env-vars "APP_ENV=production,SKIP_STARTUP_MIGRATIONS=true"
+          gcloud run deploy "$GCP_API_SERVICE" --image "${{ steps.image.outputs.image }}" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --service-account "$GCP_RUNTIME_SERVICE_ACCOUNT" --platform managed --allow-unauthenticated --port 8080 --cpu 1 --memory 1Gi --min-instances 0 --max-instances 4 --set-secrets "${{ steps.runtime-secrets.outputs.bindings }}" --set-env-vars "APP_ENV=production,SKIP_STARTUP_MIGRATIONS=true"
 
       - name: Resolve API URL
         id: api-url
@@ -195,17 +195,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gcloud run services update "$GCP_API_SERVICE" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --update-env-vars "BACKEND_BASE_URL=\${{ steps.api-url.outputs.url }},PUBLIC_API_URL=\${{ steps.api-url.outputs.url }}"
+          gcloud run services update "$GCP_API_SERVICE" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --update-env-vars "BACKEND_BASE_URL=${{ steps.api-url.outputs.url }},PUBLIC_API_URL=${{ steps.api-url.outputs.url }}"
 
       - name: Deploy Cloud Run worker job
         shell: bash
         run: |
           set -euo pipefail
-          common=(--image "\${{ steps.image.outputs.image }}" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --service-account "$GCP_RUNTIME_SERVICE_ACCOUNT" --command python --args cloud_run_worker.py --cpu 1 --memory 1Gi --task-timeout 10m --max-retries 0 --set-secrets "\${{ steps.runtime-secrets.outputs.bindings }}" --set-env-vars "APP_ENV=production,CLOUD_RUN_WORKER_MAX_JOBS=20,BACKEND_BASE_URL=\${{ steps.api-url.outputs.url }},PUBLIC_API_URL=\${{ steps.api-url.outputs.url }}")
+          common=(--image "${{ steps.image.outputs.image }}" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" --service-account "$GCP_RUNTIME_SERVICE_ACCOUNT" --command python --args cloud_run_worker.py --cpu 1 --memory 1Gi --task-timeout 10m --max-retries 0 --set-secrets "${{ steps.runtime-secrets.outputs.bindings }}" --set-env-vars "APP_ENV=production,CLOUD_RUN_WORKER_MAX_JOBS=20,BACKEND_BASE_URL=${{ steps.api-url.outputs.url }},PUBLIC_API_URL=${{ steps.api-url.outputs.url }}")
           if gcloud run jobs describe "$GCP_WORKER_JOB" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
-            gcloud run jobs update "$GCP_WORKER_JOB" "\${common[@]}"
+            gcloud run jobs update "$GCP_WORKER_JOB" "${common[@]}"
           else
-            gcloud run jobs create "$GCP_WORKER_JOB" "\${common[@]}"
+            gcloud run jobs create "$GCP_WORKER_JOB" "${common[@]}"
           fi
 
       - name: Allow scheduler identity to execute worker job
@@ -221,9 +221,9 @@ jobs:
           uri="https://run.googleapis.com/v2/projects/$GCP_PROJECT_ID/locations/$GCP_REGION/jobs/$GCP_WORKER_JOB:run"
           common=(--location "$GCP_REGION" --project "$GCP_PROJECT_ID" --schedule "* * * * *" --time-zone "Asia/Kolkata" --uri "$uri" --http-method POST --oauth-service-account-email "$GCP_RUNTIME_SERVICE_ACCOUNT")
           if gcloud scheduler jobs describe "$GCP_SCHEDULER_JOB" --location "$GCP_REGION" --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
-            gcloud scheduler jobs update http "$GCP_SCHEDULER_JOB" "\${common[@]}"
+            gcloud scheduler jobs update http "$GCP_SCHEDULER_JOB" "${common[@]}"
           else
-            gcloud scheduler jobs create http "$GCP_SCHEDULER_JOB" "\${common[@]}"
+            gcloud scheduler jobs create http "$GCP_SCHEDULER_JOB" "${common[@]}"
           fi
 
       - name: Execute worker smoke cycle
@@ -236,5 +236,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error "\${{ steps.api-url.outputs.url }}/health"
+          curl --fail --silent --show-error "${{ steps.api-url.outputs.url }}/health"
           echo
