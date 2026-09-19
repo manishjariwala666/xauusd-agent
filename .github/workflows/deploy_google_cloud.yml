@@ -46,8 +46,8 @@ jobs:
       - name: Validate Google Cloud deployment configuration
         shell: bash
         env:
-          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          DEPLOYER_SERVICE_ACCOUNT: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOYER_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
         run: |
           set -euo pipefail
           missing=0
@@ -72,13 +72,60 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v3
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Sync existing GitHub runtime secrets into Secret Manager
+        shell: bash
+        env:
+          SUPABASE_URL_VALUE: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY_VALUE: ${{ secrets.SUPABASE_KEY }}
+          JWT_SECRET_VALUE: ${{ secrets.JWT_SECRET }}
+          GOOGLE_SERVICE_ACCOUNT_JSON_VALUE: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID_VALUE: ${{ secrets.GOOGLE_SHEET_ID }}
+          GREEN_API_INSTANCE_ID_VALUE: ${{ secrets.GREEN_API_INSTANCE_ID }}
+          GREEN_API_TOKEN_VALUE: ${{ secrets.GREEN_API_TOKEN }}
+          GREEN_API_CHAT_ID_VALUE: ${{ secrets.GREEN_API_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN_VALUE: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID_VALUE: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MASTER_AI_TELEGRAM_BOT_TOKEN_VALUE: ${{ secrets.MASTER_AI_TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET_VALUE: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          GEMINI_API_KEY_VALUE: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY_VALUE: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          sync_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              return 0
+            fi
+            if ! gcloud secrets describe "$name" --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
+              gcloud secrets create "$name"                 --replication-policy=automatic                 --project "$GCP_PROJECT_ID"
+            fi
+            printf '%s' "$value" | gcloud secrets versions add "$name"               --data-file=-               --project "$GCP_PROJECT_ID" >/dev/null
+          }
+
+          sync_secret SUPABASE_URL "$SUPABASE_URL_VALUE"
+          sync_secret SUPABASE_KEY "$SUPABASE_KEY_VALUE"
+          sync_secret JWT_SECRET "$JWT_SECRET_VALUE"
+          sync_secret GOOGLE_SERVICE_ACCOUNT_JSON "$GOOGLE_SERVICE_ACCOUNT_JSON_VALUE"
+          sync_secret GOOGLE_SHEET_ID "$GOOGLE_SHEET_ID_VALUE"
+          sync_secret GREEN_API_INSTANCE_ID "$GREEN_API_INSTANCE_ID_VALUE"
+          sync_secret GREEN_API_TOKEN "$GREEN_API_TOKEN_VALUE"
+          sync_secret GREEN_API_CHAT_ID "$GREEN_API_CHAT_ID_VALUE"
+          sync_secret TELEGRAM_BOT_TOKEN "$TELEGRAM_BOT_TOKEN_VALUE"
+          sync_secret TELEGRAM_CHAT_ID "$TELEGRAM_CHAT_ID_VALUE"
+          sync_secret MASTER_AI_TELEGRAM_BOT_TOKEN "$MASTER_AI_TELEGRAM_BOT_TOKEN_VALUE"
+          sync_secret TELEGRAM_WEBHOOK_SECRET "$TELEGRAM_WEBHOOK_SECRET_VALUE"
+          sync_secret GEMINI_API_KEY "$GEMINI_API_KEY_VALUE"
+          sync_secret OPENAI_API_KEY "$OPENAI_API_KEY_VALUE"
 
       - name: Enable required Google Cloud APIs
         run: |
