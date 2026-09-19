@@ -20,6 +20,11 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+      WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+      GREEN_API_INSTANCE_ID: ${{ secrets.GREEN_API_INSTANCE_ID }}
+      GREEN_API_TOKEN: ${{ secrets.GREEN_API_TOKEN }}
+      GREEN_API_CHAT_ID: ${{ secrets.GREEN_API_CHAT_ID }}
 
     steps:
       - name: Checkout repository
@@ -53,6 +58,20 @@ jobs:
           check_secret GEMINI_API_KEY
           check_secret TELEGRAM_BOT_TOKEN
           check_secret TELEGRAM_CHAT_ID
+
+          green_ready=0
+          meta_ready=0
+          if [ -n "${GREEN_API_INSTANCE_ID:-}" ] && [ -n "${GREEN_API_TOKEN:-}" ] && [ -n "${GREEN_API_CHAT_ID:-}" ]; then
+            green_ready=1
+          fi
+          if [ -n "${WHATSAPP_ACCESS_TOKEN:-}" ] && [ -n "${WHATSAPP_PHONE_NUMBER_ID:-}" ]; then
+            meta_ready=1
+          fi
+          if [ "$green_ready" -ne 1 ] && [ "$meta_ready" -ne 1 ]; then
+            echo "::error title=Missing WhatsApp provider configuration::Configure the Green API trio or Meta Cloud API token and phone number ID."
+            echo "- WhatsApp provider configuration missing" >> "$GITHUB_STEP_SUMMARY"
+            missing=1
+          fi
 
           if [ "$missing" -eq 1 ]; then
             echo "### Signal automation blocked" >> "$GITHUB_STEP_SUMMARY"
@@ -89,8 +108,11 @@ jobs:
               os.environ.get("TELEGRAM_BOT_TOKEN", "").split()
           )
           if ":" not in telegram_token:
-              issues.append(
-                  "TELEGRAM_BOT_TOKEN must be a BotFather token and contain a colon."
+              print(
+                  "::warning title=Telegram configuration warning::"
+                  "TELEGRAM_BOT_TOKEN is not in BotFather format. "
+                  "Telegram delivery will be skipped while non-Telegram "
+                  "signal channels continue."
               )
 
           if issues:
