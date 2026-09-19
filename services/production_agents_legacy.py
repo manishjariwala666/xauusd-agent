@@ -985,6 +985,34 @@ def _monitor_stop_loss_hits(
     return stopped
 
 
+class _UnavailableTelegramService:
+    """Keep non-Telegram signal channels running when Telegram is misconfigured."""
+
+    def __init__(self, error_category: str) -> None:
+        self._error_category = error_category
+
+    def broadcast_pending_signals(self, limit: int = 50) -> int:
+        del limit
+        logger.warning(
+            "Telegram primary delivery skipped for this cycle: category={}",
+            self._error_category,
+        )
+        return 0
+
+    def send_signal(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        logger.warning(
+            "Telegram signal send skipped for this cycle: category={}",
+            self._error_category,
+        )
+
+    def send_text(self, recipient: str, message: str) -> str:
+        del recipient, message
+        raise RuntimeError(
+            "Telegram delivery is unavailable for this Signal Agent cycle."
+        )
+
+
 def run_signal_agent(payload: dict[str, Any]) -> str:
     """Process a real market signal and deliver pending channel messages."""
     settings = get_settings()
@@ -995,7 +1023,15 @@ def run_signal_agent(payload: dict[str, Any]) -> str:
     except Exception:
         logger.exception("Google Sheets unavailable to Signal Agent")
     market_data = MarketDataService(supabase)
-    telegram = TelegramService(supabase)
+    try:
+        telegram = TelegramService(supabase)
+    except Exception as exc:
+        logger.warning(
+            "Telegram unavailable to Signal Agent; continuing non-Telegram "
+            "signal channels: category={}",
+            exc.__class__.__name__,
+        )
+        telegram = _UnavailableTelegramService(exc.__class__.__name__)
 
     run_pipeline_once(
         sheets=sheets,

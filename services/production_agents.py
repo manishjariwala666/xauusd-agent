@@ -248,6 +248,10 @@ def _guarded_stop_loss_monitor(*, market_data: Any, telegram: Any) -> int:
 
 def run_signal_agent(payload: dict[str, Any]) -> str:
     _sync_legacy_runtime()
+    # The legacy agent resolves this helper from its own module globals.
+    # Rebind on every run so primary BUY/SELL delivery always uses the durable
+    # per-recipient ledger, T1-T6 formatter, and Captain verification gate.
+    _legacy._deliver_pending_whatsapp_signals = _durable_pending_whatsapp_signals
     return _legacy.run_signal_agent(payload)
 
 
