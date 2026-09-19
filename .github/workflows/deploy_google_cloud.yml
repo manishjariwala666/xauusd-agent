@@ -226,6 +226,12 @@ jobs:
             gcloud scheduler jobs create http "$GCP_SCHEDULER_JOB" "${common[@]}"
           fi
 
+      - name: Pause scheduler before worker smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud scheduler jobs pause "$GCP_SCHEDULER_JOB" --location "$GCP_REGION" --project "$GCP_PROJECT_ID"
+
       - name: Execute worker smoke cycle
         id: worker-smoke
         continue-on-error: true
@@ -247,7 +253,15 @@ jobs:
           gcloud logging read "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"$GCP_WORKER_JOB\" AND labels.\"run.googleapis.com/execution_name\"=\"$execution\"" --project "$GCP_PROJECT_ID" --limit 200 --order=asc --format="value(timestamp,severity,textPayload,jsonPayload.message)" || true
           exit 1
 
+      - name: Resume scheduler after successful worker smoke
+        if: ${{ steps.worker-smoke.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud scheduler jobs resume "$GCP_SCHEDULER_JOB" --location "$GCP_REGION" --project "$GCP_PROJECT_ID"
+
       - name: Verify API health
+        if: ${{ steps.worker-smoke.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
