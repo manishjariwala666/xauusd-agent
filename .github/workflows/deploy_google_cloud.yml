@@ -1,0 +1,247 @@
+name: Deploy VenusRealm to Google Cloud
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend.py"
+      - "cloud_run_worker.py"
+      - "worker.py"
+      - "services/**"
+      - "core/**"
+      - "migrations/**"
+      - "requirements.txt"
+      - "Dockerfile"
+      - ".github/workflows/deploy_google_cloud.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: venusrealm-google-cloud-production
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION }}
+  GCP_ARTIFACT_REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY || 'venusrealm' }}
+  GCP_API_SERVICE: ${{ vars.GCP_API_SERVICE || 'venusrealm-api' }}
+  GCP_WORKER_JOB: ${{ vars.GCP_WORKER_JOB || 'venusrealm-worker' }}
+  GCP_SCHEDULER_JOB: ${{ vars.GCP_SCHEDULER_JOB || 'venusrealm-worker-every-minute' }}
+  GCP_RUNTIME_SERVICE_ACCOUNT: ${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Google Cloud deployment configuration
+        shell: bash
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOYER_SERVICE_ACCOUNT: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in GCP_PROJECT_ID GCP_REGION GCP_RUNTIME_SERVICE_ACCOUNT; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error title=Missing Google Cloud variable::$name is not configured."
+              missing=1
+            fi
+          done
+          if [ -z "$WIF_PROVIDER" ]; then
+            echo "::error title=Missing Google Cloud secret::GCP_WORKLOAD_IDENTITY_PROVIDER is not configured."
+            missing=1
+          fi
+          if [ -z "$DEPLOYER_SERVICE_ACCOUNT" ]; then
+            echo "::error title=Missing Google Cloud secret::GCP_DEPLOYER_SERVICE_ACCOUNT is not configured."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Enable required Google Cloud APIs
+        run: |
+          gcloud services enable             run.googleapis.com             artifactregistry.googleapis.com             cloudbuild.googleapis.com             cloudscheduler.googleapis.com             secretmanager.googleapis.com             iamcredentials.googleapis.com             --project "$GCP_PROJECT_ID"
+
+      - name: Ensure Artifact Registry repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gcloud artifacts repositories describe "$GCP_ARTIFACT_REPOSITORY"               --location "$GCP_REGION"               --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
+            gcloud artifacts repositories create "$GCP_ARTIFACT_REPOSITORY"               --repository-format=docker               --location="$GCP_REGION"               --description="VenusRealm production images"               --project="$GCP_PROJECT_ID"
+          fi
+
+      - name: Build and push production image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$GCP_ARTIFACT_REPOSITORY/venusrealm:$GITHUB_SHA"
+          gcloud builds submit             --tag "$IMAGE"             --project "$GCP_PROJECT_ID"             .
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve Secret Manager bindings
+        id: runtime-secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            DATABASE_URL
+            SUPABASE_URL
+            SUPABASE_KEY
+            JWT_SECRET
+            GOOGLE_SERVICE_ACCOUNT_JSON
+            GOOGLE_SHEET_ID
+            GREEN_API_INSTANCE_ID
+            GREEN_API_TOKEN
+            GREEN_API_CHAT_ID
+          )
+          optional=(
+            GOOGLE_WORKSHEET_NAME
+            APP_BASE_URL
+            BACKEND_BASE_URL
+            PUBLIC_API_URL
+            PUBLIC_WEBSITE_URL
+            TELEGRAM_BOT_TOKEN
+            TELEGRAM_CHAT_ID
+            MASTER_AI_TELEGRAM_BOT_TOKEN
+            TELEGRAM_ADMIN_USER_ID
+            TELEGRAM_ADMIN_USER_IDS
+            TELEGRAM_WEBHOOK_SECRET
+            GEMINI_API_KEY
+            OPENAI_API_KEY
+            AI_PROVIDER
+            GOLDAPI_KEY
+            SMTP_HOST
+            SMTP_PORT
+            SMTP_USERNAME
+            SMTP_PASSWORD
+            EMAIL_FROM
+            SMTP_USE_TLS
+            USDT_WALLET_ADDRESS
+            USDT_NETWORK
+            SUBSCRIPTION_PRICE_USDT
+            SUPPORT_EMAIL
+            SUPPORT_WHATSAPP_URL
+            TELEGRAM_INVITE_URL
+            ADMIN_BFF_SHARED_SECRET
+            WHATSAPP_ACCESS_TOKEN
+            WHATSAPP_PHONE_NUMBER_ID
+            WHATSAPP_BUSINESS_ACCOUNT_ID
+            WHATSAPP_VERIFY_TOKEN
+            META_APP_SECRET
+          )
+
+          bindings=()
+          missing=0
+          for name in "${required[@]}"; do
+            if gcloud secrets describe "$name" --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
+              bindings+=("$name=$name:latest")
+            else
+              echo "::error title=Missing Secret Manager secret::$name is required."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          for name in "${optional[@]}"; do
+            if gcloud secrets describe "$name" --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
+              bindings+=("$name=$name:latest")
+            fi
+          done
+
+          joined=$(IFS=,; echo "${bindings[*]}")
+          echo "bindings=$joined" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Cloud Run API
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run deploy "$GCP_API_SERVICE"             --image "${{ steps.image.outputs.image }}"             --region "$GCP_REGION"             --project "$GCP_PROJECT_ID"             --service-account "$GCP_RUNTIME_SERVICE_ACCOUNT"             --platform managed             --allow-unauthenticated             --port 8080             --cpu 1             --memory 1Gi             --min-instances 0             --max-instances 4             --set-secrets "${{ steps.runtime-secrets.outputs.bindings }}"             --set-env-vars "APP_ENV=production,SKIP_STARTUP_MIGRATIONS=true"
+
+      - name: Resolve API URL
+        id: api-url
+        shell: bash
+        run: |
+          set -euo pipefail
+          url=$(gcloud run services describe "$GCP_API_SERVICE"             --region "$GCP_REGION"             --project "$GCP_PROJECT_ID"             --format='value(status.url)')
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Cloud Run worker job
+        shell: bash
+        run: |
+          set -euo pipefail
+          common=(
+            --image "${{ steps.image.outputs.image }}"
+            --region "$GCP_REGION"
+            --project "$GCP_PROJECT_ID"
+            --service-account "$GCP_RUNTIME_SERVICE_ACCOUNT"
+            --command python
+            --args cloud_run_worker.py
+            --cpu 1
+            --memory 1Gi
+            --task-timeout 10m
+            --max-retries 0
+            --set-secrets "${{ steps.runtime-secrets.outputs.bindings }}"
+            --set-env-vars "APP_ENV=production,CLOUD_RUN_WORKER_MAX_JOBS=20,BACKEND_BASE_URL=${{ steps.api-url.outputs.url }},PUBLIC_API_URL=${{ steps.api-url.outputs.url }}"
+          )
+          if gcloud run jobs describe "$GCP_WORKER_JOB"               --region "$GCP_REGION"               --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
+            gcloud run jobs update "$GCP_WORKER_JOB" "${common[@]}"
+          else
+            gcloud run jobs create "$GCP_WORKER_JOB" "${common[@]}"
+          fi
+
+      - name: Configure one-minute Cloud Scheduler trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          uri="https://run.googleapis.com/apis/run.googleapis.com/v1/namespaces/$GCP_PROJECT_ID/jobs/$GCP_WORKER_JOB:run"
+          common=(
+            --location "$GCP_REGION"
+            --project "$GCP_PROJECT_ID"
+            --schedule "* * * * *"
+            --time-zone "Asia/Kolkata"
+            --uri "$uri"
+            --http-method POST
+            --oauth-service-account-email "$GCP_RUNTIME_SERVICE_ACCOUNT"
+          )
+          if gcloud scheduler jobs describe "$GCP_SCHEDULER_JOB"               --location "$GCP_REGION"               --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
+            gcloud scheduler jobs update http "$GCP_SCHEDULER_JOB" "${common[@]}"
+          else
+            gcloud scheduler jobs create http "$GCP_SCHEDULER_JOB" "${common[@]}"
+          fi
+
+      - name: Execute worker smoke cycle
+        run: |
+          gcloud run jobs execute "$GCP_WORKER_JOB"             --region "$GCP_REGION"             --project "$GCP_PROJECT_ID"             --wait
+
+      - name: Verify API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "${{ steps.api-url.outputs.url }}/health"
+          echo
