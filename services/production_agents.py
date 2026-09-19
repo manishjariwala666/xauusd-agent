@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from services import production_agents_legacy as _legacy
 from services.signal_channel_delivery import deliver_pending_signal_recipients
@@ -152,14 +153,37 @@ def _durable_pending_whatsapp_signals() -> None:
     # the broad facade sync here because it can overwrite injected/verified
     # recipient and provider implementations immediately before delivery.
     now = datetime.now(timezone.utc)
-    if now.weekday() >= 5:
-        logger.info("WhatsApp signal delivery paused for the weekend")
+    india_now = now.astimezone(ZoneInfo("Asia/Kolkata"))
+    if india_now.weekday() >= 5:
+        logger.info("WhatsApp signal delivery paused for the India weekend")
         return
     recipients = _legacy._verified_whatsapp_recipients()
     if not recipients:
         logger.info("WhatsApp signal delivery skipped: no verified recipients")
         return
+
     service = _legacy.WhatsAppService()
+
+    # Session setup messages are informational session-level BUY/SELL plans
+    # sourced only from the authoritative Sheet. They are deliberately kept
+    # separate from market_signals so the live Captain/reversal gate remains
+    # the sole authority for actionable trade lifecycle records.
+    from services.session_signal_broadcast import (
+        deliver_due_session_setup_messages,
+    )
+
+    setup_delivered, setup_failed = deliver_due_session_setup_messages(
+        recipients=recipients,
+        send=service.send_text,
+        now=now,
+    )
+    if setup_delivered or setup_failed:
+        logger.info(
+            "Session setup WhatsApp delivery completed: delivered={} failed={}",
+            setup_delivered,
+            setup_failed,
+        )
+
     delivered, failed = deliver_pending_signal_recipients(
         channel="whatsapp",
         recipients=recipients,
@@ -169,7 +193,11 @@ def _durable_pending_whatsapp_signals() -> None:
         verify_signal=_captain_delivery_verifier,
     )
     if delivered or failed:
-        logger.info("Primary WhatsApp delivery completed: delivered={} failed={}", delivered, failed)
+        logger.info(
+            "Primary WhatsApp delivery completed: delivered={} failed={}",
+            delivered,
+            failed,
+        )
 
 
 def _durable_telegram_broadcast(telegram: Any, limit: int = 50) -> int:

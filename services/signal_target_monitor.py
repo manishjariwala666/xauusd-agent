@@ -144,7 +144,8 @@ def format_target_progress_message(
     points = milestone_profit_points(signal, milestone)
 
     lines = [
-        f"🎯 Yahooo — Target {milestone.number} achieved — {symbol} {direction} ✅",
+        f"💰✅ PROFIT BOOK UPDATE — Target {milestone.number} achieved",
+        f"🎯 {symbol} {direction} Target {milestone.number} achieved ✅",
         "",
         f"Entry: {entry:.2f}",
         f"Target {milestone.number}: {milestone.price:.2f}",
@@ -160,7 +161,12 @@ def format_target_progress_message(
             ]
         )
     else:
-        lines.append("🏁 Target 6 achieved — all configured targets completed.")
+        lines.extend(
+            [
+                "🏁🏆 Target 6 achieved — all configured targets completed.",
+                "🎉💚 Enjoy Profit from VenusRealm 💚🎉",
+            ]
+        )
 
     lines.extend(
         [

@@ -2,7 +2,7 @@ name: Autonomous Financial AI News Agent
 
 on:
   schedule:
-    - cron: "30 */6 * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
