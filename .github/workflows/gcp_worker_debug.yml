@@ -1,0 +1,56 @@
+name: GCP Worker Debug
+
+on:
+  push:
+    branches:
+      - ops/gcp-worker-debug-2026-09-19
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION }}
+  GCP_WORKER_JOB: ${{ vars.GCP_WORKER_JOB }}
+  GCP_SCHEDULER_JOB: ${{ vars.GCP_SCHEDULER_JOB }}
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Pause scheduler immediately
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud scheduler jobs pause "$GCP_SCHEDULER_JOB"             --location "$GCP_REGION"             --project "$GCP_PROJECT_ID" || true
+          gcloud scheduler jobs describe "$GCP_SCHEDULER_JOB"             --location "$GCP_REGION"             --project "$GCP_PROJECT_ID"             --format="table(name,state,schedule,timeZone)"
+
+      - name: Describe failed execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run jobs executions describe venusrealm-worker-259wv             --region "$GCP_REGION"             --project "$GCP_PROJECT_ID"
+
+      - name: Print failed execution logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud logging read             "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"$GCP_WORKER_JOB\" AND labels.\"run.googleapis.com/execution_name\"=\"venusrealm-worker-259wv\""             --project "$GCP_PROJECT_ID"             --limit 300             --order=asc             --format="value(timestamp,severity,textPayload,jsonPayload.message)"
