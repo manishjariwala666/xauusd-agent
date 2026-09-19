@@ -27,7 +27,7 @@ export async function SiteHeader() {
         </Link>
         {links.telegram && <a className="button button-gold button-small" href={links.telegram} rel="noreferrer" target="_blank"><Icon name="send" size={17} />Join Telegram</a>}
       </div>
-      <MobileNav items={navigation} loginUrl={hasMemberSession ? "/signals" : "/login"} telegramUrl={links.telegram} />
+      <MobileNav items={navigation} loginUrl={hasMemberSession ? "/signals" : "/login"} accessLabel={hasMemberSession ? "Member Desk" : "Member Access"} telegramUrl={links.telegram} />
     </header>
   );
 }
