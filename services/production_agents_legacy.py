@@ -2619,7 +2619,7 @@ def _fallback_blog_payload(
     # as AI-generated drafts. Standard drafts are intentionally compact enough
     # to remain reviewable while retaining the required H1/H2/H3 structure,
     # FAQ and risk disclaimer.
-    if content_length == "standard" and _blog_word_count(body) > target_word_max:
+    if content_length == "standard" and _blog_word_count(body) > 1600:
         # Rebuild a bounded standard draft instead of slicing arbitrary words.
         # Keep complete sections so the fallback remains readable and SEO-valid.
         compact_parts = [
