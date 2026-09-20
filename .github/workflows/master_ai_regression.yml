@@ -57,7 +57,8 @@ jobs:
             tests/test_signal_message_formatter.py \
             tests/test_signal_target_t6_progression.py \
             tests/test_signal_channel_delivery.py \
-            tests/test_master_ai_captain_status.py
+            tests/test_master_ai_captain_status.py \
+            tests/test_agent_role_contracts.py
 
       - name: Set up Node
         uses: actions/setup-node@v4
