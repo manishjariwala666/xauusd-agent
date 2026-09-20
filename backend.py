@@ -139,18 +139,15 @@ async def lifespan(_: FastAPI):
         "on",
     }
 
-    if captain_shadow:
-        logger.warning(
-            "Captain shadow mode active: Telegram webhook "
-            "registration skipped."
+    try:
+        # Captain shadow mode is a signal-delivery safety gate only.
+        # Master AI Telegram must remain reachable for owner/admin control,
+        # while the ordinary signal bot webhook stays disabled in shadow mode.
+        _configure_telegram_webhook(register_signal=not captain_shadow)
+    except Exception:
+        logger.exception(
+            "Telegram webhook startup configuration failed"
         )
-    else:
-        try:
-            _configure_telegram_webhook()
-        except Exception:
-            logger.exception(
-                "Telegram webhook startup configuration failed"
-            )
 
     yield
 
