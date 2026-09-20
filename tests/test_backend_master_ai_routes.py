@@ -23,6 +23,27 @@ def test_telegram_signal_and_master_routes_are_registered() -> None:
     assert _route_has_method("/webhooks/telegram/master", "POST")
 
 
+def test_master_webhook_registration_keeps_master_ai_during_signal_shadow(monkeypatch) -> None:
+    class Settings:
+        telegram_webhook_secret = "test-webhook-secret"
+        telegram_bot_token = "signal-token"
+        master_ai_telegram_bot_token = "master-token"
+
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(backend, "get_settings", lambda: Settings())
+    monkeypatch.setattr(backend, "public_api_base_url", lambda _settings: "https://api.example.com")
+    monkeypatch.setattr(
+        backend,
+        "_register_single_telegram_webhook",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    backend._configure_telegram_webhook(register_signal=False)
+
+    assert [call["bot_name"] for call in calls] == ["master_ai"]
+    assert calls[0]["path"] == "/webhooks/telegram/master"
+
+
 def test_master_webhook_returns_400_for_malformed_json(monkeypatch) -> None:
     class Settings:
         telegram_webhook_secret = "test-webhook-secret"
