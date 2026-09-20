@@ -2619,38 +2619,66 @@ def _fallback_blog_payload(
     # as AI-generated drafts. Standard drafts are intentionally compact enough
     # to remain reviewable while retaining the required H1/H2/H3 structure,
     # FAQ and risk disclaimer.
-    if content_length == "standard" and _blog_word_count(body) > 1900:
+    if content_length == "standard" and _blog_word_count(body) > target_word_max:
+        # Rebuild a bounded standard draft instead of slicing arbitrary words.
+        # Keep complete sections so the fallback remains readable and SEO-valid.
         compact_parts = [
             body_parts[0],
             body_parts[1],
         ]
-        for heading, paragraph in sections[:5]:
+        for heading, paragraph in sections[:4]:
             compact_parts.extend([f"## {heading}", paragraph])
         compact_parts.extend(
             [
-                "## XAUUSD market context",
+                "## Market context and why XAUUSD matters",
                 (
-                    "XAUUSD analysis should separate observed price structure from "
-                    "interpretation. Macro drivers, volatility, timeframe and data "
-                    "freshness all matter, and none guarantees the next move."
+                    "XAUUSD represents gold priced against the US dollar. Its "
+                    "market context can include interest-rate expectations, "
+                    "real yields, dollar strength, inflation expectations, "
+                    "geopolitical risk and liquidity. These drivers can change "
+                    "independently, so analysis should distinguish observed "
+                    "conditions from interpretation."
+                ),
+                "## Understanding price action",
+                (
+                    "Price action can be reviewed through market structure, "
+                    "momentum, volatility and important support or resistance. "
+                    "A move through a level is an observation, not a guaranteed "
+                    "forecast. Timeframe and current evidence should always be "
+                    "identified before drawing conclusions."
+                ),
+                "## Timeframe considerations",
+                (
+                    "Short and higher timeframes may show different conditions. "
+                    "A lower timeframe can describe recent movement while a "
+                    "higher timeframe can provide broader structure. Avoid "
+                    "mixing these observations without stating the timeframe."
                 ),
                 "## Risk management",
                 (
-                    "Position size, leverage, spread, slippage and invalidation "
-                    "conditions should be considered before any trading decision. "
-                    "Educational examples do not guarantee execution or returns."
+                    "Position size, leverage, spread, slippage and execution "
+                    "conditions can materially affect results. Any example "
+                    "entry, stop or target is educational and does not guarantee "
+                    "execution or returns."
+                ),
+                "## Data quality and freshness",
+                (
+                    "Current prices, economic releases and market conditions "
+                    "change quickly. Do not invent live values or recent events. "
+                    "When current evidence is required, verify it against a "
+                    "reliable real-time source before publication or action."
                 ),
                 "## Practical checklist",
                 (
-                    "Check timeframe, current structure, major events, source freshness, "
-                    "invalidation conditions and whether the proposed risk fits the "
-                    "reader's own constraints."
+                    "Check timeframe, market structure, major events, data "
+                    "freshness, invalidation conditions and whether the proposed "
+                    "risk fits the reader's own constraints."
                 ),
                 "## Conclusion",
                 (
-                    f"A trustworthy article about {safe_topic} combines verified "
-                    "research, useful SEO structure, relevant context and transparent "
-                    "limitations without promising a market outcome."
+                    f"A trustworthy article about {safe_topic} combines useful "
+                    "search structure with verified evidence, clear limitations "
+                    "and practical context rather than promising a market outcome."
                 ),
             ]
         )
@@ -2662,6 +2690,7 @@ def _fallback_blog_payload(
         )
 
     return {
+
         "title": title,
         "alternate_titles": [
             f"{safe_topic.title()}{geo_suffix}: Expert Guide",
