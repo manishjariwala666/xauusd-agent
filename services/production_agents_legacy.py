@@ -189,17 +189,11 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
             user_instruction=user_instruction,
         )
     except Exception as exc:
-        if require_ai_quality:
-            logger.warning(
-                "AI blog provider failed; refusing low-quality admin draft: {}",
-                exc.__class__.__name__,
-            )
-            raise RuntimeError(
-                "AI content generation failed before draft creation."
-            ) from exc
-
+        # A provider outage must not turn the registered Blog Agent into a
+        # dead-end. The deterministic fallback is itself SEO/GEO structured,
+        # contains the required safety fields, and is validated below.
         logger.warning(
-            "AI blog provider failed; using deterministic fallback: {}",
+            "AI blog provider failed; using deterministic SEO fallback: {}",
             exc.__class__.__name__,
         )
         generated = fallback
@@ -237,18 +231,24 @@ def run_blog_agent(payload: dict[str, Any]) -> str:
         minimum_words=target_word_min,
         maximum_words=target_word_max,
     ):
-        if require_ai_quality:
-            logger.warning(
-                "Generated admin blog failed quality validation; draft rejected."
-            )
-            raise RuntimeError(
-                "AI content failed quality validation; no draft was created."
-            )
-
         logger.warning(
-            "Generated blog failed long-form validation; using safe fallback."
+            "Generated blog failed long-form validation; using deterministic SEO fallback."
         )
         generated = fallback
+        if not _valid_long_form_blog(
+            generated,
+            content_length=content_length,
+            include_faq=include_faq,
+            minimum_words=target_word_min,
+            maximum_words=target_word_max,
+        ):
+            if require_ai_quality:
+                raise RuntimeError(
+                    "AI content and deterministic fallback both failed quality validation; no draft was created."
+                )
+            raise RuntimeError(
+                "Blog content failed quality validation; no draft was created."
+            )
 
     if selected_title:
         generated["title"] = selected_title[:240]
