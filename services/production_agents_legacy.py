@@ -2615,6 +2615,52 @@ def _fallback_blog_payload(
         include_risk_disclaimer=True,
     )
 
+    # Keep deterministic fallback output inside the same requested QA envelope
+    # as AI-generated drafts. Standard drafts are intentionally compact enough
+    # to remain reviewable while retaining the required H1/H2/H3 structure,
+    # FAQ and risk disclaimer.
+    if content_length == "standard" and _blog_word_count(body) > 1900:
+        compact_parts = [
+            body_parts[0],
+            body_parts[1],
+        ]
+        for heading, paragraph in sections[:5]:
+            compact_parts.extend([f"## {heading}", paragraph])
+        compact_parts.extend(
+            [
+                "## XAUUSD market context",
+                (
+                    "XAUUSD analysis should separate observed price structure from "
+                    "interpretation. Macro drivers, volatility, timeframe and data "
+                    "freshness all matter, and none guarantees the next move."
+                ),
+                "## Risk management",
+                (
+                    "Position size, leverage, spread, slippage and invalidation "
+                    "conditions should be considered before any trading decision. "
+                    "Educational examples do not guarantee execution or returns."
+                ),
+                "## Practical checklist",
+                (
+                    "Check timeframe, current structure, major events, source freshness, "
+                    "invalidation conditions and whether the proposed risk fits the "
+                    "reader's own constraints."
+                ),
+                "## Conclusion",
+                (
+                    f"A trustworthy article about {safe_topic} combines verified "
+                    "research, useful SEO structure, relevant context and transparent "
+                    "limitations without promising a market outcome."
+                ),
+            ]
+        )
+        body = _normalize_public_blog_sections(
+            "\n\n".join(compact_parts),
+            faq=faq,
+            include_faq=include_faq,
+            include_risk_disclaimer=True,
+        )
+
     return {
         "title": title,
         "alternate_titles": [
