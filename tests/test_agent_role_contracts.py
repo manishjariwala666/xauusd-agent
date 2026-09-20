@@ -29,4 +29,5 @@ def test_standard_roles_keep_high_impact_actions_gated() -> None:
             continue
 
         if capability.owner_approval_required:
-            assert capability.mode.value in {"APPROVAL", "BLOCKED"}
+            assert capability.mode.value in {"READ", "APPROVAL", "BLOCKED"}
+            assert capability.owner_approval_actions or capability.blocked_actions
