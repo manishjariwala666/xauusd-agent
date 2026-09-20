@@ -14,7 +14,6 @@ INSERT INTO public.ai_agents (
     updated_at
 )
 VALUES
-    ('master_ai', 'Venus Master AI', 1, TRUE, 'IDLE', NOW()),
     ('signal_agent', 'Venus Signal Agent', 10, TRUE, 'IDLE', NOW()),
     ('whatsapp_reply_agent', 'Venus WhatsApp Reply Agent', 20, TRUE, 'IDLE', NOW()),
     ('telegram_reply_agent', 'Venus Telegram Reply Agent', 30, TRUE, 'IDLE', NOW()),
@@ -28,14 +27,7 @@ VALUES
     ('cms_editor_agent', 'Venus CMS Editor Agent', 110, TRUE, 'IDLE', NOW()),
     ('image_agent', 'Venus Image Agent', 120, TRUE, 'IDLE', NOW()),
     ('announcement_agent', 'Venus Announcement Agent', 130, TRUE, 'IDLE', NOW()),
-    ('seo_agent', 'Venus SEO Agent', 140, TRUE, 'IDLE', NOW()),
-    ('macro_ai_agent', 'Venus Macro AI', 150, TRUE, 'IDLE', NOW()),
-    ('economic_calendar_ai_agent', 'Venus Economic Calendar AI', 160, TRUE, 'IDLE', NOW()),
-    ('website_health_agent', 'Venus Website Health Agent', 170, TRUE, 'IDLE', NOW()),
-    ('delivery_monitor_agent', 'Venus Delivery Monitor Agent', 180, TRUE, 'IDLE', NOW()),
-    ('scheduler_agent', 'Venus Scheduler Agent', 190, TRUE, 'IDLE', NOW()),
-    ('admin_support_agent', 'Venus Admin Support Agent', 200, TRUE, 'IDLE', NOW()),
-    ('report_agent', 'Venus Report Agent', 210, TRUE, 'IDLE', NOW())
+    ('seo_agent', 'Venus SEO Agent', 140, TRUE, 'IDLE', NOW())
 ON CONFLICT (agent_key) DO UPDATE SET
     display_name = EXCLUDED.display_name,
     display_order = EXCLUDED.display_order,
