@@ -267,3 +267,6 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error "${{ steps.api-url.outputs.url }}/health"
           echo
+
+# Operational repair trigger: this workflow is intentionally re-run on main changes so
+# a paused scheduler is brought back only after a successful Cloud Run worker smoke cycle.
