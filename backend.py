@@ -139,18 +139,15 @@ async def lifespan(_: FastAPI):
         "on",
     }
 
-    if captain_shadow:
-        logger.warning(
-            "Captain shadow mode active: Telegram webhook "
-            "registration skipped."
+    try:
+        # Captain shadow mode is a signal-delivery safety gate only.
+        # Master AI Telegram must remain reachable for owner/admin control,
+        # while the ordinary signal bot webhook stays disabled in shadow mode.
+        _configure_telegram_webhook(register_signal=not captain_shadow)
+    except Exception:
+        logger.exception(
+            "Telegram webhook startup configuration failed"
         )
-    else:
-        try:
-            _configure_telegram_webhook()
-        except Exception:
-            logger.exception(
-                "Telegram webhook startup configuration failed"
-            )
 
     yield
 
@@ -557,8 +554,8 @@ def _public_setting(key: str) -> str:
     return str(value)
 
 
-def _configure_telegram_webhook() -> None:
-    """Register Telegram webhooks for Signal Bot and Master AI Bot without logging secrets."""
+def _configure_telegram_webhook(*, register_signal: bool = True) -> None:
+    """Register Telegram webhooks without coupling Master AI to signal shadow mode."""
     settings = get_settings()
 
     public_api_url = public_api_base_url(settings)
@@ -582,14 +579,18 @@ def _configure_telegram_webhook() -> None:
         logger.warning("Telegram webhook registration skipped: configuration missing")
         return
 
-    _register_single_telegram_webhook(
-        bot_name="signal",
-        token=signal_token,
-        public_api_url=public_api_url,
-        path="/webhooks/telegram",
-        webhook_secret=webhook_secret,
-    )
+    if register_signal:
+        _register_single_telegram_webhook(
+            bot_name="signal",
+            token=signal_token,
+            public_api_url=public_api_url,
+            path="/webhooks/telegram",
+            webhook_secret=webhook_secret,
+        )
+    else:
+        logger.info("Signal Telegram webhook registration skipped by Captain shadow mode")
 
+    # Master AI is an owner/admin control channel and is not part of signal delivery.
     _register_single_telegram_webhook(
         bot_name="master_ai",
         token=master_token,
