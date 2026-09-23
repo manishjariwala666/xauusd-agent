@@ -55,11 +55,14 @@ def _active_sheet_reversal_allowed(
             .limit(10)
             .execute()
         )
-    except Exception:
+    except Exception as exc:
         logger.exception(
-            "Active Sheet direction lookup failed; opposite candidate blocked."
+            "Active Sheet direction lookup failed; signal job cannot safely "
+            "determine reversal state."
         )
-        return False
+        raise RuntimeError(
+            "Supabase market-signal lookup failed; signal creation aborted."
+        ) from exc
 
     active = None
     terminal = {
