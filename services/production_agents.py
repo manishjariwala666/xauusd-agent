@@ -1193,7 +1193,30 @@ def _deliver_pending_whatsapp_signals() -> None:
         )
     recipients = _verified_whatsapp_recipients()
     service = WhatsAppService() if rows and recipients else None
+    
+    # --- NEW LIVE PRICE CHECK ---
+    live_price = None
+    try:
+        from services.live_paper_trader import LiveXauUsdPriceSource
+        live_price, _, _ = LiveXauUsdPriceSource().latest()
+    except Exception as e:
+        import logging
+        logging.warning(f"Could not fetch live price for broadcast: {e}")
+
     for signal in rows:
+        # Filter condition: Only send if live price reached the entry base
+        if live_price is not None and signal.get("price"):
+            try:
+                entry = float(signal["price"])
+                current = float(live_price)
+                if signal["signal_type"] == "BUY" and current > entry:
+                    continue  # Skip: Market price is still above BUY entry
+                if signal["signal_type"] == "SELL" and current < entry:
+                    continue  # Skip: Market price is still below SELL entry
+            except Exception:
+                pass
+        # ----------------------------
+
         message = format_signal_message(dict(signal))
         failures = []
         for recipient in recipients:
