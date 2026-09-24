@@ -41,18 +41,36 @@ def profit_points(signal: dict[str, Any]) -> Decimal:
 
 def format_target_hit_message(signal: dict[str, Any]) -> str:
     """Build the approved VenusRealm WhatsApp target-hit message."""
+    from datetime import datetime, timezone
     direction = str(signal["signal_type"]).upper()
     symbol = str(signal.get("symbol") or "XAUUSD").upper()
     entry = Decimal(str(signal["price"]))
     target = Decimal(str(signal["target_price"]))
     points = profit_points(signal)
+    
+    signal_time_raw = signal.get("signal_time") or signal.get("updated_at")
+    if signal_time_raw:
+        try:
+            parsed = datetime.fromisoformat(str(signal_time_raw).replace("Z", "+00:00"))
+            time_str = parsed.astimezone(timezone.utc).strftime("%d %b %Y · %H:%M UTC")
+        except ValueError:
+            time_str = str(signal_time_raw)
+    else:
+        time_str = datetime.now(timezone.utc).strftime("%d %b %Y · %H:%M UTC")
 
     return (
-        "🎯 Yahooo VenusRealm TARGET HIT ✅\n\n"
-        f"{symbol} {direction}\n"
-        f"Entry: {entry:.2f}\n"
-        f"Target: {target:.2f}\n"
-        f"Profit: +{points:.2f} points 🟢"
+        "🎯 Yahooo VenusRealm TARGET HIT ✅
+
+"
+        f"{symbol} {direction}
+"
+        f"Time: {time_str}
+"
+        f"Entry: {entry:.2f}
+"
+        f"Target: {target:.2f}
+"
+        f"Profit: +{points:.2f} points 💰 PROFIT BOOK ✅"
     )
 
 
