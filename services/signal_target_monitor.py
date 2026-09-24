@@ -48,6 +48,9 @@ def format_target_hit_message(signal: dict[str, Any]) -> str:
     target = Decimal(str(signal["target_price"]))
     points = profit_points(signal)
     
+    # Auto-calculate dollar profit for 0.10 lot (1 XAUUSD point = $10 on 0.10 lot)
+    dollar_profit = points * 10
+    
     signal_time_raw = signal.get("signal_time") or signal.get("updated_at")
     if signal_time_raw:
         try:
@@ -68,9 +71,16 @@ def format_target_hit_message(signal: dict[str, Any]) -> str:
 "
         f"Entry: {entry:.2f}
 "
-        f"Target: {target:.2f}
+        f"Target Hit: {target:.2f}
 "
-        f"Profit: +{points:.2f} points 💰 PROFIT BOOK ✅"
+        f"Profit: +{points:.2f} points 🟢
+"
+        f"💵 Profit on 0.10 Lot: ${dollar_profit:.2f} 💰 PROFIT BOOK ✅
+
+"
+        "🎉 Enjoy your profit & have a great day!
+"
+        "— VenusRealm"
     )
 
 
