@@ -1212,10 +1212,7 @@ def _deliver_pending_whatsapp_signals() -> None:
         # --- 🚀 REVERSAL & EXIT LOGIC ---
         if last_sent and last_sent != signal_type:
             opposite = "SELL" if signal_type == "BUY" else "BUY"
-            reversal_msg = f"⚠️ TREND REVERSAL
-🚨 EXIT {opposite} POSITION & {signal_type} NOW!
-
-"
+            reversal_msg = "⚠️ TREND REVERSAL\n🚨 EXIT " + opposite + " POSITION & " + signal_type + " NOW.\n\n"
             message = reversal_msg + message
 
         failures = []
