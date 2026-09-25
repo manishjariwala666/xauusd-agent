@@ -1220,7 +1220,11 @@ def _deliver_pending_whatsapp_signals() -> None:
         logger.warning("Live price unavailable. Aborting to prevent double-send.")
         return
 
+    sent_this_cycle = False
     for signal in rows:
+        if sent_this_cycle:
+            break
+
         signal_type = signal["signal_type"]
 
         if live_price is not None and signal.get("price"):
@@ -1270,6 +1274,8 @@ def _deliver_pending_whatsapp_signals() -> None:
             )
         
         last_sent = signal_type
+        if not failures:
+            sent_this_cycle = True
 
 
 def _publish_pending_website_signals() -> None:
@@ -1289,7 +1295,11 @@ def _publish_pending_website_signals() -> None:
             .mappings()
             .all()
         )
-        for signal in rows:
+        sent_this_cycle = False
+    for signal in rows:
+        if sent_this_cycle:
+            break
+
             payload = {
                 "side": signal["signal_type"],
                 "entry": str(signal["price"]),

@@ -81,6 +81,8 @@ class TelegramService:
 
         sent_count = 0
         for signal in response.data or []:
+            if sent_count > 0:
+                break
             if self.send_signal(signal):
                 sent_count += 1
         if sent_count:
