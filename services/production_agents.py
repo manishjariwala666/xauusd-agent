@@ -1178,62 +1178,89 @@ def _deliver_pending_whatsapp_signals() -> None:
         rows = (
             session.execute(
                 text(
-                    """
+                    '''
                     SELECT * FROM public.market_signals
                     WHERE signal_type IN ('BUY', 'SELL')
                       AND whatsapp_sent_at IS NULL
                       AND signal_time >= NOW() - INTERVAL '6 hours'
                       AND signal_time <= NOW() + INTERVAL '5 minutes'
-                    ORDER BY signal_time LIMIT 20
-                    """
+                    ORDER BY signal_time ASC LIMIT 20
+                    '''
                 )
-            )
-            .mappings()
-            .all()
+            ).mappings().all()
         )
+
+        last_sent = session.execute(
+            text(
+                '''
+                SELECT signal_type FROM public.market_signals
+                WHERE whatsapp_sent_at IS NOT NULL
+                  AND signal_time >= NOW() - INTERVAL '12 hours'
+                ORDER BY whatsapp_sent_at DESC LIMIT 1
+                '''
+            )
+        ).scalar_one_or_none()
+
+    if not rows:
+        return
+
     recipients = _verified_whatsapp_recipients()
     service = WhatsAppService() if rows and recipients else None
-    
-    # --- NEW LIVE PRICE CHECK ---
+
     live_price = None
     try:
-        from services.live_paper_trader import LiveXauUsdPriceSource
-        live_price, _, _ = LiveXauUsdPriceSource().latest()
+        from services.market_data import MarketDataService
+        quote = MarketDataService(None).fetch_current_price()
+        if quote:
+            live_price = float(quote.price)
     except Exception as e:
-        import logging
-        logging.warning(f"Could not fetch live price for broadcast: {e}")
+        logger.warning(f"Failed to fetch live price: {e}")
+
+    if len(rows) > 1 and live_price is None:
+        logger.warning("Live price unavailable. Aborting to prevent double-send.")
+        return
 
     for signal in rows:
-        # Filter condition: Only send if live price reached the entry base
+        signal_type = signal["signal_type"]
+
         if live_price is not None and signal.get("price"):
             try:
                 entry = float(signal["price"])
-                current = float(live_price)
-                if signal["signal_type"] == "BUY" and current > entry:
-                    continue  # Skip: Market price is still above BUY entry
-                if signal["signal_type"] == "SELL" and current < entry:
-                    continue  # Skip: Market price is still below SELL entry
+                if signal_type == "BUY" and live_price > entry:
+                    continue  # Wait for price to drop to BUY base
+                if signal_type == "SELL" and live_price < entry:
+                    continue  # Wait for price to rise to SELL base
             except Exception:
                 pass
-        # ----------------------------
 
         message = format_signal_message(dict(signal))
+
+        # --- 🚀 REVERSAL & EXIT LOGIC ---
+        if last_sent and last_sent != signal_type:
+            opposite = "SELL" if signal_type == "BUY" else "BUY"
+            reversal_msg = f"⚠️ TREND REVERSAL
+🚨 EXIT {opposite} POSITION & {signal_type} NOW!
+
+"
+            message = reversal_msg + message
+
         failures = []
-        for recipient in recipients:
-            try:
-                assert service is not None
-                service.send_text(recipient, message)
-            except Exception as exc:
-                failures.append(str(exc))
+        if recipients and service:
+            for recipient in recipients:
+                try:
+                    service.send_text(recipient, message)
+                except Exception as exc:
+                    failures.append(str(exc))
+
         with session_scope() as session:
             session.execute(
                 text(
-                    """
+                    '''
                     UPDATE public.market_signals
                     SET whatsapp_sent_at = CASE WHEN :ok THEN NOW() END,
                         whatsapp_delivery_error = :error
                     WHERE id = :id
-                    """
+                    '''
                 ),
                 {
                     "id": signal["id"],
@@ -1241,6 +1268,8 @@ def _deliver_pending_whatsapp_signals() -> None:
                     "error": "; ".join(failures)[:2000] if failures else None,
                 },
             )
+        
+        last_sent = signal_type
 
 
 def _publish_pending_website_signals() -> None:
